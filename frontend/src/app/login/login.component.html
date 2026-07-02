@@ -1,0 +1,14 @@
+<section class="login-page">
+  <mat-card class="login-card" [class.shake]="isShaking()">
+    <mat-card-header>
+      <img src="/public/inspex_logo.svg" alt="EPDS Admin" class="brand-logo">
+    </mat-card-header>
+
+    <mat-card-content>
+      <button mat-flat-button color="primary" type="button" [disabled]="isLoading()" (click)="loginWithMicrosoft()">
+        <mat-icon class="material-symbols-outlined">account_circle</mat-icon>
+        Login with Microsoft
+      </button>
+    </mat-card-content>
+  </mat-card>
+</section>

@@ -1,0 +1,50 @@
+.login-page {
+  min-height: calc(100vh - 56px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  box-sizing: border-box;
+}
+
+.login-card {
+  width: min(400px, calc(100vw - 32px));
+  padding: 28px 30px 24px;
+  border-radius: 8px;
+}
+
+mat-card-header {
+  justify-content: center;
+  padding: 0 0 28px;
+}
+
+.brand-logo {
+  max-width: 190px;
+  max-height: 82px;
+  object-fit: contain;
+}
+
+mat-card-content {
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+}
+
+mat-card-content button {
+  width: 100%;
+  min-height: 48px;
+}
+
+mat-card-content mat-icon {
+  margin-right: 6px;
+}
+
+.shake {
+  animation: shake 0.7s cubic-bezier(0.455, 0.03, 0.515, 0.955) both;
+}
+
+@keyframes shake {
+  0%, 100% { transform: rotate(0deg); transform-origin: 50% 0; }
+  20%, 60% { transform: rotate(-3deg); }
+  40%, 80% { transform: rotate(3deg); }
+}

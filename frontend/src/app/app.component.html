@@ -1,0 +1,42 @@
+<div class="app-shell">
+  <mat-toolbar class="toolbar">
+    <a class="brand" routerLink="/home" aria-label="EPDS Admin home">
+      <img src="/public/inspex_logo.svg" alt="EPDS Admin">
+      <span>EPDS Admin</span>
+    </a>
+
+    <nav class="nav" *ngIf="(auth.isLoggedIn$ | async) && auth.canAccessAdminFeatures()">
+      <a mat-button routerLink="/home" routerLinkActive="active-link">HOME</a>
+      <a mat-button routerLink="/mail" routerLinkActive="active-link">
+        <mat-icon class="material-symbols-outlined">mail</mat-icon>
+        MAIL
+      </a>
+      <a mat-button routerLink="/domain-health" routerLinkActive="active-link">
+        <mat-icon class="material-symbols-outlined">health_and_safety</mat-icon>
+        DOMAIN HEALTH
+      </a>
+    </nav>
+
+    <span class="spacer"></span>
+
+    <button mat-button *ngIf="!(auth.isLoggedIn$ | async)" routerLink="/login">
+      <mat-icon class="material-symbols-outlined">login</mat-icon>
+      Login
+    </button>
+
+    <button mat-button *ngIf="auth.isLoggedIn$ | async" [matMenuTriggerFor]="profileMenu">
+      <mat-icon class="material-symbols-outlined">account_circle</mat-icon>
+      {{ auth.getFullName() || 'Profile' }}
+    </button>
+    <mat-menu #profileMenu="matMenu">
+      <button mat-menu-item (click)="logout()">
+        <mat-icon class="material-symbols-outlined">logout</mat-icon>
+        Logout
+      </button>
+    </mat-menu>
+  </mat-toolbar>
+
+  <main class="app-content">
+    <router-outlet></router-outlet>
+  </main>
+</div>

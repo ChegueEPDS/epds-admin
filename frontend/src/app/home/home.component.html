@@ -1,0 +1,50 @@
+<section class="page home-page">
+  <div class="page-title">
+    <div>
+      <h1>EPDS Admin</h1>
+      <p>{{ auth.getFullName() || 'Select a function' }}</p>
+    </div>
+  </div>
+
+  <div class="feature-grid" *ngIf="auth.canAccessAdminFeatures(); else limitedAccess">
+    <a class="feature-card" *ngFor="let card of cards" [routerLink]="card.route">
+      <mat-card>
+        <mat-card-content>
+          <span class="icon-wrap">
+            <mat-icon class="material-symbols-outlined">{{ card.icon }}</mat-icon>
+          </span>
+          <div>
+            <h2>{{ card.title }}</h2>
+            <p>{{ card.description }}</p>
+          </div>
+        </mat-card-content>
+      </mat-card>
+    </a>
+
+    <mat-card class="feature-card disabled-card">
+      <mat-card-content>
+        <span class="icon-wrap muted">
+          <mat-icon class="material-symbols-outlined">add_circle</mat-icon>
+        </span>
+        <div>
+          <h2>More</h2>
+          <p>Future admin tools.</p>
+        </div>
+      </mat-card-content>
+    </mat-card>
+  </div>
+
+  <ng-template #limitedAccess>
+    <mat-card class="limited-card">
+      <mat-card-content>
+        <span class="icon-wrap muted">
+          <mat-icon class="material-symbols-outlined">lock</mat-icon>
+        </span>
+        <div>
+          <h2>Access pending</h2>
+          <p>Your Microsoft account is signed in. Feature access will be configured later.</p>
+        </div>
+      </mat-card-content>
+    </mat-card>
+  </ng-template>
+</section>

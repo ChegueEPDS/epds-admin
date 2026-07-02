@@ -1,0 +1,58 @@
+<section class="page">
+  <div class="page-title">
+    <div>
+      <h1>Domain Health</h1>
+      <p>Check mailbox DNS records for a domain.</p>
+    </div>
+  </div>
+
+  <mat-card class="check-card">
+    <mat-card-content>
+      <form class="check-form" (ngSubmit)="check()">
+        <mat-form-field appearance="outline">
+          <mat-label>Domain</mat-label>
+          <input matInput name="domain" [(ngModel)]="domain" placeholder="example.com" required>
+        </mat-form-field>
+        <mat-form-field appearance="outline">
+          <mat-label>DKIM selector</mat-label>
+          <input matInput name="selector" [(ngModel)]="selector" placeholder="default">
+        </mat-form-field>
+        <button mat-flat-button color="primary" type="submit" [disabled]="isLoading">
+          <mat-progress-spinner *ngIf="isLoading" diameter="18" mode="indeterminate"></mat-progress-spinner>
+          <mat-icon *ngIf="!isLoading" class="material-symbols-outlined">health_and_safety</mat-icon>
+          Check
+        </button>
+      </form>
+    </mat-card-content>
+  </mat-card>
+
+  <div class="result-grid" *ngIf="result">
+    <mat-card class="summary-card" [ngClass]="'summary-' + result.summary">
+      <mat-card-content>
+        <mat-icon class="material-symbols-outlined">monitor_heart</mat-icon>
+        <div>
+          <h2>{{ result.domain }}</h2>
+          <p>{{ result.summary | uppercase }} · {{ result.checkedAt | date:'medium' }}</p>
+        </div>
+      </mat-card-content>
+    </mat-card>
+
+    <mat-card *ngFor="let entry of recordEntries()" class="record-card">
+      <mat-card-content>
+        <div class="record-head">
+          <mat-icon class="material-symbols-outlined" [ngClass]="'status-' + entry.record.status">{{ entry.icon }}</mat-icon>
+          <div>
+            <h3>{{ entry.key }}</h3>
+            <span [ngClass]="'status-' + entry.record.status">{{ entry.record.status | uppercase }}</span>
+          </div>
+        </div>
+        <div class="record-values" *ngIf="entry.record.values.length; else emptyRecord">
+          <code *ngFor="let value of entry.record.values">{{ valueText(value) }}</code>
+        </div>
+        <ng-template #emptyRecord>
+          <p class="empty-record">No record found.</p>
+        </ng-template>
+      </mat-card-content>
+    </mat-card>
+  </div>
+</section>
