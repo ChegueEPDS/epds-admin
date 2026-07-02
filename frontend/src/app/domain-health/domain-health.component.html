@@ -52,12 +52,22 @@
     <section class="domain-list-panel">
       <div class="table-wrap">
         <table class="domain-table">
+          <colgroup>
+            <col class="status-col">
+            <col class="domain-col">
+            <col *ngIf="auth.hasEpdsEmail()" class="owner-col">
+            <col class="performance-col">
+            <col class="checked-col">
+            <col class="issue-col">
+            <col class="actions-col-width">
+          </colgroup>
           <thead>
             <tr>
               <th>Status</th>
               <th>Domain</th>
-              <th>Performance</th>
-              <th>Last checked</th>
+              <th *ngIf="auth.hasEpdsEmail()">Owner</th>
+              <th>Perf.</th>
+              <th>Checked</th>
               <th>Issue</th>
               <th class="actions-col">Actions</th>
             </tr>
@@ -81,13 +91,16 @@
                 <strong>{{ domain.name }}</strong>
                 <span class="domain-url">{{ domain.baseUrl }}</span>
               </td>
+              <td *ngIf="auth.hasEpdsEmail()">
+                <span class="owner-pill">{{ ownerText(domain) }}</span>
+              </td>
               <td>
                 <span class="status-pill" [ngClass]="'performance-' + performanceStatus(domain)">
                   <mat-icon class="material-symbols-outlined">{{ performanceIcon(performanceStatus(domain)) }}</mat-icon>
                   {{ performanceLabel(performanceStatus(domain)) }}
                 </span>
                 <span class="metric-subtext">
-                  Last {{ responseText(domain) }} · P95 {{ msText(domain.performance?.p95ResponseMs) }}
+                  {{ responseText(domain) }} · P95 {{ msText(domain.performance?.p95ResponseMs) }}
                 </span>
               </td>
               <td>{{ domain.lastCheckedAt ? (domain.lastCheckedAt | date:'short') : '-' }}</td>
@@ -111,7 +124,7 @@
               </td>
             </tr>
             <tr *ngIf="!filteredDomains.length">
-              <td colspan="6" class="empty-state">
+              <td [attr.colspan]="auth.hasEpdsEmail() ? 7 : 6" class="empty-state">
                 <mat-icon class="material-symbols-outlined">domain_disabled</mat-icon>
                 No domains match the current filter.
               </td>

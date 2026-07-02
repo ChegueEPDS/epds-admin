@@ -16,10 +16,12 @@ import {
   DomainCheck,
   DomainHealthService,
   DomainMonitor,
+  DomainOwner,
   DomainPerformanceStatus,
   DomainMonitorStatus,
   DomainPayload
 } from '../services/domain-health.service';
+import { AuthService } from '../services/auth.service';
 
 type RangeOption = '24h' | '7d' | '30d';
 type StatusFilter = 'all' | 'issues' | 'warning' | 'healthy';
@@ -35,6 +37,7 @@ type StatusFilter = 'all' | 'issues' | 'warning' | 'healthy';
     MatFormFieldModule,
     MatIconModule,
     MatInputModule,
+    MatSelectModule,
     MatSlideToggleModule
   ],
   template: `
@@ -48,6 +51,12 @@ type StatusFilter = 'all' | 'issues' | 'warning' | 'healthy';
         <mat-form-field appearance="outline">
           <mat-label>Base URL</mat-label>
           <input matInput name="baseUrl" [(ngModel)]="model.baseUrl" placeholder="https://example.com" required>
+        </mat-form-field>
+        <mat-form-field appearance="outline">
+          <mat-label>Owner</mat-label>
+          <mat-select name="owner" [(ngModel)]="model.owner" required>
+            <mat-option *ngFor="let owner of owners" [value]="owner">{{ owner }}</mat-option>
+          </mat-select>
         </mat-form-field>
         <mat-slide-toggle name="enabled" [(ngModel)]="model.enabled">Enabled</mat-slide-toggle>
       </mat-dialog-content>
@@ -73,6 +82,7 @@ type StatusFilter = 'all' | 'issues' | 'warning' | 'healthy';
   `]
 })
 export class DomainDialogComponent {
+  owners: DomainOwner[] = ['Stahl', 'Robex', 'Veproil', 'ExNB/Exva', 'Ind-Ex', 'EPDS'];
   model: DomainPayload;
 
   constructor(
@@ -82,15 +92,17 @@ export class DomainDialogComponent {
     this.model = {
       name: data.domain?.name || '',
       baseUrl: data.domain?.baseUrl || '',
+      owner: data.domain?.owner || 'EPDS',
       enabled: data.domain?.enabled ?? true
     };
   }
 
   save(): void {
-    if (!this.model.name.trim() || !this.model.baseUrl.trim()) return;
+    if (!this.model.name.trim() || !this.model.baseUrl.trim() || !this.model.owner) return;
     this.dialogRef.close({
       name: this.model.name.trim(),
       baseUrl: this.model.baseUrl.trim(),
+      owner: this.model.owner,
       enabled: this.model.enabled
     });
   }
@@ -129,7 +141,8 @@ export class DomainHealthComponent implements OnInit {
   constructor(
     private service: DomainHealthService,
     private snackBar: MatSnackBar,
-    private dialog: MatDialog
+    private dialog: MatDialog,
+    public auth: AuthService
   ) {}
 
   ngOnInit(): void {
@@ -309,6 +322,10 @@ export class DomainHealthComponent implements OnInit {
     if (domain.displayStatus === 'warning') return `${domain.recentIssueCount} issue in 24h`;
     if (domain.displayStatus === 'ok') return 'No recent issues';
     return 'No check yet';
+  }
+
+  ownerText(domain: DomainMonitor): string {
+    return domain.owner || 'EPDS';
   }
 
   chartPoints(): Array<{ x: number; y: number; color: string; label: string; check: DomainCheck }> {

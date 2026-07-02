@@ -22,11 +22,13 @@ export type DomainHealthResult = {
 
 export type DomainMonitorStatus = 'ok' | 'warning' | 'error' | 'unknown';
 export type DomainPerformanceStatus = 'ok' | 'slow' | 'very_slow' | 'unknown';
+export type DomainOwner = 'Stahl' | 'Robex' | 'Veproil' | 'ExNB/Exva' | 'Ind-Ex' | 'EPDS';
 
 export type DomainMonitor = {
   id: string;
   name: string;
   baseUrl: string;
+  owner: DomainOwner;
   tenantId?: string | null;
   enabled: boolean;
   lastCheckedAt?: string;
@@ -69,6 +71,7 @@ export type DomainCheck = {
 export type DomainPayload = {
   name: string;
   baseUrl: string;
+  owner: DomainOwner;
   enabled: boolean;
 };
 

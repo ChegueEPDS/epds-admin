@@ -122,6 +122,7 @@ function presentDomain(domain, summary = {}) {
     id: String(domain._id),
     name: domain.name,
     baseUrl: domain.baseUrl,
+    owner: domain.owner || 'EPDS',
     tenantId: domain.tenantId ? String(domain.tenantId) : null,
     enabled: domain.enabled,
     lastCheckedAt: domain.lastCheckedAt,

@@ -11,6 +11,7 @@ import { MatListModule } from '@angular/material/list';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { MatTabsModule } from '@angular/material/tabs';
+import { MatTooltipModule } from '@angular/material/tooltip';
 import { MailApiService } from '../services/mail-api.service';
 
 type MailFolder = 'inbox' | 'sentitems';
@@ -55,7 +56,8 @@ const MAILBOX_PAGE_SIZE = 40;
     MatListModule,
     MatProgressSpinnerModule,
     MatSnackBarModule,
-    MatTabsModule
+    MatTabsModule,
+    MatTooltipModule
   ],
   templateUrl: './mailbox.component.html',
   styleUrl: './mailbox.component.scss'
@@ -71,6 +73,11 @@ export class MailboxComponent implements OnInit {
   isLoadingMore = false;
   isDetailLoading = false;
   isSending = false;
+  isTextColorMenuOpen = false;
+  isHighlightMenuOpen = false;
+  selectedFontSize = '3';
+  selectedTextColor = '#111827';
+  selectedHighlightColor = 'transparent';
 
   compose = {
     to: '',
@@ -79,6 +86,22 @@ export class MailboxComponent implements OnInit {
     subject: '',
     html: ''
   };
+  textColors = [
+    { label: 'black', value: '#111827' },
+    { label: 'gray', value: '#6b7280' },
+    { label: 'red', value: '#b91c1c' },
+    { label: 'orange', value: '#b45309' },
+    { label: 'yellow', value: '#ca8a04' },
+    { label: 'green', value: '#047857' },
+    { label: 'blue', value: '#1d4ed8' }
+  ];
+  highlightColors = [
+    { label: 'yellow', value: '#fef3c7' },
+    { label: 'orange', value: '#ffedd5' },
+    { label: 'green', value: '#dcfce7' },
+    { label: 'blue', value: '#dbeafe' },
+    { label: 'gray', value: '#f3f4f6' }
+  ];
 
   constructor(private mailApi: MailApiService, private snackBar: MatSnackBar) {}
 
@@ -151,7 +174,7 @@ export class MailboxComponent implements OnInit {
     const cc = this.parseAddresses(this.compose.cc);
     const bcc = this.parseAddresses(this.compose.bcc);
     const subject = this.compose.subject.trim();
-    const html = this.compose.html.trim().replace(/\n/g, '<br>');
+    const html = this.compose.html.trim();
     if (!to.length || !subject || !html) {
       this.snackBar.open('To, subject and body are required.', 'Close', { duration: 3500 });
       return;
@@ -162,12 +185,113 @@ export class MailboxComponent implements OnInit {
       await firstValueFrom(this.mailApi.sendMail({ to, subject, html, cc, bcc }));
       this.snackBar.open('Mail sent.', 'Close', { duration: 3000 });
       this.compose = { to: '', cc: '', bcc: '', subject: '', html: '' };
+      this.selectedFontSize = '3';
+      this.selectedTextColor = '#111827';
+      this.selectedHighlightColor = 'transparent';
+      this.clearEditor();
       if (this.folder === 'sentitems') await this.reload('sentitems');
     } catch (e: any) {
       this.snackBar.open(e?.error?.detail || e?.error?.error || 'Send failed.', 'Close', { duration: 4500 });
     } finally {
       this.isSending = false;
     }
+  }
+
+  syncEditor(event: Event): void {
+    this.compose.html = (event.target as HTMLElement)?.innerHTML || '';
+  }
+
+  formatMessage(command: string): void {
+    document.execCommand(command, false);
+    this.captureEditorHtml();
+  }
+
+  setFontSize(size: string): void {
+    if (!size) return;
+    this.selectedFontSize = size;
+    document.execCommand('fontSize', false, size);
+    this.captureEditorHtml();
+  }
+
+  applyColor(command: 'foreColor' | 'hiliteColor', value: string): void {
+    if (!value) return;
+    document.execCommand(command, false, value);
+    this.applyListStyle(command, value);
+    this.captureEditorHtml();
+  }
+
+  applyHighlight(value: string): void {
+    if (!value) return;
+    document.execCommand('hiliteColor', false, value === 'transparent' ? 'transparent' : value);
+    this.applyListStyle('hiliteColor', value);
+    this.captureEditorHtml();
+  }
+
+  toggleTextColorMenu(): void {
+    this.isTextColorMenuOpen = !this.isTextColorMenuOpen;
+    this.isHighlightMenuOpen = false;
+  }
+
+  toggleHighlightMenu(): void {
+    this.isHighlightMenuOpen = !this.isHighlightMenuOpen;
+    this.isTextColorMenuOpen = false;
+  }
+
+  applyMenuColor(command: 'foreColor' | 'hiliteColor', value: string): void {
+    if (command === 'foreColor') this.selectedTextColor = value;
+    this.applyColor(command, value);
+    this.isTextColorMenuOpen = false;
+  }
+
+  applyMenuHighlight(value: string): void {
+    this.selectedHighlightColor = value;
+    this.applyHighlight(value);
+    this.isHighlightMenuOpen = false;
+  }
+
+  colorLabel(value: string, colors: Array<{ label: string; value: string }>): string {
+    return colors.find((color) => color.value === value)?.label || 'Color';
+  }
+
+  private applyListStyle(command: 'foreColor' | 'hiliteColor', value: string): void {
+    const selection = window.getSelection();
+    if (!selection?.rangeCount) return;
+    const range = selection.getRangeAt(0);
+    const editor = document.querySelector<HTMLElement>('.wysiwyg-editor');
+    if (!editor) return;
+
+    const listItems = Array.from(editor.querySelectorAll<HTMLElement>('li'))
+      .filter((node) => range.intersectsNode(node));
+    const listContainers = Array.from(editor.querySelectorAll<HTMLElement>('ul,ol'))
+      .filter((node) => range.intersectsNode(node));
+
+    for (const node of [...listItems, ...listContainers]) {
+      if (command === 'foreColor') {
+        node.style.color = value;
+      } else if (value === 'transparent') {
+        node.style.backgroundColor = '';
+      } else {
+        node.style.backgroundColor = value;
+      }
+    }
+  }
+
+  insertLink(): void {
+    const url = window.prompt('URL');
+    if (!url) return;
+    document.execCommand('createLink', false, url);
+    this.captureEditorHtml();
+  }
+
+  private captureEditorHtml(): void {
+    const editor = document.querySelector<HTMLElement>('.wysiwyg-editor');
+    this.compose.html = editor?.innerHTML || this.compose.html;
+    editor?.focus();
+  }
+
+  private clearEditor(): void {
+    const editor = document.querySelector<HTMLElement>('.wysiwyg-editor');
+    if (editor) editor.innerHTML = '';
   }
 
   displayAddress(addr?: MailAddress | null): string {

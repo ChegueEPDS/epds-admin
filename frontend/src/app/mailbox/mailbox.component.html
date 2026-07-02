@@ -46,8 +46,8 @@
                 <span>{{ filteredItems.length }} of {{ items.length }} messages</span>
               </div>
 
-              <mat-nav-list *ngIf="filteredItems.length; else emptyState" class="message-list">
-                <button mat-list-item type="button" class="message-row" *ngFor="let row of filteredItems" (click)="openMessage(row)" [class.unread]="folder === 'inbox' && row.isRead === false" [class.selected]="selected?.id === row.id">
+              <div *ngIf="filteredItems.length; else emptyState" class="message-list">
+                <button type="button" class="message-row" *ngFor="let row of filteredItems" (click)="openMessage(row)" [class.unread]="folder === 'inbox' && row.isRead === false" [class.selected]="selected?.id === row.id">
                   <span class="message-row-content">
                     <span class="message-row-top">
                       <span class="message-subject">{{ row.subject || '(No subject)' }}</span>
@@ -64,7 +64,7 @@
                     Load more
                   </button>
                 </div>
-              </mat-nav-list>
+              </div>
               <ng-template #emptyState>
                 <div class="empty-state">{{ searchTerm ? 'No messages match your search.' : 'No messages found.' }}</div>
               </ng-template>
@@ -130,10 +130,101 @@
               <mat-label>Subject</mat-label>
               <input matInput name="subject" [(ngModel)]="compose.subject" required>
             </mat-form-field>
-            <mat-form-field appearance="outline" class="body-field">
-              <mat-label>Body</mat-label>
-              <textarea matInput name="html" rows="12" [(ngModel)]="compose.html" required></textarea>
-            </mat-form-field>
+            <div class="body-field editor-field">
+              <label>Body</label>
+              <div class="editor-toolbar" aria-label="Message formatting">
+                <button mat-icon-button type="button" matTooltip="Bold" (click)="formatMessage('bold')">
+                  <mat-icon class="material-symbols-outlined">format_bold</mat-icon>
+                </button>
+                <button mat-icon-button type="button" matTooltip="Italic" (click)="formatMessage('italic')">
+                  <mat-icon class="material-symbols-outlined">format_italic</mat-icon>
+                </button>
+                <button mat-icon-button type="button" matTooltip="Underline" (click)="formatMessage('underline')">
+                  <mat-icon class="material-symbols-outlined">format_underlined</mat-icon>
+                </button>
+                <button mat-icon-button type="button" matTooltip="Strikethrough" (click)="formatMessage('strikeThrough')">
+                  <mat-icon class="material-symbols-outlined">strikethrough_s</mat-icon>
+                </button>
+                <span class="toolbar-divider"></span>
+                <select class="editor-select" aria-label="Font size" [value]="selectedFontSize" (change)="setFontSize($any($event.target).value)">
+                  <option value="2">Small</option>
+                  <option value="3">Normal</option>
+                  <option value="5">Large</option>
+                </select>
+                <span class="toolbar-divider"></span>
+                <button mat-icon-button type="button" matTooltip="Align left" (click)="formatMessage('justifyLeft')">
+                  <mat-icon class="material-symbols-outlined">format_align_left</mat-icon>
+                </button>
+                <button mat-icon-button type="button" matTooltip="Align center" (click)="formatMessage('justifyCenter')">
+                  <mat-icon class="material-symbols-outlined">format_align_center</mat-icon>
+                </button>
+                <button mat-icon-button type="button" matTooltip="Align right" (click)="formatMessage('justifyRight')">
+                  <mat-icon class="material-symbols-outlined">format_align_right</mat-icon>
+                </button>
+                <button mat-icon-button type="button" matTooltip="Justify" (click)="formatMessage('justifyFull')">
+                  <mat-icon class="material-symbols-outlined">format_align_justify</mat-icon>
+                </button>
+                <span class="toolbar-divider"></span>
+                <button mat-icon-button type="button" matTooltip="Bulleted list" (click)="formatMessage('insertUnorderedList')">
+                  <mat-icon class="material-symbols-outlined">format_list_bulleted</mat-icon>
+                </button>
+                <button mat-icon-button type="button" matTooltip="Numbered list" (click)="formatMessage('insertOrderedList')">
+                  <mat-icon class="material-symbols-outlined">format_list_numbered</mat-icon>
+                </button>
+                <button mat-icon-button type="button" matTooltip="Decrease indent" (click)="formatMessage('outdent')">
+                  <mat-icon class="material-symbols-outlined">format_indent_decrease</mat-icon>
+                </button>
+                <button mat-icon-button type="button" matTooltip="Increase indent" (click)="formatMessage('indent')">
+                  <mat-icon class="material-symbols-outlined">format_indent_increase</mat-icon>
+                </button>
+                <span class="toolbar-divider"></span>
+                <div class="color-menu">
+                  <button class="color-menu-trigger" type="button" (click)="toggleTextColorMenu()">
+                    <mat-icon class="material-symbols-outlined">format_color_text</mat-icon>
+                    <span class="color-swatch" [style.background]="selectedTextColor"></span>
+                    {{ colorLabel(selectedTextColor, textColors) }}
+                  </button>
+                  <div class="color-menu-panel" *ngIf="isTextColorMenuOpen">
+                    <button type="button" *ngFor="let color of textColors" [class.selected-color]="selectedTextColor === color.value" (click)="applyMenuColor('foreColor', color.value)">
+                      <span class="color-swatch" [style.background]="color.value"></span>
+                      {{ color.label }}
+                    </button>
+                  </div>
+                </div>
+                <div class="color-menu">
+                  <button class="color-menu-trigger" type="button" (click)="toggleHighlightMenu()">
+                    <mat-icon class="material-symbols-outlined">format_color_fill</mat-icon>
+                    <span class="color-swatch" [class.no-fill]="selectedHighlightColor === 'transparent'" [style.background]="selectedHighlightColor === 'transparent' ? null : selectedHighlightColor"></span>
+                    {{ selectedHighlightColor === 'transparent' ? 'No fill' : colorLabel(selectedHighlightColor, highlightColors) }}
+                  </button>
+                  <div class="color-menu-panel" *ngIf="isHighlightMenuOpen">
+                    <button type="button" [class.selected-color]="selectedHighlightColor === 'transparent'" (click)="applyMenuHighlight('transparent')">
+                      <span class="color-swatch no-fill"></span>
+                      No fill
+                    </button>
+                    <button type="button" *ngFor="let color of highlightColors" [class.selected-color]="selectedHighlightColor === color.value" (click)="applyMenuHighlight(color.value)">
+                      <span class="color-swatch" [style.background]="color.value"></span>
+                      {{ color.label }}
+                    </button>
+                  </div>
+                </div>
+                <span class="toolbar-divider"></span>
+                <button mat-icon-button type="button" matTooltip="Insert link" (click)="insertLink()">
+                  <mat-icon class="material-symbols-outlined">link</mat-icon>
+                </button>
+                <button mat-icon-button type="button" matTooltip="Clear formatting" (click)="formatMessage('removeFormat')">
+                  <mat-icon class="material-symbols-outlined">format_clear</mat-icon>
+                </button>
+              </div>
+              <div
+                class="wysiwyg-editor"
+                contenteditable="true"
+                role="textbox"
+                aria-label="Mail body"
+                (input)="syncEditor($event)"
+                (blur)="syncEditor($event)"
+              ></div>
+            </div>
             <div class="compose-actions">
               <button mat-flat-button color="primary" type="submit" [disabled]="isSending">
                 <mat-progress-spinner *ngIf="isSending" diameter="18" mode="indeterminate"></mat-progress-spinner>

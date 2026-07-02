@@ -21,6 +21,11 @@ function status(ok, warning = false) {
   return warning ? 'warning' : 'error';
 }
 
+function normalizeOwner(input) {
+  const raw = String(input || '').trim();
+  return DomainMonitor.owners.find((owner) => owner.toLowerCase() === raw.toLowerCase()) || null;
+}
+
 exports.checkDomainHealth = async (req, res) => {
   const domain = normalizeDomain(req.query.domain);
   const selector = String(req.query.selector || 'default').trim().toLowerCase();
@@ -82,14 +87,17 @@ exports.createDomain = async (req, res, next) => {
   try {
     const name = String(req.body?.name || '').trim();
     const normalizedUrl = normalizeBaseUrl(req.body?.baseUrl);
+    const owner = normalizeOwner(req.body?.owner);
 
     if (!name) return res.status(400).json({ error: 'Name is required' });
+    if (!owner) return res.status(400).json({ error: 'Valid owner is required' });
     await assertPublicUrl(normalizedUrl);
 
     const domain = await DomainMonitor.create({
       name,
       baseUrl: normalizedUrl,
       normalizedUrl,
+      owner,
       tenantId: req.scope?.tenantId,
       enabled: req.body?.enabled !== false,
       createdBy: req.userId
@@ -121,6 +129,12 @@ exports.updateDomain = async (req, res, next) => {
       await assertPublicUrl(normalizedUrl);
       domain.baseUrl = normalizedUrl;
       domain.normalizedUrl = normalizedUrl;
+    }
+
+    if (Object.prototype.hasOwnProperty.call(req.body, 'owner')) {
+      const owner = normalizeOwner(req.body.owner);
+      if (!owner) return res.status(400).json({ error: 'Valid owner is required' });
+      domain.owner = owner;
     }
 
     if (Object.prototype.hasOwnProperty.call(req.body, 'enabled')) {

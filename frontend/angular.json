@@ -28,9 +28,15 @@
             "inlineStyleLanguage": "scss",
             "assets": [
               {
+                "glob": "staticwebapp.config.json",
+                "input": "public",
+                "output": "/"
+              },
+              {
                 "glob": "**/*",
                 "input": "public",
-                "output": "/public"
+                "output": "/public",
+                "ignore": ["staticwebapp.config.json"]
               }
             ],
             "styles": ["src/styles.scss"],

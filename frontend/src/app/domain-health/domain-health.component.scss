@@ -70,7 +70,7 @@
 
 .content-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1.35fr) minmax(360px, 0.65fr);
+  grid-template-columns: minmax(0, 1.45fr) minmax(360px, 0.55fr);
   gap: 16px;
   align-items: start;
 }
@@ -88,20 +88,51 @@
 
 .domain-table {
   width: 100%;
-  min-width: 1080px;
+  min-width: 960px;
   border-collapse: collapse;
+  table-layout: fixed;
+}
+
+.status-col {
+  width: 94px;
+}
+
+.domain-col {
+  width: 230px;
+}
+
+.owner-col {
+  width: 76px;
+}
+
+.performance-col {
+  width: 152px;
+}
+
+.checked-col {
+  width: 118px;
+}
+
+.issue-col {
+  width: 168px;
+}
+
+.actions-col-width {
+  width: 126px;
 }
 
 .domain-table th,
 .domain-table td {
-  padding: 12px;
+  padding: 7px 10px;
   border-bottom: 1px solid var(--brand-border);
   text-align: left;
   vertical-align: middle;
+  font-size: 13px;
+  line-height: 1.25;
 }
 
 .domain-table th {
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 700;
   color: var(--brand-muted);
   text-transform: uppercase;
@@ -139,12 +170,19 @@
 .domain-url {
   display: block;
   margin-top: 3px;
-  color: #1d4ed8;
+  color: var(--brand-muted);
   overflow-wrap: anywhere;
+  font-size: 10.5px;
+  line-height: 1.25;
+}
+
+.domain-table td strong {
+  font-size: 14px;
+  line-height: 1.2;
 }
 
 .actions-col {
-  width: 176px;
+  width: 140px;
   white-space: nowrap;
 }
 
@@ -152,19 +190,31 @@
   color: inherit;
 }
 
+.actions-col .mat-mdc-icon-button {
+  width: 30px;
+  height: 30px;
+  padding: 3px;
+}
+
+.actions-col mat-icon {
+  font-size: 20px;
+  width: 20px;
+  height: 20px;
+}
+
 .status-pill {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 5px;
   min-width: max-content;
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 700;
 }
 
 .status-pill mat-icon {
-  font-size: 20px;
-  width: 20px;
-  height: 20px;
+  font-size: 17px;
+  width: 17px;
+  height: 17px;
 }
 
 .performance-ok {
@@ -185,9 +235,23 @@
 
 .metric-subtext {
   display: block;
-  margin-top: 4px;
+  margin-top: 3px;
   color: var(--brand-muted);
-  font-size: 12px;
+  font-size: 10.5px;
+  line-height: 1.25;
+}
+
+.owner-pill {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  padding: 0 8px;
+  border: 1px solid rgba(17, 24, 39, 0.12);
+  border-radius: 999px;
+  background: #f8fafc;
+  font-size: 10.5px;
+  font-weight: 700;
+  color: #374151;
 }
 
 .empty-state,
