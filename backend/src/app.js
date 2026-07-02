@@ -11,6 +11,7 @@ const authRoutes = require('./routes/authRoutes');
 const mailRoutes = require('./routes/mailRoutes');
 const domainHealthRoutes = require('./routes/domainHealthRoutes');
 const { startDomainHealthMonitor } = require('./services/domainMonitorService');
+const { startDomainDailyReportScheduler } = require('./services/domainDailyReportService');
 
 const app = express();
 
@@ -49,6 +50,7 @@ if (require.main === module) {
   connectDb()
     .then(() => {
       startDomainHealthMonitor();
+      startDomainDailyReportScheduler();
       app.listen(port, () => console.log(`[app] EPDS Admin API listening on ${port}`));
     })
     .catch((err) => {
