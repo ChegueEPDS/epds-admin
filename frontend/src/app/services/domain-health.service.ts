@@ -68,6 +68,50 @@ export type DomainCheck = {
   errorMessage?: string;
 };
 
+export type PageSpeedMetric = {
+  id: string;
+  title?: string;
+  displayValue?: string | null;
+  numericValue?: number | null;
+  score?: number | null;
+};
+
+export type DomainDeepScanResult = {
+  checkedAt: string;
+  domain: DomainMonitor;
+  scans: Array<{
+    ok: boolean;
+    strategy: 'mobile' | 'desktop';
+    requestedUrl?: string | null;
+    finalUrl?: string | null;
+    fetchedAt?: string;
+    lighthouseVersion?: string | null;
+    userAgent?: string | null;
+    scores?: {
+      performance: number | null;
+      accessibility: number | null;
+      bestPractices: number | null;
+      seo: number | null;
+    };
+    metrics?: {
+      firstContentfulPaint: PageSpeedMetric | null;
+      largestContentfulPaint: PageSpeedMetric | null;
+      cumulativeLayoutShift: PageSpeedMetric | null;
+      totalBlockingTime: PageSpeedMetric | null;
+      speedIndex: PageSpeedMetric | null;
+    };
+    opportunities?: Array<{
+      id?: string;
+      title?: string;
+      displayValue?: string | null;
+      savingsMs?: number;
+    }>;
+    warnings?: unknown[];
+    runtimeError?: unknown;
+    error?: string;
+  }>;
+};
+
 export type DomainPayload = {
   name: string;
   baseUrl: string;
@@ -105,6 +149,10 @@ export class DomainHealthService {
 
   checkNow(id: string) {
     return this.http.post<{ domain: DomainMonitor; check: DomainCheck }>(`${this.base}/domains/${id}/check-now`, {});
+  }
+
+  deepScan(id: string) {
+    return this.http.post<DomainDeepScanResult>(`${this.base}/domains/${id}/deep-scan`, {});
   }
 
   getChecks(id: string, range: '24h' | '7d' | '30d') {

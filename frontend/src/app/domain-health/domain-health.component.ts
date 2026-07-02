@@ -14,6 +14,7 @@ import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import {
   DomainCheck,
+  DomainDeepScanResult,
   DomainHealthService,
   DomainMonitor,
   DomainOwner,
@@ -105,6 +106,276 @@ export class DomainDialogComponent {
       owner: this.model.owner,
       enabled: this.model.enabled
     });
+  }
+}
+
+@Component({
+  selector: 'app-domain-deep-scan-dialog',
+  standalone: true,
+  imports: [
+    CommonModule,
+    MatButtonModule,
+    MatDialogModule,
+    MatIconModule,
+    MatProgressSpinnerModule
+  ],
+  template: `
+    <h2 mat-dialog-title>Deep scan</h2>
+    <mat-dialog-content class="deep-scan-dialog">
+      <div class="deep-scan-head">
+        <div>
+          <strong>{{ data.domain.name }}</strong>
+          <span>{{ data.domain.baseUrl }}</span>
+        </div>
+        <mat-progress-spinner *ngIf="isLoading" diameter="28" mode="indeterminate"></mat-progress-spinner>
+      </div>
+
+      <div *ngIf="isLoading" class="deep-scan-loading">
+        <mat-icon class="material-symbols-outlined">speed</mat-icon>
+        <span>Running mobile and desktop PageSpeed scan...</span>
+      </div>
+
+      <div *ngIf="!isLoading && error" class="deep-scan-error">
+        <mat-icon class="material-symbols-outlined">error</mat-icon>
+        <span>{{ error }}</span>
+      </div>
+
+      <div *ngIf="!isLoading && result" class="deep-scan-results">
+        <section *ngFor="let scan of result.scans" class="scan-card">
+          <div class="scan-card-head">
+            <h3>{{ scan.strategy | titlecase }}</h3>
+            <span *ngIf="scan.ok">{{ scan.fetchedAt | date:'short' }}</span>
+            <span *ngIf="!scan.ok" class="scan-failed">Failed</span>
+          </div>
+
+          <div *ngIf="!scan.ok" class="scan-error">{{ scan.error || 'Scan failed.' }}</div>
+
+          <ng-container *ngIf="scan.ok">
+            <div class="score-grid">
+              <div [class]="scoreClass(scan.scores?.performance)">
+                <span>Performance</span>
+                <strong>{{ scoreText(scan.scores?.performance) }}</strong>
+              </div>
+              <div [class]="scoreClass(scan.scores?.accessibility)">
+                <span>Accessibility</span>
+                <strong>{{ scoreText(scan.scores?.accessibility) }}</strong>
+              </div>
+              <div [class]="scoreClass(scan.scores?.bestPractices)">
+                <span>Best practices</span>
+                <strong>{{ scoreText(scan.scores?.bestPractices) }}</strong>
+              </div>
+              <div [class]="scoreClass(scan.scores?.seo)">
+                <span>SEO</span>
+                <strong>{{ scoreText(scan.scores?.seo) }}</strong>
+              </div>
+            </div>
+
+            <div class="metric-list">
+              <div>
+                <span>FCP</span>
+                <strong>{{ scan.metrics?.firstContentfulPaint?.displayValue || '-' }}</strong>
+              </div>
+              <div>
+                <span>LCP</span>
+                <strong>{{ scan.metrics?.largestContentfulPaint?.displayValue || '-' }}</strong>
+              </div>
+              <div>
+                <span>CLS</span>
+                <strong>{{ scan.metrics?.cumulativeLayoutShift?.displayValue || '-' }}</strong>
+              </div>
+              <div>
+                <span>TBT</span>
+                <strong>{{ scan.metrics?.totalBlockingTime?.displayValue || '-' }}</strong>
+              </div>
+              <div>
+                <span>Speed index</span>
+                <strong>{{ scan.metrics?.speedIndex?.displayValue || '-' }}</strong>
+              </div>
+            </div>
+
+            <div class="opportunity-list">
+              <h4>Top opportunities</h4>
+              <div *ngIf="!scan.opportunities?.length" class="muted-row">No major opportunities returned.</div>
+              <div *ngFor="let item of scan.opportunities" class="opportunity-row">
+                <span>{{ item.title }}</span>
+                <strong>{{ item.displayValue || savingsText(item.savingsMs) }}</strong>
+              </div>
+            </div>
+          </ng-container>
+        </section>
+      </div>
+    </mat-dialog-content>
+    <mat-dialog-actions align="end">
+      <button mat-button mat-dialog-close>Close</button>
+    </mat-dialog-actions>
+  `,
+  styles: [`
+    :host {
+      display: block;
+    }
+    .deep-scan-dialog {
+      display: grid;
+      width: 100%;
+      max-height: calc(92vh - 108px);
+      gap: 14px;
+      padding-top: 4px;
+    }
+    .deep-scan-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+    }
+    .deep-scan-head strong,
+    .deep-scan-head span {
+      display: block;
+    }
+    .deep-scan-head span,
+    .muted-row,
+    .scan-card-head span {
+      color: #6b7280;
+      font-size: 12px;
+    }
+    .deep-scan-loading,
+    .deep-scan-error {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      min-height: 180px;
+      color: #6b7280;
+    }
+    .deep-scan-error,
+    .scan-error,
+    .scan-failed {
+      color: #b91c1c;
+    }
+    .deep-scan-results {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 14px;
+    }
+    .scan-card {
+      display: grid;
+      gap: 12px;
+      padding: 14px;
+      border: 1px solid var(--brand-border);
+      border-radius: 8px;
+      background: #fff;
+    }
+    .scan-card-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+    }
+    .scan-card-head h3,
+    .opportunity-list h4 {
+      margin: 0;
+    }
+    .score-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 8px;
+    }
+    .score-grid div,
+    .metric-list div {
+      padding: 8px;
+      border: 1px solid var(--brand-border);
+      border-radius: 8px;
+      background: #f8fafc;
+    }
+    .score-grid span,
+    .metric-list span {
+      display: block;
+      margin-bottom: 4px;
+      color: #6b7280;
+      font-size: 11px;
+    }
+    .score-grid strong,
+    .metric-list strong {
+      font-size: 16px;
+    }
+    .score-ok strong {
+      color: #047857;
+    }
+    .score-warning strong {
+      color: #b45309;
+    }
+    .score-error strong {
+      color: #b91c1c;
+    }
+    .metric-list {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap: 8px;
+    }
+    .opportunity-list {
+      display: grid;
+      gap: 8px;
+    }
+    .opportunity-row {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      padding-top: 8px;
+      border-top: 1px solid var(--brand-border);
+      font-size: 12px;
+    }
+    .opportunity-row span {
+      min-width: 0;
+    }
+    .opportunity-row strong {
+      white-space: nowrap;
+    }
+    @media (max-width: 900px) {
+      .deep-scan-results,
+      .score-grid,
+      .metric-list {
+        grid-template-columns: 1fr;
+      }
+    }
+  `]
+})
+export class DomainDeepScanDialogComponent implements OnInit {
+  isLoading = true;
+  error = '';
+  result: DomainDeepScanResult | null = null;
+
+  constructor(
+    @Inject(MAT_DIALOG_DATA) public data: { domain: DomainMonitor },
+    private service: DomainHealthService
+  ) {}
+
+  ngOnInit(): void {
+    void this.run();
+  }
+
+  async run(): Promise<void> {
+    this.isLoading = true;
+    this.error = '';
+    try {
+      this.result = await firstValueFrom(this.service.deepScan(this.data.domain.id));
+    } catch (error: any) {
+      this.error = error?.error?.error || 'Deep scan failed.';
+    } finally {
+      this.isLoading = false;
+    }
+  }
+
+  scoreText(value?: number | null): string {
+    return typeof value === 'number' ? String(value) : '-';
+  }
+
+  scoreClass(value?: number | null): string {
+    if (typeof value !== 'number') return 'score-unknown';
+    if (value >= 90) return 'score-ok';
+    if (value >= 50) return 'score-warning';
+    return 'score-error';
+  }
+
+  savingsText(value?: number): string {
+    return typeof value === 'number' ? `${value} ms` : '-';
   }
 }
 
@@ -254,6 +525,17 @@ export class DomainHealthComponent implements OnInit {
     } finally {
       this.isChecking = false;
     }
+  }
+
+  openDeepScan(domain: DomainMonitor): void {
+    this.dialog.open(DomainDeepScanDialogComponent, {
+      data: { domain },
+      autoFocus: false,
+      width: '96vw',
+      maxWidth: '1200px',
+      height: '92vh',
+      maxHeight: '92vh'
+    });
   }
 
   upsertDomain(domain: DomainMonitor): void {

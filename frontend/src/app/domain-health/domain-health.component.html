@@ -165,6 +165,11 @@
         </div>
       </div>
 
+      <button mat-stroked-button type="button" class="deep-scan-button" (click)="openDeepScan(selectedDomain)">
+        <mat-icon class="material-symbols-outlined">speed</mat-icon>
+        Deep scan
+      </button>
+
       <div class="range-row">
         <button mat-button type="button" [class.active-range]="selectedRange === '24h'" (click)="selectedRange = '24h'; loadChecks()">24h</button>
         <button mat-button type="button" [class.active-range]="selectedRange === '7d'" (click)="selectedRange = '7d'; loadChecks()">7d</button>

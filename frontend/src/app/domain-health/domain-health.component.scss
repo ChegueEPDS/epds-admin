@@ -70,7 +70,7 @@
 
 .content-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1.45fr) minmax(360px, 0.55fr);
+  grid-template-columns: minmax(0, 2fr) minmax(360px, 1fr);
   gap: 16px;
   align-items: start;
 }
@@ -88,25 +88,25 @@
 
 .domain-table {
   width: 100%;
-  min-width: 960px;
+  min-width: 900px;
   border-collapse: collapse;
   table-layout: fixed;
 }
 
 .status-col {
-  width: 94px;
+  width: 88px;
 }
 
 .domain-col {
-  width: 230px;
+  width: 178px;
 }
 
 .owner-col {
-  width: 76px;
+  width: 82px;
 }
 
 .performance-col {
-  width: 152px;
+  width: 150px;
 }
 
 .checked-col {
@@ -114,11 +114,11 @@
 }
 
 .issue-col {
-  width: 168px;
+  width: 142px;
 }
 
 .actions-col-width {
-  width: 126px;
+  width: 142px;
 }
 
 .domain-table th,
@@ -314,6 +314,15 @@
 
 .metric-grid strong {
   font-size: 18px;
+}
+
+.deep-scan-button {
+  width: 100%;
+  margin: -2px 0 14px;
+}
+
+.deep-scan-button mat-icon {
+  margin-right: 6px;
 }
 
 .range-row {

@@ -1,6 +1,7 @@
 const dns = require('dns').promises;
 const DomainMonitor = require('../models/domainMonitor');
 const DomainHealthCheck = require('../models/domainHealthCheck');
+const { runDeepScan } = require('../services/pageSpeedService');
 const {
   normalizeBaseUrl,
   assertPublicUrl,
@@ -172,6 +173,22 @@ exports.checkDomainNow = async (req, res, next) => {
     const check = await runDomainCheck(domain);
     const summary = await summarizeRecentChecks(domain._id);
     return res.json({ domain: presentDomain(domain, summary), check });
+  } catch (err) {
+    if (err.statusCode) return res.status(err.statusCode).json({ error: err.message });
+    return next(err);
+  }
+};
+
+exports.deepScanDomain = async (req, res, next) => {
+  try {
+    const domain = await DomainMonitor.findOne({ _id: req.params.id, ...domainScopeQuery(req.scope) });
+    if (!domain) return res.status(404).json({ error: 'Domain not found' });
+
+    const result = await runDeepScan(domain.baseUrl);
+    return res.json({
+      domain: presentDomain(domain, await summarizeRecentChecks(domain._id)),
+      ...result
+    });
   } catch (err) {
     if (err.statusCode) return res.status(err.statusCode).json({ error: err.message });
     return next(err);
