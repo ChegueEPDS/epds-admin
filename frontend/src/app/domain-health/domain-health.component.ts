@@ -16,6 +16,7 @@ import {
   DomainCheck,
   DomainHealthService,
   DomainMonitor,
+  DomainPerformanceStatus,
   DomainMonitorStatus,
   DomainPayload
 } from '../services/domain-health.service';
@@ -272,9 +273,42 @@ export class DomainHealthComponent implements OnInit {
   }
 
   uptimePercent(): string {
-    if (!this.checks.length) return '-';
-    const ok = this.checks.filter((check) => check.ok).length;
-    return `${Math.round((ok / this.checks.length) * 1000) / 10}%`;
+    const uptime = this.selectedDomain?.availability?.uptimePercent;
+    return typeof uptime === 'number' ? `${uptime}%` : '-';
+  }
+
+  uptimeText(domain: DomainMonitor): string {
+    const uptime = domain.availability?.uptimePercent;
+    return typeof uptime === 'number' ? `${uptime}%` : '-';
+  }
+
+  msText(value?: number | null): string {
+    return typeof value === 'number' ? `${value} ms` : '-';
+  }
+
+  performanceIcon(status?: DomainPerformanceStatus): string {
+    if (status === 'very_slow') return 'priority_high';
+    if (status === 'slow') return 'speed';
+    if (status === 'ok') return 'bolt';
+    return 'help';
+  }
+
+  performanceLabel(status?: DomainPerformanceStatus): string {
+    if (status === 'very_slow') return 'Very slow';
+    if (status === 'slow') return 'Slow';
+    if (status === 'ok') return 'OK';
+    return 'No data';
+  }
+
+  performanceStatus(domain: DomainMonitor): DomainPerformanceStatus {
+    return domain.performance?.status || 'unknown';
+  }
+
+  issueText(domain: DomainMonitor): string {
+    if (domain.displayStatus === 'error') return domain.lastError || 'Current issue';
+    if (domain.displayStatus === 'warning') return `${domain.recentIssueCount} issue in 24h`;
+    if (domain.displayStatus === 'ok') return 'No recent issues';
+    return 'No check yet';
   }
 
   chartPoints(): Array<{ x: number; y: number; color: string; label: string; check: DomainCheck }> {
@@ -290,7 +324,7 @@ export class DomainHealthComponent implements OnInit {
       const value = check.ok ? Math.max(check.responseMs || 0, 1) : max;
       const x = pad + (index / span) * (width - pad * 2);
       const y = height - pad - (value / max) * (height - pad * 2);
-      const color = !check.ok ? '#b91c1c' : (check.responseMs || 0) > 2000 ? '#b45309' : '#047857';
+      const color = !check.ok ? '#b91c1c' : (check.responseMs || 0) > 5000 ? '#b91c1c' : (check.responseMs || 0) > 2500 ? '#b45309' : '#047857';
       const label = `${new Date(check.checkedAt).toLocaleString()} · ${check.ok ? `${check.responseMs} ms` : check.errorType || 'failed'}`;
       return { x, y, color, label, check };
     });

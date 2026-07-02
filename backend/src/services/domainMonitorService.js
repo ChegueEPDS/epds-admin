@@ -7,6 +7,8 @@ const DomainHealthCheck = require('../models/domainHealthCheck');
 const CHECK_TIMEOUT_MS = 10000;
 const MONITOR_INTERVAL_MS = 15 * 60 * 1000;
 const RECENT_ISSUE_MS = 24 * 60 * 60 * 1000;
+const PERFORMANCE_SLOW_MS = 2500;
+const PERFORMANCE_VERY_SLOW_MS = 5000;
 
 function normalizeBaseUrl(input) {
   const raw = String(input || '').trim();
@@ -71,7 +73,41 @@ function domainScopeQuery(scope = {}) {
   return { tenantId: scope.tenantId || null };
 }
 
-function presentDomain(domain, recentIssueCount = 0) {
+function percentile(sortedValues, p) {
+  if (!sortedValues.length) return null;
+  const index = Math.ceil((p / 100) * sortedValues.length) - 1;
+  return sortedValues[Math.min(Math.max(index, 0), sortedValues.length - 1)];
+}
+
+function performanceStatus(responseMs) {
+  if (typeof responseMs !== 'number') return 'unknown';
+  if (responseMs > PERFORMANCE_VERY_SLOW_MS) return 'very_slow';
+  if (responseMs > PERFORMANCE_SLOW_MS) return 'slow';
+  return 'ok';
+}
+
+function summarizeChecks(checks = []) {
+  const total = checks.length;
+  const failures = checks.filter((check) => !check.ok).length;
+  const successfulResponseTimes = checks
+    .filter((check) => check.ok && typeof check.responseMs === 'number')
+    .map((check) => check.responseMs)
+    .sort((a, b) => a - b);
+  const medianResponseMs = percentile(successfulResponseTimes, 50);
+  const p95ResponseMs = percentile(successfulResponseTimes, 95);
+
+  return {
+    totalChecks: total,
+    uptimePercent: total ? Math.round(((total - failures) / total) * 1000) / 10 : null,
+    recentIssueCount: failures,
+    medianResponseMs,
+    p95ResponseMs,
+    performanceStatus: performanceStatus(p95ResponseMs ?? medianResponseMs)
+  };
+}
+
+function presentDomain(domain, summary = {}) {
+  const recentIssueCount = summary.recentIssueCount || 0;
   const hasCurrentIssue = domain.lastStatus === 'error';
   const hasRecentIssue = recentIssueCount > 0 || Boolean(
     domain.lastFailureAt && Date.now() - domain.lastFailureAt.getTime() <= RECENT_ISSUE_MS
@@ -99,6 +135,18 @@ function presentDomain(domain, recentIssueCount = 0) {
     lastFailureAt: domain.lastFailureAt,
     lastRecoveryAt: domain.lastRecoveryAt,
     recentIssueCount,
+    availability: {
+      status: displayStatus,
+      uptimePercent: summary.uptimePercent ?? null,
+      totalChecks: summary.totalChecks || 0,
+      recentIssueCount
+    },
+    performance: {
+      status: summary.performanceStatus || performanceStatus(domain.lastResponseMs),
+      lastResponseMs: domain.lastResponseMs,
+      medianResponseMs: summary.medianResponseMs ?? null,
+      p95ResponseMs: summary.p95ResponseMs ?? null
+    },
     createdAt: domain.createdAt,
     updatedAt: domain.updatedAt
   };
@@ -108,22 +156,34 @@ async function buildDomainList(scope = {}) {
   const domains = await DomainMonitor.find(domainScopeQuery(scope)).sort({ name: 1 }).lean(false);
   const since = new Date(Date.now() - RECENT_ISSUE_MS);
   const visibleDomainIds = domains.map((domain) => domain._id);
-  const failures = visibleDomainIds.length
-    ? await DomainHealthCheck.aggregate([
-      { $match: { domainId: { $in: visibleDomainIds }, checkedAt: { $gte: since }, ok: false } },
-      { $group: { _id: '$domainId', count: { $sum: 1 } } }
-    ])
+  const checks = visibleDomainIds.length
+    ? await DomainHealthCheck.find({ domainId: { $in: visibleDomainIds }, checkedAt: { $gte: since } })
+      .select('domainId ok responseMs')
+      .lean()
     : [];
-  const failureMap = new Map(failures.map((item) => [String(item._id), item.count]));
+  const checksByDomain = checks.reduce((acc, check) => {
+    const key = String(check.domainId);
+    if (!acc.has(key)) acc.set(key, []);
+    acc.get(key).push(check);
+    return acc;
+  }, new Map());
   const order = { error: 0, warning: 1, unknown: 2, ok: 3 };
   return domains
-    .map((domain) => presentDomain(domain, failureMap.get(String(domain._id)) || 0))
+    .map((domain) => presentDomain(domain, summarizeChecks(checksByDomain.get(String(domain._id)) || [])))
     .sort((a, b) => (order[a.displayStatus] ?? 4) - (order[b.displayStatus] ?? 4) || a.name.localeCompare(b.name));
 }
 
 async function countRecentIssues(domainId) {
   const since = new Date(Date.now() - RECENT_ISSUE_MS);
   return DomainHealthCheck.countDocuments({ domainId, checkedAt: { $gte: since }, ok: false });
+}
+
+async function summarizeRecentChecks(domainId) {
+  const since = new Date(Date.now() - RECENT_ISSUE_MS);
+  const checks = await DomainHealthCheck.find({ domainId, checkedAt: { $gte: since } })
+    .select('ok responseMs')
+    .lean();
+  return summarizeChecks(checks);
 }
 
 async function runDomainCheck(domain) {
@@ -225,6 +285,8 @@ function startDomainHealthMonitor() {
 
 module.exports = {
   CHECK_TIMEOUT_MS,
+  PERFORMANCE_SLOW_MS,
+  PERFORMANCE_VERY_SLOW_MS,
   RECENT_ISSUE_MS,
   normalizeBaseUrl,
   assertPublicUrl,
@@ -233,6 +295,7 @@ module.exports = {
   isGlobalTenant,
   presentDomain,
   countRecentIssues,
+  summarizeRecentChecks,
   runDomainCheck,
   startDomainHealthMonitor
 };

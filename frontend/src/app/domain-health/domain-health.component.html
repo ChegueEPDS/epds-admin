@@ -56,7 +56,7 @@
             <tr>
               <th>Status</th>
               <th>Domain</th>
-              <th>Last response</th>
+              <th>Performance</th>
               <th>Last checked</th>
               <th>Issue</th>
               <th class="actions-col">Actions</th>
@@ -81,13 +81,19 @@
                 <strong>{{ domain.name }}</strong>
                 <span class="domain-url">{{ domain.baseUrl }}</span>
               </td>
-              <td>{{ responseText(domain) }}</td>
+              <td>
+                <span class="status-pill" [ngClass]="'performance-' + performanceStatus(domain)">
+                  <mat-icon class="material-symbols-outlined">{{ performanceIcon(performanceStatus(domain)) }}</mat-icon>
+                  {{ performanceLabel(performanceStatus(domain)) }}
+                </span>
+                <span class="metric-subtext">
+                  Last {{ responseText(domain) }} · P95 {{ msText(domain.performance?.p95ResponseMs) }}
+                </span>
+              </td>
               <td>{{ domain.lastCheckedAt ? (domain.lastCheckedAt | date:'short') : '-' }}</td>
               <td>
-                <span *ngIf="domain.displayStatus === 'error'">{{ domain.lastError || 'Current issue' }}</span>
-                <span *ngIf="domain.displayStatus === 'warning'">{{ domain.recentIssueCount }} issue in 24h</span>
-                <span *ngIf="domain.displayStatus === 'ok'">No recent issues</span>
-                <span *ngIf="domain.displayStatus === 'unknown'">No check yet</span>
+                <span>{{ issueText(domain) }}</span>
+                <span class="metric-subtext">24h uptime {{ uptimeText(domain) }}</span>
               </td>
               <td class="actions-col">
                 <a mat-icon-button [href]="domain.baseUrl" target="_blank" rel="noopener" matTooltip="Open website" (click)="$event.stopPropagation()">
@@ -133,12 +139,16 @@
           <strong>{{ responseText(selectedDomain) }}</strong>
         </div>
         <div>
-          <span>Uptime</span>
+          <span>24h uptime</span>
           <strong>{{ uptimePercent() }}</strong>
         </div>
         <div>
-          <span>24h issues</span>
-          <strong>{{ selectedDomain.recentIssueCount }}</strong>
+          <span>24h median</span>
+          <strong>{{ msText(selectedDomain.performance?.medianResponseMs) }}</strong>
+        </div>
+        <div>
+          <span>24h P95</span>
+          <strong>{{ msText(selectedDomain.performance?.p95ResponseMs) }}</strong>
         </div>
       </div>
 

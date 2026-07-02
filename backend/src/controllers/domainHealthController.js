@@ -5,10 +5,10 @@ const {
   normalizeBaseUrl,
   assertPublicUrl,
   buildDomainList,
-  countRecentIssues,
   domainScopeQuery,
   presentDomain,
-  runDomainCheck
+  runDomainCheck,
+  summarizeRecentChecks
 } = require('../services/domainMonitorService');
 
 function normalizeDomain(input) {
@@ -95,7 +95,9 @@ exports.createDomain = async (req, res, next) => {
       createdBy: req.userId
     });
 
-    return res.status(201).json({ domain: presentDomain(domain) });
+    if (domain.enabled) await runDomainCheck(domain);
+    const summary = await summarizeRecentChecks(domain._id);
+    return res.status(201).json({ domain: presentDomain(domain, summary) });
   } catch (err) {
     if (err.code === 11000) return res.status(409).json({ error: 'Domain URL already exists' });
     if (err.statusCode) return res.status(err.statusCode).json({ error: err.message });
@@ -127,7 +129,8 @@ exports.updateDomain = async (req, res, next) => {
 
     domain.updatedBy = req.userId;
     await domain.save();
-    return res.json({ domain: presentDomain(domain) });
+    const summary = await summarizeRecentChecks(domain._id);
+    return res.json({ domain: presentDomain(domain, summary) });
   } catch (err) {
     if (err.code === 11000) return res.status(409).json({ error: 'Domain URL already exists' });
     if (err.statusCode) return res.status(err.statusCode).json({ error: err.message });
@@ -153,8 +156,8 @@ exports.checkDomainNow = async (req, res, next) => {
     if (!domain) return res.status(404).json({ error: 'Domain not found' });
 
     const check = await runDomainCheck(domain);
-    const recentIssueCount = await countRecentIssues(domain._id);
-    return res.json({ domain: presentDomain(domain, recentIssueCount), check });
+    const summary = await summarizeRecentChecks(domain._id);
+    return res.json({ domain: presentDomain(domain, summary), check });
   } catch (err) {
     if (err.statusCode) return res.status(err.statusCode).json({ error: err.message });
     return next(err);
@@ -174,10 +177,10 @@ exports.getDomainChecks = async (req, res, next) => {
       .limit(3000)
       .lean();
 
-    const recentIssueCount = await countRecentIssues(domain._id);
+    const summary = await summarizeRecentChecks(domain._id);
 
     return res.json({
-      domain: presentDomain(domain, recentIssueCount),
+      domain: presentDomain(domain, summary),
       checks: checks.map((check) => ({
         id: String(check._id),
         checkedAt: check.checkedAt,

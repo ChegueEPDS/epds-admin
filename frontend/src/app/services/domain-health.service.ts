@@ -21,6 +21,7 @@ export type DomainHealthResult = {
 };
 
 export type DomainMonitorStatus = 'ok' | 'warning' | 'error' | 'unknown';
+export type DomainPerformanceStatus = 'ok' | 'slow' | 'very_slow' | 'unknown';
 
 export type DomainMonitor = {
   id: string;
@@ -39,6 +40,18 @@ export type DomainMonitor = {
   lastFailureAt?: string;
   lastRecoveryAt?: string;
   recentIssueCount: number;
+  availability?: {
+    status: DomainMonitorStatus;
+    uptimePercent: number | null;
+    totalChecks: number;
+    recentIssueCount: number;
+  };
+  performance?: {
+    status: DomainPerformanceStatus;
+    lastResponseMs?: number;
+    medianResponseMs: number | null;
+    p95ResponseMs: number | null;
+  };
   createdAt: string;
   updatedAt: string;
 };

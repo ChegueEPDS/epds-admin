@@ -88,7 +88,7 @@
 
 .domain-table {
   width: 100%;
-  min-width: 920px;
+  min-width: 1080px;
   border-collapse: collapse;
 }
 
@@ -167,6 +167,29 @@
   height: 20px;
 }
 
+.performance-ok {
+  color: #047857;
+}
+
+.performance-slow {
+  color: #b45309;
+}
+
+.performance-very_slow {
+  color: #b91c1c;
+}
+
+.performance-unknown {
+  color: #4b5563;
+}
+
+.metric-subtext {
+  display: block;
+  margin-top: 4px;
+  color: var(--brand-muted);
+  font-size: 12px;
+}
+
 .empty-state,
 .empty-timeline,
 .empty-detail {
@@ -206,7 +229,7 @@
 
 .metric-grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 10px;
   margin-bottom: 16px;
 }
