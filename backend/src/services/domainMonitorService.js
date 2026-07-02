@@ -1,0 +1,220 @@
+const dns = require('dns').promises;
+const net = require('net');
+const axios = require('axios');
+const DomainMonitor = require('../models/domainMonitor');
+const DomainHealthCheck = require('../models/domainHealthCheck');
+
+const CHECK_TIMEOUT_MS = 10000;
+const MONITOR_INTERVAL_MS = 15 * 60 * 1000;
+const RECENT_ISSUE_MS = 24 * 60 * 60 * 1000;
+
+function normalizeBaseUrl(input) {
+  const raw = String(input || '').trim();
+  const withProtocol = /^https?:\/\//i.test(raw) ? raw : `https://${raw}`;
+  let url;
+
+  try {
+    url = new URL(withProtocol);
+  } catch {
+    throw Object.assign(new Error('Valid URL is required'), { statusCode: 400 });
+  }
+
+  if (!['http:', 'https:'].includes(url.protocol)) {
+    throw Object.assign(new Error('Only HTTP and HTTPS URLs are allowed'), { statusCode: 400 });
+  }
+
+  url.hash = '';
+  url.search = '';
+  if (url.pathname === '/') url.pathname = '';
+  url.hostname = url.hostname.toLowerCase();
+
+  return url.toString().replace(/\/$/, '');
+}
+
+function isPrivateIp(ip) {
+  const version = net.isIP(ip);
+  if (!version) return true;
+
+  if (version === 6) {
+    const value = ip.toLowerCase();
+    return value === '::1' || value.startsWith('fc') || value.startsWith('fd') || value.startsWith('fe80:');
+  }
+
+  const parts = ip.split('.').map(Number);
+  return (
+    parts[0] === 10 ||
+    parts[0] === 127 ||
+    (parts[0] === 169 && parts[1] === 254) ||
+    (parts[0] === 172 && parts[1] >= 16 && parts[1] <= 31) ||
+    (parts[0] === 192 && parts[1] === 168) ||
+    parts[0] === 0
+  );
+}
+
+async function assertPublicUrl(normalizedUrl) {
+  const { hostname } = new URL(normalizedUrl);
+  const directIp = net.isIP(hostname);
+  const addresses = directIp ? [{ address: hostname }] : await dns.lookup(hostname, { all: true });
+
+  if (!addresses.length || addresses.some((entry) => isPrivateIp(entry.address))) {
+    throw Object.assign(new Error('URL host must resolve to a public address'), { statusCode: 400 });
+  }
+}
+
+function presentDomain(domain, recentIssueCount = 0) {
+  const hasCurrentIssue = domain.lastStatus === 'error';
+  const hasRecentIssue = recentIssueCount > 0 || Boolean(
+    domain.lastFailureAt && Date.now() - domain.lastFailureAt.getTime() <= RECENT_ISSUE_MS
+  );
+  const displayStatus = hasCurrentIssue
+    ? 'error'
+    : hasRecentIssue && domain.lastStatus === 'ok'
+      ? 'warning'
+      : domain.lastStatus || 'unknown';
+
+  return {
+    id: String(domain._id),
+    name: domain.name,
+    baseUrl: domain.baseUrl,
+    enabled: domain.enabled,
+    lastCheckedAt: domain.lastCheckedAt,
+    lastStatus: domain.lastStatus,
+    displayStatus,
+    lastResponseMs: domain.lastResponseMs,
+    lastStatusCode: domain.lastStatusCode,
+    lastError: domain.lastError,
+    lastErrorType: domain.lastErrorType,
+    currentIssueSince: domain.currentIssueSince,
+    lastFailureAt: domain.lastFailureAt,
+    lastRecoveryAt: domain.lastRecoveryAt,
+    recentIssueCount,
+    createdAt: domain.createdAt,
+    updatedAt: domain.updatedAt
+  };
+}
+
+async function buildDomainList() {
+  const domains = await DomainMonitor.find().sort({ name: 1 }).lean(false);
+  const since = new Date(Date.now() - RECENT_ISSUE_MS);
+  const failures = await DomainHealthCheck.aggregate([
+    { $match: { checkedAt: { $gte: since }, ok: false } },
+    { $group: { _id: '$domainId', count: { $sum: 1 } } }
+  ]);
+  const failureMap = new Map(failures.map((item) => [String(item._id), item.count]));
+  const order = { error: 0, warning: 1, unknown: 2, ok: 3 };
+  return domains
+    .map((domain) => presentDomain(domain, failureMap.get(String(domain._id)) || 0))
+    .sort((a, b) => (order[a.displayStatus] ?? 4) - (order[b.displayStatus] ?? 4) || a.name.localeCompare(b.name));
+}
+
+async function countRecentIssues(domainId) {
+  const since = new Date(Date.now() - RECENT_ISSUE_MS);
+  return DomainHealthCheck.countDocuments({ domainId, checkedAt: { $gte: since }, ok: false });
+}
+
+async function runDomainCheck(domain) {
+  const checkedAt = new Date();
+  const startedAt = Date.now();
+  let result;
+
+  try {
+    await assertPublicUrl(domain.normalizedUrl);
+    const response = await axios.get(domain.normalizedUrl, {
+      timeout: CHECK_TIMEOUT_MS,
+      maxRedirects: 3,
+      validateStatus: () => true,
+      headers: { 'User-Agent': 'EPDS-Admin-DomainHealth/1.0' }
+    });
+    const responseMs = Date.now() - startedAt;
+    const ok = response.status >= 200 && response.status < 400;
+    result = {
+      checkedAt,
+      ok,
+      statusCode: response.status,
+      responseMs,
+      errorType: ok ? undefined : 'http_status',
+      errorMessage: ok ? undefined : `HTTP ${response.status}`
+    };
+  } catch (err) {
+    const responseMs = Date.now() - startedAt;
+    const isTimeout = err.code === 'ECONNABORTED' || /timeout/i.test(err.message || '');
+    const isDns = ['ENOTFOUND', 'EAI_AGAIN', 'ENODATA'].includes(err.code);
+    result = {
+      checkedAt,
+      ok: false,
+      responseMs,
+      errorType: isTimeout ? 'timeout' : isDns ? 'dns' : err.statusCode ? 'blocked_host' : 'connection',
+      errorMessage: isTimeout ? 'Request timed out after 10 seconds' : (err.message || 'Request failed')
+    };
+  }
+
+  await DomainHealthCheck.create({
+    domainId: domain._id,
+    checkedAt: result.checkedAt,
+    ok: result.ok,
+    statusCode: result.statusCode,
+    responseMs: result.responseMs,
+    errorType: result.errorType,
+    errorMessage: result.errorMessage
+  });
+
+  const wasFailing = domain.lastStatus === 'error';
+  domain.lastCheckedAt = result.checkedAt;
+  domain.lastStatus = result.ok ? 'ok' : 'error';
+  domain.lastResponseMs = result.responseMs;
+  domain.lastStatusCode = result.statusCode;
+  domain.lastError = result.errorMessage;
+  domain.lastErrorType = result.errorType;
+
+  if (result.ok) {
+    if (wasFailing) domain.lastRecoveryAt = result.checkedAt;
+    domain.currentIssueSince = undefined;
+  } else {
+    domain.lastFailureAt = result.checkedAt;
+    if (!wasFailing) domain.currentIssueSince = result.checkedAt;
+  }
+
+  await domain.save();
+  return result;
+}
+
+let monitorTimer;
+let isRunning = false;
+
+async function runScheduledChecks() {
+  if (isRunning) return;
+  isRunning = true;
+  try {
+    const domains = await DomainMonitor.find({ enabled: true });
+    for (const domain of domains) {
+      try {
+        await runDomainCheck(domain);
+      } catch (err) {
+        console.error(`[domain-monitor] ${domain.baseUrl} check failed:`, err.message);
+      }
+    }
+  } finally {
+    isRunning = false;
+  }
+}
+
+function startDomainHealthMonitor() {
+  if (monitorTimer) return;
+  const delay = Number(process.env.DOMAIN_HEALTH_INITIAL_DELAY_MS || 15000);
+  setTimeout(runScheduledChecks, delay).unref?.();
+  monitorTimer = setInterval(runScheduledChecks, MONITOR_INTERVAL_MS);
+  monitorTimer.unref?.();
+  console.log('[domain-monitor] scheduled every 15 minutes');
+}
+
+module.exports = {
+  CHECK_TIMEOUT_MS,
+  RECENT_ISSUE_MS,
+  normalizeBaseUrl,
+  assertPublicUrl,
+  buildDomainList,
+  presentDomain,
+  countRecentIssues,
+  runDomainCheck,
+  startDomainHealthMonitor
+};

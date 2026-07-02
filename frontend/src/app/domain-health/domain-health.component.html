@@ -2,57 +2,183 @@
   <div class="page-title">
     <div>
       <h1>Domain Health</h1>
-      <p>Check mailbox DNS records for a domain.</p>
+      <p>Monitors registered domains every 15 minutes with a 10 second GET timeout.</p>
     </div>
+    <button mat-flat-button color="primary" type="button" (click)="openDomainDialog()">
+      <mat-icon class="material-symbols-outlined">add</mat-icon>
+      Add domain
+    </button>
   </div>
 
-  <mat-card class="check-card">
-    <mat-card-content>
-      <form class="check-form" (ngSubmit)="check()">
-        <mat-form-field appearance="outline">
-          <mat-label>Domain</mat-label>
-          <input matInput name="domain" [(ngModel)]="domain" placeholder="example.com" required>
-        </mat-form-field>
-        <mat-form-field appearance="outline">
-          <mat-label>DKIM selector</mat-label>
-          <input matInput name="selector" [(ngModel)]="selector" placeholder="default">
-        </mat-form-field>
-        <button mat-flat-button color="primary" type="submit" [disabled]="isLoading">
-          <mat-progress-spinner *ngIf="isLoading" diameter="18" mode="indeterminate"></mat-progress-spinner>
-          <mat-icon *ngIf="!isLoading" class="material-symbols-outlined">health_and_safety</mat-icon>
-          Check
-        </button>
-      </form>
-    </mat-card-content>
-  </mat-card>
+  <div class="summary-strip">
+    <button type="button" class="summary-tile status-ok" [class.active]="statusFilter === 'healthy'" (click)="statusFilter = 'healthy'">
+      <mat-icon class="material-symbols-outlined">check_circle</mat-icon>
+      <span>{{ summary('ok') }}</span>
+      <strong>Healthy</strong>
+    </button>
+    <button type="button" class="summary-tile status-warning" [class.active]="statusFilter === 'warning'" (click)="statusFilter = 'warning'">
+      <mat-icon class="material-symbols-outlined">warning</mat-icon>
+      <span>{{ summary('warning') }}</span>
+      <strong>Recent issue</strong>
+    </button>
+    <button type="button" class="summary-tile status-error" [class.active]="statusFilter === 'issues'" (click)="statusFilter = 'issues'">
+      <mat-icon class="material-symbols-outlined">error</mat-icon>
+      <span>{{ summary('error') }}</span>
+      <strong>Down</strong>
+    </button>
+    <button type="button" class="summary-tile status-unknown" [class.active]="statusFilter === 'all'" (click)="statusFilter = 'all'">
+      <mat-icon class="material-symbols-outlined">dns</mat-icon>
+      <span>{{ domains.length }}</span>
+      <strong>All domains</strong>
+    </button>
+  </div>
 
-  <div class="result-grid" *ngIf="result">
-    <mat-card class="summary-card" [ngClass]="'summary-' + result.summary">
-      <mat-card-content>
-        <mat-icon class="material-symbols-outlined">monitor_heart</mat-icon>
+  <div class="toolbar-row">
+    <mat-form-field appearance="outline">
+      <mat-label>Search</mat-label>
+      <mat-icon matPrefix class="material-symbols-outlined">search</mat-icon>
+      <input matInput [(ngModel)]="searchTerm" placeholder="Name or URL">
+    </mat-form-field>
+    <button mat-button type="button" (click)="loadDomains()" [disabled]="isLoading">
+      <mat-progress-spinner *ngIf="isLoading" diameter="18" mode="indeterminate"></mat-progress-spinner>
+      <mat-icon *ngIf="!isLoading" class="material-symbols-outlined">refresh</mat-icon>
+      Refresh
+    </button>
+  </div>
+
+  <div class="content-grid">
+    <section class="domain-list-panel">
+      <div class="table-wrap">
+        <table class="domain-table">
+          <thead>
+            <tr>
+              <th>Status</th>
+              <th>Domain</th>
+              <th>Last response</th>
+              <th>Last checked</th>
+              <th>Issue</th>
+              <th class="actions-col">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr
+              *ngFor="let domain of filteredDomains; trackBy: trackByDomain"
+              [class.selected]="selectedDomain?.id === domain.id"
+              [class.row-error]="domain.displayStatus === 'error'"
+              [class.row-warning]="domain.displayStatus === 'warning'"
+              [class.row-disabled]="!domain.enabled"
+              (click)="selectDomain(domain)"
+            >
+              <td>
+                <span class="status-pill" [ngClass]="'status-' + domain.displayStatus">
+                  <mat-icon class="material-symbols-outlined">{{ statusIcon(domain.displayStatus) }}</mat-icon>
+                  {{ statusLabel(domain.displayStatus) }}
+                </span>
+              </td>
+              <td>
+                <strong>{{ domain.name }}</strong>
+                <a [href]="domain.baseUrl" target="_blank" rel="noopener" (click)="$event.stopPropagation()">{{ domain.baseUrl }}</a>
+              </td>
+              <td>{{ responseText(domain) }}</td>
+              <td>{{ domain.lastCheckedAt ? (domain.lastCheckedAt | date:'short') : '-' }}</td>
+              <td>
+                <span *ngIf="domain.displayStatus === 'error'">{{ domain.lastError || 'Current issue' }}</span>
+                <span *ngIf="domain.displayStatus === 'warning'">{{ domain.recentIssueCount }} issue in 24h</span>
+                <span *ngIf="domain.displayStatus === 'ok'">No recent issues</span>
+                <span *ngIf="domain.displayStatus === 'unknown'">No check yet</span>
+              </td>
+              <td class="actions-col">
+                <button mat-icon-button type="button" matTooltip="Run check now" (click)="checkNow(domain, $event)" [disabled]="isChecking">
+                  <mat-icon class="material-symbols-outlined">play_arrow</mat-icon>
+                </button>
+                <button mat-icon-button type="button" matTooltip="Edit domain" (click)="$event.stopPropagation(); openDomainDialog(domain)">
+                  <mat-icon class="material-symbols-outlined">edit</mat-icon>
+                </button>
+                <button mat-icon-button type="button" matTooltip="Delete domain" (click)="deleteDomain(domain, $event)">
+                  <mat-icon class="material-symbols-outlined">delete</mat-icon>
+                </button>
+              </td>
+            </tr>
+            <tr *ngIf="!filteredDomains.length">
+              <td colspan="6" class="empty-state">
+                <mat-icon class="material-symbols-outlined">domain_disabled</mat-icon>
+                No domains match the current filter.
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <aside class="detail-panel" *ngIf="selectedDomain; else noSelection">
+      <div class="detail-head">
         <div>
-          <h2>{{ result.domain }}</h2>
-          <p>{{ result.summary | uppercase }} · {{ result.checkedAt | date:'medium' }}</p>
+          <h2>{{ selectedDomain.name }}</h2>
+          <a [href]="selectedDomain.baseUrl" target="_blank" rel="noopener">{{ selectedDomain.baseUrl }}</a>
         </div>
-      </mat-card-content>
-    </mat-card>
+        <span class="status-pill" [ngClass]="'status-' + selectedDomain.displayStatus">
+          <mat-icon class="material-symbols-outlined">{{ statusIcon(selectedDomain.displayStatus) }}</mat-icon>
+          {{ statusLabel(selectedDomain.displayStatus) }}
+        </span>
+      </div>
 
-    <mat-card *ngFor="let entry of recordEntries()" class="record-card">
-      <mat-card-content>
-        <div class="record-head">
-          <mat-icon class="material-symbols-outlined" [ngClass]="'status-' + entry.record.status">{{ entry.icon }}</mat-icon>
+      <div class="metric-grid">
+        <div>
+          <span>Last response</span>
+          <strong>{{ responseText(selectedDomain) }}</strong>
+        </div>
+        <div>
+          <span>Uptime</span>
+          <strong>{{ uptimePercent() }}</strong>
+        </div>
+        <div>
+          <span>24h issues</span>
+          <strong>{{ selectedDomain.recentIssueCount }}</strong>
+        </div>
+      </div>
+
+      <div class="range-row">
+        <button mat-button type="button" [class.active-range]="selectedRange === '24h'" (click)="selectedRange = '24h'; loadChecks()">24h</button>
+        <button mat-button type="button" [class.active-range]="selectedRange === '7d'" (click)="selectedRange = '7d'; loadChecks()">7d</button>
+        <button mat-button type="button" [class.active-range]="selectedRange === '30d'" (click)="selectedRange = '30d'; loadChecks()">30d</button>
+      </div>
+
+      <div class="timeline-chart" *ngIf="checks.length; else emptyTimeline">
+        <svg viewBox="0 0 720 220" role="img" aria-label="Domain response time timeline">
+          <line x1="28" y1="192" x2="692" y2="192" class="axis"></line>
+          <line x1="28" y1="28" x2="28" y2="192" class="axis"></line>
+          <polyline [attr.points]="polylinePoints()" fill="none" class="response-line"></polyline>
+          <g *ngFor="let point of chartPoints()">
+            <circle [attr.cx]="point.x" [attr.cy]="point.y" r="5" [attr.fill]="point.color"></circle>
+            <title>{{ point.label }}</title>
+          </g>
+        </svg>
+      </div>
+      <ng-template #emptyTimeline>
+        <div class="empty-timeline">
+          <mat-progress-spinner *ngIf="isLoadingChecks" diameter="24" mode="indeterminate"></mat-progress-spinner>
+          <mat-icon *ngIf="!isLoadingChecks" class="material-symbols-outlined">timeline</mat-icon>
+          <span>{{ isLoadingChecks ? 'Loading timeline...' : 'No checks in this range yet.' }}</span>
+        </div>
+      </ng-template>
+
+      <div class="event-list">
+        <h3>Recent checks</h3>
+        <div class="event-row" *ngFor="let check of checks.slice().reverse().slice(0, 10); trackBy: trackByCheck" [class.failed]="!check.ok">
+          <mat-icon class="material-symbols-outlined">{{ check.ok ? 'check_circle' : 'error' }}</mat-icon>
           <div>
-            <h3>{{ entry.key }}</h3>
-            <span [ngClass]="'status-' + entry.record.status">{{ entry.record.status | uppercase }}</span>
+            <strong>{{ check.checkedAt | date:'short' }}</strong>
+            <span>{{ check.ok ? ((check.responseMs || 0) + ' ms · HTTP ' + check.statusCode) : (check.errorMessage || check.errorType) }}</span>
           </div>
         </div>
-        <div class="record-values" *ngIf="entry.record.values.length; else emptyRecord">
-          <code *ngFor="let value of entry.record.values">{{ valueText(value) }}</code>
-        </div>
-        <ng-template #emptyRecord>
-          <p class="empty-record">No record found.</p>
-        </ng-template>
-      </mat-card-content>
-    </mat-card>
+      </div>
+    </aside>
+
+    <ng-template #noSelection>
+      <aside class="detail-panel empty-detail">
+        <mat-icon class="material-symbols-outlined">monitor_heart</mat-icon>
+        <span>Select a domain to inspect the response-time timeline.</span>
+      </aside>
+    </ng-template>
   </div>
 </section>

@@ -20,6 +20,44 @@ export type DomainHealthResult = {
   };
 };
 
+export type DomainMonitorStatus = 'ok' | 'warning' | 'error' | 'unknown';
+
+export type DomainMonitor = {
+  id: string;
+  name: string;
+  baseUrl: string;
+  enabled: boolean;
+  lastCheckedAt?: string;
+  lastStatus: DomainMonitorStatus;
+  displayStatus: DomainMonitorStatus;
+  lastResponseMs?: number;
+  lastStatusCode?: number;
+  lastError?: string;
+  lastErrorType?: string;
+  currentIssueSince?: string;
+  lastFailureAt?: string;
+  lastRecoveryAt?: string;
+  recentIssueCount: number;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type DomainCheck = {
+  id: string;
+  checkedAt: string;
+  ok: boolean;
+  statusCode?: number;
+  responseMs?: number;
+  errorType?: string;
+  errorMessage?: string;
+};
+
+export type DomainPayload = {
+  name: string;
+  baseUrl: string;
+  enabled: boolean;
+};
+
 @Injectable({ providedIn: 'root' })
 export class DomainHealthService {
   private base = `${environment.apiUrl}/api`;
@@ -29,6 +67,32 @@ export class DomainHealthService {
   check(domain: string, selector: string) {
     return this.http.get<DomainHealthResult>(`${this.base}/domain-health`, {
       params: { domain, selector }
+    });
+  }
+
+  listDomains() {
+    return this.http.get<{ domains: DomainMonitor[] }>(`${this.base}/domains`);
+  }
+
+  createDomain(payload: DomainPayload) {
+    return this.http.post<{ domain: DomainMonitor }>(`${this.base}/domains`, payload);
+  }
+
+  updateDomain(id: string, payload: DomainPayload) {
+    return this.http.patch<{ domain: DomainMonitor }>(`${this.base}/domains/${id}`, payload);
+  }
+
+  deleteDomain(id: string) {
+    return this.http.delete<void>(`${this.base}/domains/${id}`);
+  }
+
+  checkNow(id: string) {
+    return this.http.post<{ domain: DomainMonitor; check: DomainCheck }>(`${this.base}/domains/${id}/check-now`, {});
+  }
+
+  getChecks(id: string, range: '24h' | '7d' | '30d') {
+    return this.http.get<{ domain: DomainMonitor; checks: DomainCheck[] }>(`${this.base}/domains/${id}/checks`, {
+      params: { range }
     });
   }
 }

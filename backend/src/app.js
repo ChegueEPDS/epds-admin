@@ -8,6 +8,7 @@ const { connectDb } = require('./db');
 const authRoutes = require('./routes/authRoutes');
 const mailRoutes = require('./routes/mailRoutes');
 const domainHealthRoutes = require('./routes/domainHealthRoutes');
+const { startDomainHealthMonitor } = require('./services/domainMonitorService');
 
 const app = express();
 
@@ -44,7 +45,10 @@ app.use((err, req, res, next) => {
 if (require.main === module) {
   const port = Number(process.env.PORT || 4301);
   connectDb()
-    .then(() => app.listen(port, () => console.log(`[app] EPDS Admin API listening on ${port}`)))
+    .then(() => {
+      startDomainHealthMonitor();
+      app.listen(port, () => console.log(`[app] EPDS Admin API listening on ${port}`));
+    })
     .catch((err) => {
       console.error('[app] startup failed:', err);
       process.exit(1);
