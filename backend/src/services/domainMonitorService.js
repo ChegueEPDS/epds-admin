@@ -61,6 +61,16 @@ async function assertPublicUrl(normalizedUrl) {
   }
 }
 
+function isGlobalTenant(scope = {}) {
+  const globalTenant = String(process.env.EPDS_ADMIN_GLOBAL_TENANT_NAME || 'epds').trim().toLowerCase();
+  return String(scope.tenantName || '').trim().toLowerCase() === globalTenant;
+}
+
+function domainScopeQuery(scope = {}) {
+  if (isGlobalTenant(scope)) return {};
+  return { tenantId: scope.tenantId || null };
+}
+
 function presentDomain(domain, recentIssueCount = 0) {
   const hasCurrentIssue = domain.lastStatus === 'error';
   const hasRecentIssue = recentIssueCount > 0 || Boolean(
@@ -76,6 +86,7 @@ function presentDomain(domain, recentIssueCount = 0) {
     id: String(domain._id),
     name: domain.name,
     baseUrl: domain.baseUrl,
+    tenantId: domain.tenantId ? String(domain.tenantId) : null,
     enabled: domain.enabled,
     lastCheckedAt: domain.lastCheckedAt,
     lastStatus: domain.lastStatus,
@@ -93,13 +104,16 @@ function presentDomain(domain, recentIssueCount = 0) {
   };
 }
 
-async function buildDomainList() {
-  const domains = await DomainMonitor.find().sort({ name: 1 }).lean(false);
+async function buildDomainList(scope = {}) {
+  const domains = await DomainMonitor.find(domainScopeQuery(scope)).sort({ name: 1 }).lean(false);
   const since = new Date(Date.now() - RECENT_ISSUE_MS);
-  const failures = await DomainHealthCheck.aggregate([
-    { $match: { checkedAt: { $gte: since }, ok: false } },
-    { $group: { _id: '$domainId', count: { $sum: 1 } } }
-  ]);
+  const visibleDomainIds = domains.map((domain) => domain._id);
+  const failures = visibleDomainIds.length
+    ? await DomainHealthCheck.aggregate([
+      { $match: { domainId: { $in: visibleDomainIds }, checkedAt: { $gte: since }, ok: false } },
+      { $group: { _id: '$domainId', count: { $sum: 1 } } }
+    ])
+    : [];
   const failureMap = new Map(failures.map((item) => [String(item._id), item.count]));
   const order = { error: 0, warning: 1, unknown: 2, ok: 3 };
   return domains
@@ -193,6 +207,8 @@ async function runScheduledChecks() {
         console.error(`[domain-monitor] ${domain.baseUrl} check failed:`, err.message);
       }
     }
+  } catch (err) {
+    console.error('[domain-monitor] scheduled checks failed:', err.message);
   } finally {
     isRunning = false;
   }
@@ -213,6 +229,8 @@ module.exports = {
   normalizeBaseUrl,
   assertPublicUrl,
   buildDomainList,
+  domainScopeQuery,
+  isGlobalTenant,
   presentDomain,
   countRecentIssues,
   runDomainCheck,

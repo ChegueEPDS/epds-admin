@@ -26,6 +26,7 @@ export type DomainMonitor = {
   id: string;
   name: string;
   baseUrl: string;
+  tenantId?: string | null;
   enabled: boolean;
   lastCheckedAt?: string;
   lastStatus: DomainMonitorStatus;

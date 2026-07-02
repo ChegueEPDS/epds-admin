@@ -43,9 +43,14 @@ function assertAllowedCompanyEmail(email) {
   }
 }
 
-async function ensureDefaultCompanyTenant(user) {
-  if (user.tenantId) return user;
-  const name = slugifyTenantName(process.env.EPDS_ADMIN_DEFAULT_TENANT_NAME || 'epds-admin');
+function tenantNameFromEmail(email) {
+  const domain = String(email || '').split('@').pop()?.toLowerCase() || '';
+  const base = domain.split('.')[0] || process.env.EPDS_ADMIN_DEFAULT_TENANT_NAME || 'epds-admin';
+  return slugifyTenantName(base);
+}
+
+async function ensureCompanyTenantForEmail(user, email) {
+  const name = tenantNameFromEmail(email);
   let tenant = await Tenant.findOne({ name });
   if (!tenant) {
     tenant = await Tenant.create({
@@ -57,8 +62,10 @@ async function ensureDefaultCompanyTenant(user) {
       seatsManaged: 'manual'
     });
   }
-  user.tenantId = tenant._id;
-  await user.save();
+  if (!user.tenantId || String(user.tenantId) !== String(tenant._id)) {
+    user.tenantId = tenant._id;
+    await user.save();
+  }
   return user;
 }
 
@@ -93,7 +100,7 @@ exports.microsoftLogin = async (req, res) => {
       await user.save();
     }
 
-    user = await ensureDefaultCompanyTenant(user);
+    user = await ensureCompanyTenantForEmail(user, email);
     user.lastLoginAt = new Date();
     await user.save();
 

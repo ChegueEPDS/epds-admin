@@ -4,10 +4,6 @@
       <h1>Domain Health</h1>
       <p>Monitors registered domains every 15 minutes with a 10 second GET timeout.</p>
     </div>
-    <button mat-flat-button color="primary" type="button" (click)="openDomainDialog()">
-      <mat-icon class="material-symbols-outlined">add</mat-icon>
-      Add domain
-    </button>
   </div>
 
   <div class="summary-strip">
@@ -39,11 +35,17 @@
       <mat-icon matPrefix class="material-symbols-outlined">search</mat-icon>
       <input matInput [(ngModel)]="searchTerm" placeholder="Name or URL">
     </mat-form-field>
-    <button mat-button type="button" (click)="loadDomains()" [disabled]="isLoading">
-      <mat-progress-spinner *ngIf="isLoading" diameter="18" mode="indeterminate"></mat-progress-spinner>
-      <mat-icon *ngIf="!isLoading" class="material-symbols-outlined">refresh</mat-icon>
-      Refresh
-    </button>
+    <div class="toolbar-actions">
+      <button mat-button type="button" (click)="loadDomains()" [disabled]="isLoading">
+        <mat-progress-spinner *ngIf="isLoading" diameter="18" mode="indeterminate"></mat-progress-spinner>
+        <mat-icon *ngIf="!isLoading" class="material-symbols-outlined">refresh</mat-icon>
+        Refresh
+      </button>
+      <button mat-flat-button color="primary" type="button" (click)="openDomainDialog()">
+        <mat-icon class="material-symbols-outlined">add</mat-icon>
+        Add domain
+      </button>
+    </div>
   </div>
 
   <div class="content-grid">
@@ -77,7 +79,7 @@
               </td>
               <td>
                 <strong>{{ domain.name }}</strong>
-                <a [href]="domain.baseUrl" target="_blank" rel="noopener" (click)="$event.stopPropagation()">{{ domain.baseUrl }}</a>
+                <span class="domain-url">{{ domain.baseUrl }}</span>
               </td>
               <td>{{ responseText(domain) }}</td>
               <td>{{ domain.lastCheckedAt ? (domain.lastCheckedAt | date:'short') : '-' }}</td>
@@ -88,6 +90,9 @@
                 <span *ngIf="domain.displayStatus === 'unknown'">No check yet</span>
               </td>
               <td class="actions-col">
+                <a mat-icon-button [href]="domain.baseUrl" target="_blank" rel="noopener" matTooltip="Open website" (click)="$event.stopPropagation()">
+                  <mat-icon class="material-symbols-outlined">open_in_new</mat-icon>
+                </a>
                 <button mat-icon-button type="button" matTooltip="Run check now" (click)="checkNow(domain, $event)" [disabled]="isChecking">
                   <mat-icon class="material-symbols-outlined">play_arrow</mat-icon>
                 </button>

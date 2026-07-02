@@ -1,4 +1,3 @@
-.page-title button mat-icon,
 .toolbar-row button mat-icon,
 .toolbar-row mat-progress-spinner {
   margin-right: 6px;
@@ -57,7 +56,16 @@
 }
 
 .toolbar-row mat-form-field {
-  width: min(420px, 100%);
+  width: min(560px, 100%);
+}
+
+.toolbar-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  min-height: 48px;
+  white-space: nowrap;
 }
 
 .content-grid {
@@ -120,7 +128,6 @@
   opacity: 0.62;
 }
 
-.domain-table a,
 .detail-head a {
   display: block;
   margin-top: 3px;
@@ -129,9 +136,20 @@
   text-decoration: none;
 }
 
+.domain-url {
+  display: block;
+  margin-top: 3px;
+  color: #1d4ed8;
+  overflow-wrap: anywhere;
+}
+
 .actions-col {
-  width: 132px;
+  width: 176px;
   white-space: nowrap;
+}
+
+.actions-col a {
+  color: inherit;
 }
 
 .status-pill {
@@ -308,6 +326,11 @@
   .detail-head {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .toolbar-actions {
+    justify-content: flex-start;
+    flex-wrap: wrap;
   }
 
   .metric-grid {

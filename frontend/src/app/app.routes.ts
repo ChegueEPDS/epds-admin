@@ -9,7 +9,7 @@ export const routes: Routes = [
   { path: 'login', component: LoginComponent },
   { path: 'home', component: HomeComponent, canActivate: [AuthGuard] },
   { path: 'mail', component: MailboxComponent, canActivate: [AuthGuard], data: { requiresEpdsEmail: true } },
-  { path: 'domain-health', component: DomainHealthComponent, canActivate: [AuthGuard], data: { requiresEpdsEmail: true } },
+  { path: 'domain-health', component: DomainHealthComponent, canActivate: [AuthGuard] },
   { path: '', pathMatch: 'full', redirectTo: 'home' },
   { path: '**', redirectTo: 'home' }
 ];

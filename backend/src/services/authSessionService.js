@@ -132,8 +132,8 @@ async function signAccessToken(user, session) {
     permissions: ctx.permissions,
     type: 'access',
     typ: 'access',
-    aud: process.env.JWT_AUDIENCE || 'atex-api',
-    iss: process.env.JWT_ISSUER || 'atex-backend',
+    aud: process.env.JWT_AUDIENCE || 'epds-admin-api',
+    iss: process.env.JWT_ISSUER || 'epds-admin-backend',
     jti: randomToken(16),
     v: 4
   };
@@ -222,8 +222,8 @@ async function rotateRefreshToken({ refreshToken, req }) {
 
 async function authenticateAccessToken(token) {
   const decoded = jwt.verify(token, mustJwtSecret(), {
-    audience: process.env.JWT_AUDIENCE || 'atex-api',
-    issuer: process.env.JWT_ISSUER || 'atex-backend'
+    audience: process.env.JWT_AUDIENCE || 'epds-admin-api',
+    issuer: process.env.JWT_ISSUER || 'epds-admin-backend'
   });
   if (decoded.type !== 'access' && decoded.typ !== 'access') throw new Error('Wrong token type');
   if (!decoded.sid) throw new Error('Missing session');

@@ -5,6 +5,7 @@ const DomainMonitorSchema = new mongoose.Schema(
     name: { type: String, required: true, trim: true },
     baseUrl: { type: String, required: true, trim: true },
     normalizedUrl: { type: String, required: true, trim: true, lowercase: true, unique: true },
+    tenantId: { type: mongoose.Schema.Types.ObjectId, ref: 'Tenant', index: true },
     enabled: { type: Boolean, default: true, index: true },
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     updatedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },

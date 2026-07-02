@@ -152,6 +152,10 @@ export class AuthService {
   }
 
   canAccessAdminFeatures(): boolean {
+    return Boolean(this.currentUser?.tenantId || this.currentUser?.tenantName);
+  }
+
+  hasEpdsEmail(): boolean {
     const email = String(this.currentUser?.email || '').trim().toLowerCase();
     return email.endsWith('@epds.hu');
   }

@@ -3,7 +3,7 @@ const mongoose = require('mongoose');
 const DomainHealthCheckSchema = new mongoose.Schema(
   {
     domainId: { type: mongoose.Schema.Types.ObjectId, ref: 'DomainMonitor', required: true, index: true },
-    checkedAt: { type: Date, required: true, default: Date.now, index: true },
+    checkedAt: { type: Date, required: true, default: Date.now },
     ok: { type: Boolean, required: true, index: true },
     statusCode: { type: Number },
     responseMs: { type: Number },

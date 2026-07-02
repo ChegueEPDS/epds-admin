@@ -6,6 +6,7 @@ const {
   assertPublicUrl,
   buildDomainList,
   countRecentIssues,
+  domainScopeQuery,
   presentDomain,
   runDomainCheck
 } = require('../services/domainMonitorService');
@@ -70,7 +71,7 @@ exports.checkDomainHealth = async (req, res) => {
 
 exports.listDomains = async (req, res, next) => {
   try {
-    const domains = await buildDomainList();
+    const domains = await buildDomainList(req.scope);
     return res.json({ domains });
   } catch (err) {
     return next(err);
@@ -89,6 +90,7 @@ exports.createDomain = async (req, res, next) => {
       name,
       baseUrl: normalizedUrl,
       normalizedUrl,
+      tenantId: req.scope?.tenantId,
       enabled: req.body?.enabled !== false,
       createdBy: req.userId
     });
@@ -103,7 +105,7 @@ exports.createDomain = async (req, res, next) => {
 
 exports.updateDomain = async (req, res, next) => {
   try {
-    const domain = await DomainMonitor.findById(req.params.id);
+    const domain = await DomainMonitor.findOne({ _id: req.params.id, ...domainScopeQuery(req.scope) });
     if (!domain) return res.status(404).json({ error: 'Domain not found' });
 
     if (Object.prototype.hasOwnProperty.call(req.body, 'name')) {
@@ -135,7 +137,7 @@ exports.updateDomain = async (req, res, next) => {
 
 exports.deleteDomain = async (req, res, next) => {
   try {
-    const domain = await DomainMonitor.findById(req.params.id);
+    const domain = await DomainMonitor.findOne({ _id: req.params.id, ...domainScopeQuery(req.scope) });
     if (!domain) return res.status(404).json({ error: 'Domain not found' });
     await DomainHealthCheck.deleteMany({ domainId: domain._id });
     await domain.deleteOne();
@@ -147,7 +149,7 @@ exports.deleteDomain = async (req, res, next) => {
 
 exports.checkDomainNow = async (req, res, next) => {
   try {
-    const domain = await DomainMonitor.findById(req.params.id);
+    const domain = await DomainMonitor.findOne({ _id: req.params.id, ...domainScopeQuery(req.scope) });
     if (!domain) return res.status(404).json({ error: 'Domain not found' });
 
     const check = await runDomainCheck(domain);
@@ -161,7 +163,7 @@ exports.checkDomainNow = async (req, res, next) => {
 
 exports.getDomainChecks = async (req, res, next) => {
   try {
-    const domain = await DomainMonitor.findById(req.params.id);
+    const domain = await DomainMonitor.findOne({ _id: req.params.id, ...domainScopeQuery(req.scope) });
     if (!domain) return res.status(404).json({ error: 'Domain not found' });
 
     const range = String(req.query.range || '24h');

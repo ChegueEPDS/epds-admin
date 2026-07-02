@@ -7,7 +7,7 @@
 
     <nav class="nav" *ngIf="(auth.isLoggedIn$ | async) && auth.canAccessAdminFeatures()">
       <a mat-button routerLink="/home" routerLinkActive="active-link">HOME</a>
-      <a mat-button routerLink="/mail" routerLinkActive="active-link">
+      <a mat-button routerLink="/mail" routerLinkActive="active-link" *ngIf="auth.hasEpdsEmail()">
         <mat-icon class="material-symbols-outlined">mail</mat-icon>
         MAIL
       </a>

@@ -3,11 +3,14 @@ const { fetch } = require('undici');
 
 class GraphMailService {
   constructor() {
-    this.client = getGraphClient();
     this.defaultSender = process.env.MAIL_SENDER_UPN;
     this.saveToSent = String(process.env.MAIL_SAVE_TO_SENT || 'true').toLowerCase() === 'true';
     this.inlineLogo = String(process.env.MAIL_INLINE_LOGO || 'false').toLowerCase() === 'true';
     this.inlineLogoTimeoutMs = Number(process.env.MAIL_INLINE_LOGO_TIMEOUT_MS || 5000);
+  }
+
+  get client() {
+    return getGraphClient();
   }
 
   static logoCache = new Map();
