@@ -1,0 +1,125 @@
+:host {
+  display: block;
+}
+.deep-scan-dialog {
+  display: grid;
+  width: 100%;
+  max-height: calc(92vh - 108px);
+  gap: 14px;
+  padding-top: 4px;
+}
+.deep-scan-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+.deep-scan-head strong,
+.deep-scan-head span {
+  display: block;
+}
+.deep-scan-head span,
+.muted-row,
+.scan-card-head span {
+  color: #6b7280;
+  font-size: 12px;
+}
+.deep-scan-loading,
+.deep-scan-error {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-height: 180px;
+  color: #6b7280;
+}
+.deep-scan-error,
+.scan-error,
+.scan-failed {
+  color: #b91c1c;
+}
+.deep-scan-results {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+.scan-card {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid var(--brand-border);
+  border-radius: 8px;
+  background: #fff;
+}
+.scan-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.scan-card-head h3,
+.opportunity-list h4 {
+  margin: 0;
+}
+.score-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+.score-grid div,
+.metric-list div {
+  padding: 8px;
+  border: 1px solid var(--brand-border);
+  border-radius: 8px;
+  background: #f8fafc;
+}
+.score-grid span,
+.metric-list span {
+  display: block;
+  margin-bottom: 4px;
+  color: #6b7280;
+  font-size: 11px;
+}
+.score-grid strong,
+.metric-list strong {
+  font-size: 16px;
+}
+.score-ok strong {
+  color: #047857;
+}
+.score-warning strong {
+  color: #b45309;
+}
+.score-error strong {
+  color: #b91c1c;
+}
+.metric-list {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 8px;
+}
+.opportunity-list {
+  display: grid;
+  gap: 8px;
+}
+.opportunity-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding-top: 8px;
+  border-top: 1px solid var(--brand-border);
+  font-size: 12px;
+}
+.opportunity-row span {
+  min-width: 0;
+}
+.opportunity-row strong {
+  white-space: nowrap;
+}
+@media (max-width: 900px) {
+  .deep-scan-results,
+  .score-grid,
+  .metric-list {
+    grid-template-columns: 1fr;
+  }
+}

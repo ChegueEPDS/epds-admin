@@ -47,6 +47,7 @@ export class EffortTrackingComponent implements OnInit, OnDestroy {
   showProjectForm = false;
   showTaskForm = false;
   editingProject = false;
+  editingTaskId: string | null = null;
   projectForm: ProjectForm = this.emptyProjectForm();
   taskForm: TaskForm = this.emptyTaskForm();
   now = Date.now();
@@ -147,11 +148,22 @@ export class EffortTrackingComponent implements OnInit, OnDestroy {
 
   startCreateTask(): void {
     this.taskForm = this.emptyTaskForm();
+    this.editingTaskId = null;
+    this.showTaskForm = true;
+  }
+
+  startEditTask(task: EffortTask): void {
+    this.taskForm = {
+      name: task.name,
+      note: task.note || ''
+    };
+    this.editingTaskId = task.id;
     this.showTaskForm = true;
   }
 
   cancelTaskForm(): void {
     this.showTaskForm = false;
+    this.editingTaskId = null;
     this.taskForm = this.emptyTaskForm();
   }
 
@@ -168,7 +180,11 @@ export class EffortTrackingComponent implements OnInit, OnDestroy {
 
     this.saving = true;
     try {
-      await firstValueFrom(this.effortService.createTask(this.selectedProject.id, payload));
+      if (this.editingTaskId) {
+        await firstValueFrom(this.effortService.updateTask(this.editingTaskId, payload));
+      } else {
+        await firstValueFrom(this.effortService.createTask(this.selectedProject.id, payload));
+      }
       await this.refreshSelected();
       this.cancelTaskForm();
     } catch {
@@ -269,6 +285,13 @@ export class EffortTrackingComponent implements OnInit, OnDestroy {
 
   statusText(status: string): string {
     return status === 'closed' ? 'Closed' : 'Open';
+  }
+
+  taskStatusText(task: EffortTask): string {
+    if (task.active) return 'Running';
+    if (task.status === 'closed') return 'Closed';
+    if (!task.hasStarted) return 'New';
+    return 'Open';
   }
 
   private async refreshSelected(): Promise<void> {

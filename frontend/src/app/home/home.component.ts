@@ -23,7 +23,7 @@ type FeatureCard = {
 export class HomeComponent {
   cards: FeatureCard[] = [
     {
-      title: 'MAIL',
+      title: 'Noreply Mailbox',
       icon: 'mail',
       route: '/mail',
       description: 'Mailbox, sent items and message sending.'

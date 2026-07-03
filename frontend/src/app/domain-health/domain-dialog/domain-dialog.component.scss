@@ -1,0 +1,9 @@
+.domain-dialog-content {
+  display: grid;
+  min-width: min(520px, calc(100vw - 48px));
+  gap: 12px;
+  padding-top: 8px;
+}
+button mat-icon {
+  margin-right: 6px;
+}

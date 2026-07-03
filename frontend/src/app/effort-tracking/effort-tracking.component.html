@@ -123,7 +123,7 @@
           <button mat-button type="button" (click)="cancelTaskForm()">Cancel</button>
           <button mat-flat-button color="primary" type="submit" [disabled]="saving">
             <mat-icon class="material-symbols-outlined">save</mat-icon>
-            Save
+            {{ editingTaskId ? 'Save task' : 'Create task' }}
           </button>
         </div>
       </form>
@@ -132,7 +132,7 @@
         <article class="task-card" *ngFor="let task of selectedProject.tasks" [class.closed]="task.status === 'closed'" [class.active]="task.active">
           <div class="task-head">
             <div>
-              <span class="status-pill" [class.closed]="task.status === 'closed'">{{ task.active ? 'Running' : statusText(task.status) }}</span>
+              <span class="status-pill" [class.closed]="task.status === 'closed'" [class.new]="taskStatusText(task) === 'New'">{{ taskStatusText(task) }}</span>
               <h4>{{ task.name }}</h4>
             </div>
             <mat-icon class="material-symbols-outlined" *ngIf="task.active">timer</mat-icon>
@@ -149,6 +149,10 @@
             </div>
           </div>
           <div class="task-actions">
+            <button mat-stroked-button type="button" *ngIf="task.status === 'open'" (click)="startEditTask(task)" [disabled]="saving || selectedProject.status === 'closed'">
+              <mat-icon class="material-symbols-outlined">edit</mat-icon>
+              Edit
+            </button>
             <button mat-flat-button color="primary" type="button" *ngIf="!task.active && task.status === 'open'" (click)="startTask(task)" [disabled]="saving || selectedProject.status === 'closed'">
               <mat-icon class="material-symbols-outlined">play_arrow</mat-icon>
               Start

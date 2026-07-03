@@ -38,6 +38,7 @@ function taskGrossMs(task) {
 }
 
 function presentTask(task, now = new Date()) {
+  const sessionCount = (task.sessions || []).length;
   return {
     id: String(task._id),
     projectId: String(task.projectId),
@@ -48,6 +49,8 @@ function presentTask(task, now = new Date()) {
     grossMs: taskGrossMs(task),
     active: Boolean(task.activeTimer?.startedAt),
     activeStartedAt: task.activeTimer?.startedAt || null,
+    sessionCount,
+    hasStarted: sessionCount > 0 || Boolean(task.activeTimer?.startedAt),
     closedAt: task.closedAt || null,
     closedNetMs: Number(task.closedNetMs || 0),
     closedGrossMs: Number(task.closedGrossMs || 0),

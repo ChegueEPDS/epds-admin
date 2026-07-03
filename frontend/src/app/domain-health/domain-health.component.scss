@@ -56,11 +56,14 @@
 }
 
 .toolbar-row mat-form-field {
-  width: min(560px, 100%);
+  flex: 1 1 auto;
+  min-width: 240px;
+  width: auto;
 }
 
 .toolbar-actions {
   display: flex;
+  flex: 0 0 auto;
   align-items: center;
   justify-content: flex-end;
   gap: 10px;
