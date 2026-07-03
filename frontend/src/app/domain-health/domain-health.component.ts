@@ -426,11 +426,11 @@ export class DomainHealthComponent implements OnInit, OnDestroy {
   private lastSeenMonitorCompletion = '';
   readonly chart = {
     width: 720,
-    height: 250,
+    height: 500,
     left: 52,
     right: 18,
     top: 22,
-    bottom: 202
+    bottom: 475
   };
 
   constructor(

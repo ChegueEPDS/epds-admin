@@ -1,10 +1,10 @@
 <section class="page home-page">
-  <div class="page-title">
+  <!--div class="page-title">
     <div>
       <h1>EPDS Admin</h1>
       <p>{{ auth.getFullName() || 'Select a function' }}</p>
     </div>
-  </div>
+  </div-->
 
   <div class="feature-grid" *ngIf="auth.canAccessAdminFeatures(); else limitedAccess">
     <a class="feature-card" *ngFor="let card of cards" [routerLink]="card.route">
