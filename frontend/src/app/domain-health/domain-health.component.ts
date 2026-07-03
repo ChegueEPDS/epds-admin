@@ -1,5 +1,5 @@
 import { CommonModule } from '@angular/common';
-import { Component, Inject, OnInit } from '@angular/core';
+import { Component, Inject, OnDestroy, OnInit } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { firstValueFrom } from 'rxjs';
 import { MatButtonModule } from '@angular/material/button';
@@ -17,6 +17,7 @@ import {
   DomainDeepScanResult,
   DomainHealthService,
   DomainMonitor,
+  DomainMonitorRuntime,
   DomainOwner,
   DomainPerformanceStatus,
   DomainMonitorStatus,
@@ -26,6 +27,17 @@ import { AuthService } from '../services/auth.service';
 
 type RangeOption = '24h' | '7d' | '30d';
 type StatusFilter = 'all' | 'issues' | 'warning' | 'healthy';
+type ChartPoint = {
+  x: number;
+  y: number;
+  color: string;
+  label: string;
+  timeText: string;
+  valueText: string;
+  detailText: string;
+  statusText: string;
+  check: DomainCheck;
+};
 
 @Component({
   selector: 'app-domain-dialog',
@@ -398,8 +410,9 @@ export class DomainDeepScanDialogComponent implements OnInit {
   templateUrl: './domain-health.component.html',
   styleUrl: './domain-health.component.scss'
 })
-export class DomainHealthComponent implements OnInit {
+export class DomainHealthComponent implements OnInit, OnDestroy {
   domains: DomainMonitor[] = [];
+  monitor: DomainMonitorRuntime | null = null;
   selectedDomain: DomainMonitor | null = null;
   checks: DomainCheck[] = [];
   searchTerm = '';
@@ -408,6 +421,17 @@ export class DomainHealthComponent implements OnInit {
   isLoading = false;
   isChecking = false;
   isLoadingChecks = false;
+  activeChartPoint: ChartPoint | null = null;
+  private refreshTimer?: ReturnType<typeof setInterval>;
+  private lastSeenMonitorCompletion = '';
+  readonly chart = {
+    width: 720,
+    height: 250,
+    left: 52,
+    right: 18,
+    top: 22,
+    bottom: 202
+  };
 
   constructor(
     private service: DomainHealthService,
@@ -418,20 +442,53 @@ export class DomainHealthComponent implements OnInit {
 
   ngOnInit(): void {
     this.loadDomains();
+    this.refreshTimer = setInterval(() => {
+      void this.refreshAfterMonitorCompletion();
+    }, 120000);
   }
 
-  async loadDomains(): Promise<void> {
-    this.isLoading = true;
+  ngOnDestroy(): void {
+    if (this.refreshTimer) clearInterval(this.refreshTimer);
+  }
+
+  async loadDomains(options: { silent?: boolean } = {}): Promise<void> {
+    if (!options.silent) this.isLoading = true;
     try {
       const response = await firstValueFrom(this.service.listDomains());
       this.domains = response.domains;
+      this.monitor = response.monitor || null;
+      if (response.monitor?.lastRunCompletedAt) {
+        this.lastSeenMonitorCompletion = response.monitor.lastRunCompletedAt;
+      }
       if (this.selectedDomain) {
         this.selectedDomain = this.domains.find((domain) => domain.id === this.selectedDomain?.id) || null;
       }
     } catch (error: any) {
-      this.snackBar.open(error?.error?.error || 'Failed to load domains.', 'Close', { duration: 4500 });
+      if (!options.silent) {
+        this.snackBar.open(error?.error?.error || 'Failed to load domains.', 'Close', { duration: 4500 });
+      }
     } finally {
-      this.isLoading = false;
+      if (!options.silent) this.isLoading = false;
+    }
+  }
+
+  async refreshAfterMonitorCompletion(): Promise<void> {
+    if (this.isLoading || this.isChecking || this.isLoadingChecks) return;
+    try {
+      const response = await firstValueFrom(this.service.listDomains());
+      const completedAt = response.monitor?.lastRunCompletedAt || '';
+      const hasNewCompletedRun = Boolean(completedAt && completedAt !== this.lastSeenMonitorCompletion);
+      this.domains = response.domains;
+      this.monitor = response.monitor || null;
+      if (completedAt) this.lastSeenMonitorCompletion = completedAt;
+      if (this.selectedDomain) {
+        this.selectedDomain = this.domains.find((domain) => domain.id === this.selectedDomain?.id) || null;
+      }
+      if (hasNewCompletedRun && this.selectedDomain) {
+        await this.loadChecks({ silent: true });
+      }
+    } catch {
+      // Keep background refresh quiet; manual Refresh still reports errors.
     }
   }
 
@@ -495,17 +552,20 @@ export class DomainHealthComponent implements OnInit {
     await this.loadChecks();
   }
 
-  async loadChecks(): Promise<void> {
+  async loadChecks(options: { silent?: boolean } = {}): Promise<void> {
     if (!this.selectedDomain) return;
-    this.isLoadingChecks = true;
+    if (!options.silent) this.isLoadingChecks = true;
     try {
       const response = await firstValueFrom(this.service.getChecks(this.selectedDomain.id, this.selectedRange));
       this.selectedDomain = response.domain;
       this.checks = response.checks;
+      this.activeChartPoint = null;
     } catch (error: any) {
-      this.snackBar.open(error?.error?.error || 'Failed to load timeline.', 'Close', { duration: 4500 });
+      if (!options.silent) {
+        this.snackBar.open(error?.error?.error || 'Failed to load timeline.', 'Close', { duration: 4500 });
+      }
     } finally {
-      this.isLoadingChecks = false;
+      if (!options.silent) this.isLoadingChecks = false;
     }
   }
 
@@ -610,27 +670,68 @@ export class DomainHealthComponent implements OnInit {
     return domain.owner || 'EPDS';
   }
 
-  chartPoints(): Array<{ x: number; y: number; color: string; label: string; check: DomainCheck }> {
-    if (!this.checks.length) return [];
+  chartMaxMs(): number {
     const values = this.checks.map((check) => check.ok ? Math.max(check.responseMs || 0, 1) : 10000);
-    const max = Math.max(...values, 1000);
-    const width = 720;
-    const height = 220;
-    const pad = 28;
+    const max = Math.max(...values, 10000);
+    return Math.ceil(max / 1000) * 1000;
+  }
+
+  chartY(value: number): number {
+    const plotHeight = this.chart.bottom - this.chart.top;
+    const capped = Math.min(Math.max(value, 0), this.chartMaxMs());
+    return this.chart.bottom - (capped / this.chartMaxMs()) * plotHeight;
+  }
+
+  chartZoneY(fromMs: number, toMs: number): { y: number; height: number } {
+    const yTop = this.chartY(toMs);
+    const yBottom = this.chartY(fromMs);
+    return { y: yTop, height: Math.max(yBottom - yTop, 0) };
+  }
+
+  chartTicks(): number[] {
+    return Array.from(new Set([0, 2500, 5000, this.chartMaxMs()])).sort((a, b) => a - b);
+  }
+
+  chartTickLabel(value: number): string {
+    if (value === 0) return '0';
+    if (value === 2500) return '2.5s';
+    if (value === 5000) return '5s';
+    return `${Math.round(value / 1000)}s`;
+  }
+
+  chartPoints(): ChartPoint[] {
+    if (!this.checks.length) return [];
+    const plotWidth = this.chart.width - this.chart.left - this.chart.right;
     const span = Math.max(this.checks.length - 1, 1);
 
     return this.checks.map((check, index) => {
-      const value = check.ok ? Math.max(check.responseMs || 0, 1) : max;
-      const x = pad + (index / span) * (width - pad * 2);
-      const y = height - pad - (value / max) * (height - pad * 2);
+      const value = check.ok ? Math.max(check.responseMs || 0, 1) : this.chartMaxMs();
+      const x = this.chart.left + (index / span) * plotWidth;
+      const y = this.chartY(value);
       const color = !check.ok ? '#b91c1c' : (check.responseMs || 0) > 5000 ? '#b91c1c' : (check.responseMs || 0) > 2500 ? '#b45309' : '#047857';
-      const label = `${new Date(check.checkedAt).toLocaleString()} · ${check.ok ? `${check.responseMs} ms` : check.errorType || 'failed'}`;
-      return { x, y, color, label, check };
+      const timeText = new Date(check.checkedAt).toLocaleString();
+      const valueText = check.ok ? `${check.responseMs || 0} ms` : 'Failed';
+      const detailText = check.ok ? `HTTP ${check.statusCode || '-'}` : (check.errorMessage || check.errorType || 'Request failed');
+      const statusText = !check.ok ? 'Down' : (check.responseMs || 0) > 5000 ? 'Very slow' : (check.responseMs || 0) > 2500 ? 'Slow' : 'OK';
+      const label = `${timeText} · ${valueText} · ${detailText}`;
+      return { x, y, color, label, timeText, valueText, detailText, statusText, check };
     });
   }
 
   polylinePoints(): string {
     return this.chartPoints().map((point) => `${point.x},${point.y}`).join(' ');
+  }
+
+  setActiveChartPoint(point: ChartPoint | null): void {
+    this.activeChartPoint = point;
+  }
+
+  tooltipX(point: ChartPoint): number {
+    return Math.min(Math.max(point.x - 92, 8), this.chart.width - 198);
+  }
+
+  tooltipY(point: ChartPoint): number {
+    return point.y < 86 ? point.y + 14 : point.y - 78;
   }
 
   trackByDomain(_: number, domain: DomainMonitor): string {

@@ -37,4 +37,11 @@ function requireEpdsEmail(req, res, next) {
   return next();
 }
 
-module.exports = { requireAuth, requireEpdsEmail };
+function requireAdminFeatureAccess(req, res, next) {
+  if (!req.scope?.tenantId && !req.scope?.tenantName) {
+    return res.status(403).json({ error: 'Admin feature access required' });
+  }
+  return next();
+}
+
+module.exports = { requireAuth, requireEpdsEmail, requireAdminFeatureAccess };

@@ -255,12 +255,18 @@ async function runDomainCheck(domain) {
 
 let monitorTimer;
 let isRunning = false;
+let lastRunStartedAt = null;
+let lastRunCompletedAt = null;
+let lastRunDomainCount = 0;
 
 async function runScheduledChecks() {
   if (isRunning) return;
   isRunning = true;
+  lastRunStartedAt = new Date();
+  lastRunDomainCount = 0;
   try {
     const domains = await DomainMonitor.find({ enabled: true });
+    lastRunDomainCount = domains.length;
     for (const domain of domains) {
       try {
         await runDomainCheck(domain);
@@ -271,8 +277,19 @@ async function runScheduledChecks() {
   } catch (err) {
     console.error('[domain-monitor] scheduled checks failed:', err.message);
   } finally {
+    lastRunCompletedAt = new Date();
     isRunning = false;
   }
+}
+
+function getDomainMonitorRuntime() {
+  return {
+    isRunning,
+    intervalMs: MONITOR_INTERVAL_MS,
+    lastRunStartedAt,
+    lastRunCompletedAt,
+    lastRunDomainCount
+  };
 }
 
 function startDomainHealthMonitor() {
@@ -296,6 +313,7 @@ module.exports = {
   isGlobalTenant,
   presentDomain,
   countRecentIssues,
+  getDomainMonitorRuntime,
   summarizeRecentChecks,
   runDomainCheck,
   startDomainHealthMonitor

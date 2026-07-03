@@ -1,0 +1,99 @@
+<div class="editor-field">
+  <label *ngIf="label">{{ label }}</label>
+  <div class="editor-toolbar" aria-label="Rich text formatting">
+    <button mat-icon-button type="button" matTooltip="Bold" (click)="format('bold')">
+      <mat-icon class="material-symbols-outlined">format_bold</mat-icon>
+    </button>
+    <button mat-icon-button type="button" matTooltip="Italic" (click)="format('italic')">
+      <mat-icon class="material-symbols-outlined">format_italic</mat-icon>
+    </button>
+    <button mat-icon-button type="button" matTooltip="Underline" (click)="format('underline')">
+      <mat-icon class="material-symbols-outlined">format_underlined</mat-icon>
+    </button>
+    <button mat-icon-button type="button" matTooltip="Strikethrough" (click)="format('strikeThrough')">
+      <mat-icon class="material-symbols-outlined">strikethrough_s</mat-icon>
+    </button>
+    <span class="toolbar-divider"></span>
+    <select class="editor-select" aria-label="Font size" [value]="selectedFontSize" (change)="setFontSize($any($event.target).value)">
+      <option value="2">Small</option>
+      <option value="3">Normal</option>
+      <option value="5">Large</option>
+    </select>
+    <span class="toolbar-divider"></span>
+    <button mat-icon-button type="button" matTooltip="Align left" (click)="format('justifyLeft')">
+      <mat-icon class="material-symbols-outlined">format_align_left</mat-icon>
+    </button>
+    <button mat-icon-button type="button" matTooltip="Align center" (click)="format('justifyCenter')">
+      <mat-icon class="material-symbols-outlined">format_align_center</mat-icon>
+    </button>
+    <button mat-icon-button type="button" matTooltip="Align right" (click)="format('justifyRight')">
+      <mat-icon class="material-symbols-outlined">format_align_right</mat-icon>
+    </button>
+    <button mat-icon-button type="button" matTooltip="Justify" (click)="format('justifyFull')">
+      <mat-icon class="material-symbols-outlined">format_align_justify</mat-icon>
+    </button>
+    <span class="toolbar-divider"></span>
+    <button mat-icon-button type="button" matTooltip="Bulleted list" (click)="format('insertUnorderedList')">
+      <mat-icon class="material-symbols-outlined">format_list_bulleted</mat-icon>
+    </button>
+    <button mat-icon-button type="button" matTooltip="Numbered list" (click)="format('insertOrderedList')">
+      <mat-icon class="material-symbols-outlined">format_list_numbered</mat-icon>
+    </button>
+    <button mat-icon-button type="button" matTooltip="Decrease indent" (click)="format('outdent')">
+      <mat-icon class="material-symbols-outlined">format_indent_decrease</mat-icon>
+    </button>
+    <button mat-icon-button type="button" matTooltip="Increase indent" (click)="format('indent')">
+      <mat-icon class="material-symbols-outlined">format_indent_increase</mat-icon>
+    </button>
+    <span class="toolbar-divider"></span>
+    <div class="color-menu">
+      <button class="color-menu-trigger" type="button" (click)="toggleTextColorMenu()">
+        <mat-icon class="material-symbols-outlined">format_color_text</mat-icon>
+        <span class="color-swatch" [style.background]="selectedTextColor"></span>
+        {{ colorLabel(selectedTextColor, textColors) }}
+      </button>
+      <div class="color-menu-panel" *ngIf="isTextColorMenuOpen">
+        <button type="button" *ngFor="let color of textColors" [class.selected-color]="selectedTextColor === color.value" (click)="applyMenuColor('foreColor', color.value)">
+          <span class="color-swatch" [style.background]="color.value"></span>
+          {{ color.label }}
+        </button>
+      </div>
+    </div>
+    <div class="color-menu">
+      <button class="color-menu-trigger" type="button" (click)="toggleHighlightMenu()">
+        <mat-icon class="material-symbols-outlined">format_color_fill</mat-icon>
+        <span class="color-swatch" [class.no-fill]="selectedHighlightColor === 'transparent'" [style.background]="selectedHighlightColor === 'transparent' ? null : selectedHighlightColor"></span>
+        {{ selectedHighlightColor === 'transparent' ? 'No fill' : colorLabel(selectedHighlightColor, highlightColors) }}
+      </button>
+      <div class="color-menu-panel" *ngIf="isHighlightMenuOpen">
+        <button type="button" [class.selected-color]="selectedHighlightColor === 'transparent'" (click)="applyMenuHighlight('transparent')">
+          <span class="color-swatch no-fill"></span>
+          No fill
+        </button>
+        <button type="button" *ngFor="let color of highlightColors" [class.selected-color]="selectedHighlightColor === color.value" (click)="applyMenuHighlight(color.value)">
+          <span class="color-swatch" [style.background]="color.value"></span>
+          {{ color.label }}
+        </button>
+      </div>
+    </div>
+    <span class="toolbar-divider"></span>
+    <button mat-icon-button type="button" matTooltip="Insert link" (click)="insertLink()">
+      <mat-icon class="material-symbols-outlined">link</mat-icon>
+    </button>
+    <button mat-icon-button type="button" matTooltip="Clear formatting" (click)="format('removeFormat')">
+      <mat-icon class="material-symbols-outlined">format_clear</mat-icon>
+    </button>
+  </div>
+  <div
+    #editor
+    class="wysiwyg-editor"
+    contenteditable="true"
+    role="textbox"
+    dir="ltr"
+    [attr.aria-label]="ariaLabel"
+    [attr.data-placeholder]="placeholder"
+    [style.min-height]="minHeight"
+    (input)="syncEditor($event)"
+    (blur)="syncEditor($event)"
+  ></div>
+</div>

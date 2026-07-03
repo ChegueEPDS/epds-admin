@@ -7,6 +7,7 @@ const {
   assertPublicUrl,
   buildDomainList,
   domainScopeQuery,
+  getDomainMonitorRuntime,
   presentDomain,
   runDomainCheck,
   summarizeRecentChecks
@@ -78,7 +79,7 @@ exports.checkDomainHealth = async (req, res) => {
 exports.listDomains = async (req, res, next) => {
   try {
     const domains = await buildDomainList(req.scope);
-    return res.json({ domains });
+    return res.json({ domains, monitor: getDomainMonitorRuntime() });
   } catch (err) {
     return next(err);
   }

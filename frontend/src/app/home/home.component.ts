@@ -32,6 +32,12 @@ export class HomeComponent {
       icon: 'health_and_safety',
       route: '/domain-health',
       description: 'MX, SPF, DMARC and DKIM checks.'
+    },
+    {
+      title: 'Licenses',
+      icon: 'license',
+      route: '/licenses',
+      description: 'Customer license status, object limits and expiry dates.'
     }
   ];
 

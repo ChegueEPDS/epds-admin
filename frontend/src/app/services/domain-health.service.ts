@@ -68,6 +68,14 @@ export type DomainCheck = {
   errorMessage?: string;
 };
 
+export type DomainMonitorRuntime = {
+  isRunning: boolean;
+  intervalMs: number;
+  lastRunStartedAt?: string | null;
+  lastRunCompletedAt?: string | null;
+  lastRunDomainCount: number;
+};
+
 export type PageSpeedMetric = {
   id: string;
   title?: string;
@@ -132,7 +140,7 @@ export class DomainHealthService {
   }
 
   listDomains() {
-    return this.http.get<{ domains: DomainMonitor[] }>(`${this.base}/domains`);
+    return this.http.get<{ domains: DomainMonitor[]; monitor?: DomainMonitorRuntime }>(`${this.base}/domains`);
   }
 
   createDomain(payload: DomainPayload) {
