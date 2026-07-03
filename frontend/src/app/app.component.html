@@ -19,6 +19,10 @@
         <mat-icon class="material-symbols-outlined">license</mat-icon>
         LICENSES
       </a>
+      <a mat-button routerLink="/effort-tracking" routerLinkActive="active-link" *ngIf="auth.hasEpdsEmail()">
+        <mat-icon class="material-symbols-outlined">timer</mat-icon>
+        EFFORT TRACKING
+      </a>
     </nav>
 
     <span class="spacer"></span>

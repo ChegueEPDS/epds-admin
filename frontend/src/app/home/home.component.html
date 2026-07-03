@@ -7,7 +7,7 @@
   </div-->
 
   <div class="feature-grid" *ngIf="auth.canAccessAdminFeatures(); else limitedAccess">
-    <a class="feature-card" *ngFor="let card of cards" [routerLink]="card.route">
+    <a class="feature-card" *ngFor="let card of visibleCards" [routerLink]="card.route">
       <mat-card>
         <mat-card-content>
           <span class="icon-wrap">

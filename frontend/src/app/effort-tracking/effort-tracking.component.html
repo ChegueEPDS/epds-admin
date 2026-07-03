@@ -1,0 +1,180 @@
+<section class="effort-page">
+  <header class="page-header">
+    <div>
+      <h1>Effort Tracking</h1>
+      <p>Projects, task timers, and net/gross effort summaries.</p>
+    </div>
+    <button mat-flat-button color="primary" type="button" (click)="startCreateProject()">
+      <mat-icon class="material-symbols-outlined">add</mat-icon>
+      New project
+    </button>
+  </header>
+
+  <form class="project-form" *ngIf="showProjectForm" (ngSubmit)="saveProject()">
+    <mat-form-field appearance="outline">
+      <mat-label>Project name</mat-label>
+      <input matInput name="projectName" [(ngModel)]="projectForm.name" required>
+    </mat-form-field>
+    <mat-form-field appearance="outline">
+      <mat-label>Customer</mat-label>
+      <input matInput name="projectCustomer" [(ngModel)]="projectForm.customer">
+    </mat-form-field>
+    <mat-form-field appearance="outline" class="wide-field">
+      <mat-label>Comment</mat-label>
+      <textarea matInput name="projectComment" rows="2" [(ngModel)]="projectForm.comment"></textarea>
+    </mat-form-field>
+    <div class="form-actions">
+      <button mat-button type="button" (click)="cancelProjectForm()">Cancel</button>
+      <button mat-flat-button color="primary" type="submit" [disabled]="saving">
+        <mat-icon class="material-symbols-outlined">save</mat-icon>
+        Save
+      </button>
+    </div>
+  </form>
+
+  <div class="loading-state" *ngIf="loading">
+    <mat-spinner diameter="36"></mat-spinner>
+  </div>
+
+  <div class="effort-layout" *ngIf="!loading">
+    <aside class="project-list">
+      <button
+        class="project-card"
+        type="button"
+        *ngFor="let project of projects"
+        [class.selected]="selectedProject?.id === project.id"
+        [class.closed]="project.status === 'closed'"
+        (click)="selectProject(project)">
+        <span class="status-pill" [class.closed]="project.status === 'closed'">{{ statusText(project.status) }}</span>
+        <strong>{{ project.name }}</strong>
+        <span>{{ project.customer || 'No customer' }}</span>
+        <div class="time-row">
+          <span>Net {{ formatDuration(project.status === 'closed' ? project.closedNetMs : project.netMs) }}</span>
+          <span>{{ project.taskCount }} task</span>
+        </div>
+      </button>
+      <div class="empty-state" *ngIf="!projects.length">
+        No projects yet.
+      </div>
+    </aside>
+
+    <section class="project-detail" *ngIf="selectedProject; else noProjectSelected">
+      <div class="detail-header">
+        <div>
+          <span class="status-pill" [class.closed]="selectedProject.status === 'closed'">{{ statusText(selectedProject.status) }}</span>
+          <h2>{{ selectedProject.name }}</h2>
+          <p>{{ selectedProject.customer || 'No customer' }}</p>
+        </div>
+        <div class="detail-actions">
+          <button mat-stroked-button type="button" (click)="startEditProject()" [disabled]="selectedProject.status === 'closed'">
+            <mat-icon class="material-symbols-outlined">edit</mat-icon>
+            Edit
+          </button>
+          <button mat-stroked-button type="button" *ngIf="selectedProject.status === 'open'" (click)="closeProject()" [disabled]="saving">
+            <mat-icon class="material-symbols-outlined">task_alt</mat-icon>
+            Close project
+          </button>
+          <button mat-stroked-button type="button" *ngIf="selectedProject.status === 'closed'" (click)="reopenProject()" [disabled]="saving">
+            <mat-icon class="material-symbols-outlined">lock_open</mat-icon>
+            Reopen
+          </button>
+        </div>
+      </div>
+
+      <div class="summary-grid">
+        <div>
+          <span>Project net</span>
+          <strong>{{ formatDuration(projectDisplayNet()) }}</strong>
+        </div>
+        <div>
+          <span>Project gross</span>
+          <strong>{{ grossText(selectedProject) }}</strong>
+        </div>
+        <div>
+          <span>Tasks</span>
+          <strong>{{ selectedProject.taskCount }}</strong>
+        </div>
+        <div>
+          <span>Running</span>
+          <strong>{{ selectedProject.activeTaskCount }}</strong>
+        </div>
+      </div>
+
+      <p class="comment" *ngIf="selectedProject.comment">{{ selectedProject.comment }}</p>
+
+      <div class="section-header">
+        <h3>Tasks</h3>
+        <button mat-stroked-button type="button" (click)="startCreateTask()" [disabled]="selectedProject.status === 'closed'">
+          <mat-icon class="material-symbols-outlined">add</mat-icon>
+          Add task
+        </button>
+      </div>
+
+      <form class="task-form" *ngIf="showTaskForm" (ngSubmit)="saveTask()">
+        <mat-form-field appearance="outline">
+          <mat-label>Task name</mat-label>
+          <input matInput name="taskName" [(ngModel)]="taskForm.name" required>
+        </mat-form-field>
+        <mat-form-field appearance="outline" class="wide-field">
+          <mat-label>Note</mat-label>
+          <textarea matInput name="taskNote" rows="2" [(ngModel)]="taskForm.note"></textarea>
+        </mat-form-field>
+        <div class="form-actions">
+          <button mat-button type="button" (click)="cancelTaskForm()">Cancel</button>
+          <button mat-flat-button color="primary" type="submit" [disabled]="saving">
+            <mat-icon class="material-symbols-outlined">save</mat-icon>
+            Save
+          </button>
+        </div>
+      </form>
+
+      <div class="task-grid" *ngIf="selectedProject.tasks.length; else noTasks">
+        <article class="task-card" *ngFor="let task of selectedProject.tasks" [class.closed]="task.status === 'closed'" [class.active]="task.active">
+          <div class="task-head">
+            <div>
+              <span class="status-pill" [class.closed]="task.status === 'closed'">{{ task.active ? 'Running' : statusText(task.status) }}</span>
+              <h4>{{ task.name }}</h4>
+            </div>
+            <mat-icon class="material-symbols-outlined" *ngIf="task.active">timer</mat-icon>
+          </div>
+          <p *ngIf="task.note">{{ task.note }}</p>
+          <div class="task-times">
+            <div>
+              <span>Net</span>
+              <strong>{{ formatDuration(taskDisplayNet(task)) }}</strong>
+            </div>
+            <div>
+              <span>Gross</span>
+              <strong>{{ grossText(task) }}</strong>
+            </div>
+          </div>
+          <div class="task-actions">
+            <button mat-flat-button color="primary" type="button" *ngIf="!task.active && task.status === 'open'" (click)="startTask(task)" [disabled]="saving || selectedProject.status === 'closed'">
+              <mat-icon class="material-symbols-outlined">play_arrow</mat-icon>
+              Start
+            </button>
+            <button mat-stroked-button type="button" *ngIf="task.active" (click)="stopTask(task)" [disabled]="saving">
+              <mat-icon class="material-symbols-outlined">stop</mat-icon>
+              Stop
+            </button>
+            <button mat-stroked-button type="button" *ngIf="task.status === 'open'" (click)="closeTask(task)" [disabled]="saving || selectedProject.status === 'closed'">
+              <mat-icon class="material-symbols-outlined">check_circle</mat-icon>
+              Close
+            </button>
+          </div>
+          <small *ngIf="task.status === 'closed'">
+            Closed net {{ formatDuration(task.closedNetMs) }} / gross {{ formatDuration(task.closedGrossMs) }}
+          </small>
+        </article>
+      </div>
+
+      <ng-template #noTasks>
+        <div class="empty-state">No tasks on this project.</div>
+      </ng-template>
+    </section>
+
+    <ng-template #noProjectSelected>
+      <section class="project-detail empty-state">Select or create a project.</section>
+    </ng-template>
+  </div>
+</section>

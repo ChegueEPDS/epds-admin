@@ -10,6 +10,7 @@ type FeatureCard = {
   icon: string;
   route: string;
   description: string;
+  epdsOnly?: boolean;
 };
 
 @Component({
@@ -38,8 +39,19 @@ export class HomeComponent {
       icon: 'license',
       route: '/licenses',
       description: 'Customer license status, object limits and expiry dates.'
+    },
+    {
+      title: 'Effort Tracking',
+      icon: 'timer',
+      route: '/effort-tracking',
+      description: 'Project tasks, timers and net/gross effort totals.',
+      epdsOnly: true
     }
   ];
 
   constructor(public auth: AuthService) {}
+
+  get visibleCards(): FeatureCard[] {
+    return this.cards.filter((card) => !card.epdsOnly || this.auth.hasEpdsEmail());
+  }
 }

@@ -15,6 +15,7 @@ const authRoutes = require('./routes/authRoutes');
 const mailRoutes = require('./routes/mailRoutes');
 const domainHealthRoutes = require('./routes/domainHealthRoutes');
 const licenseRoutes = require('./routes/licenseRoutes');
+const effortRoutes = require('./routes/effortRoutes');
 const { startDomainHealthMonitor } = require('./services/domainMonitorService');
 const { startDomainDailyReportScheduler } = require('./services/domainDailyReportService');
 
@@ -70,6 +71,7 @@ app.use('/api', authRoutes);
 app.use('/api', mailRoutes);
 app.use('/api', domainHealthRoutes);
 app.use('/api', licenseRoutes);
+app.use('/api', effortRoutes);
 
 app.use((err, req, res, next) => {
   console.error('[app] unhandled error:', err);

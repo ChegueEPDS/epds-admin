@@ -110,10 +110,18 @@ function normalizeInfrastructureGroups(input) {
     .map((item) => ({
       environment: normalizeAddressEnvironment(item?.environment),
       applicationServerAddress: String(item?.applicationServerAddress || '').trim(),
+      applicationServerType: normalizeOptionalEnum(item?.applicationServerType, LicenseCustomer.applicationServerTypes, 'application server type'),
       databaseServerAddress: String(item?.databaseServerAddress || '').trim(),
+      databaseServerType: normalizeOptionalEnum(item?.databaseServerType, LicenseCustomer.databaseServerTypes, 'database server type'),
       applicationAddress: String(item?.applicationAddress || '').trim()
     }))
-    .filter((item) => item.applicationServerAddress || item.databaseServerAddress || item.applicationAddress);
+    .filter((item) => (
+      item.applicationServerAddress ||
+      item.applicationServerType ||
+      item.databaseServerAddress ||
+      item.databaseServerType ||
+      item.applicationAddress
+    ));
 }
 
 function buildInfrastructureGroups(license, databaseAddresses, applicationAddresses) {
@@ -127,20 +135,25 @@ function buildInfrastructureGroups(license, databaseAddresses, applicationAddres
       byEnvironment.set(key, {
         environment: key,
         applicationServerAddress: '',
+        applicationServerType: undefined,
         databaseServerAddress: '',
+        databaseServerType: undefined,
         applicationAddress: ''
       });
     }
     return byEnvironment.get(key);
   };
 
-  if (license.applicationServerAddress) {
-    ensureGroup('prod').applicationServerAddress = license.applicationServerAddress || '';
+  if (license.applicationServerAddress || license.applicationServerType) {
+    const group = ensureGroup('prod');
+    group.applicationServerAddress = license.applicationServerAddress || '';
+    group.applicationServerType = license.applicationServerType || undefined;
   }
 
   for (const item of databaseAddresses) {
     const group = ensureGroup(item.environment);
     if (!group.databaseServerAddress) group.databaseServerAddress = item.address || '';
+    if (!group.databaseServerType) group.databaseServerType = item.databaseType || undefined;
   }
 
   for (const item of applicationAddresses) {
@@ -149,7 +162,11 @@ function buildInfrastructureGroups(license, databaseAddresses, applicationAddres
   }
 
   return Array.from(byEnvironment.values()).filter((item) => (
-    item.applicationServerAddress || item.databaseServerAddress || item.applicationAddress
+    item.applicationServerAddress ||
+    item.applicationServerType ||
+    item.databaseServerAddress ||
+    item.databaseServerType ||
+    item.applicationAddress
   ));
 }
 
@@ -307,8 +324,9 @@ function applyLicensePayload(license, body) {
     license.infrastructureGroups = normalizeInfrastructureGroups(body.infrastructureGroups);
     license.databaseAddresses = license.infrastructureGroups.map((item) => ({
       address: item.databaseServerAddress,
-      environment: item.environment
-    })).filter((item) => item.address);
+      environment: item.environment,
+      databaseType: item.databaseServerType
+    })).filter((item) => item.address || item.databaseType);
     license.applicationAddresses = license.infrastructureGroups.map((item) => ({
       address: item.applicationAddress,
       environment: item.environment
@@ -317,8 +335,8 @@ function applyLicensePayload(license, body) {
     const firstGroup = license.infrastructureGroups[0];
     license.applicationServerAddress = firstGroup?.applicationServerAddress || '';
     license.databaseServerAddress = firstGroup?.databaseServerAddress || '';
-    license.databaseServerType = undefined;
-    license.applicationServerType = undefined;
+    license.databaseServerType = firstGroup?.databaseServerType;
+    license.applicationServerType = firstGroup?.applicationServerType;
     license.applicationAddress = firstGroup?.applicationAddress || '';
   }
 

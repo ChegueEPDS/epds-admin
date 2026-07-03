@@ -16,8 +16,10 @@ import { MatTooltipModule } from '@angular/material/tooltip';
 import { RichTextEditorComponent } from '../shared/rich-text-editor/rich-text-editor.component';
 import {
   AddressEnvironment,
+  ApplicationServerType,
   ContactArea,
   CurrencyCode,
+  DatabaseServerType,
   InfrastructureGroup,
   LicenseCustomer,
   LicensePayload,
@@ -35,6 +37,8 @@ const OBJECT_LIMIT_OPTIONS: ObjectLimitOption[] = ['1000', '6000', '11000', '160
 const CONTACT_AREAS: ContactArea[] = ['IT', 'Üzlet', 'Beszerzés'];
 const ADDRESS_ENVIRONMENTS: AddressEnvironment[] = ['prod', 'test', 'dev'];
 const CURRENCIES: CurrencyCode[] = ['HUF', 'EUR', 'USD'];
+const DATABASE_SERVER_TYPES: DatabaseServerType[] = ['MSSQL', 'PostgreSQL', 'Oracle'];
+const APPLICATION_SERVER_TYPES: ApplicationServerType[] = ['Linux', 'Windows'];
 
 @Component({
   selector: 'app-license-dialog',
@@ -162,10 +166,12 @@ const CURRENCIES: CurrencyCode[] = ['HUF', 'EUR', 'USD'];
                   <div>
                     <span>Application server</span>
                     <strong>{{ emptyText(group.applicationServerAddress) }}</strong>
+                    <small>{{ group.applicationServerType || '-' }}</small>
                   </div>
                   <div>
                     <span>Database server</span>
                     <strong>{{ emptyText(group.databaseServerAddress) }}</strong>
+                    <small>{{ group.databaseServerType || '-' }}</small>
                   </div>
                   <div>
                     <span>Application address</span>
@@ -351,8 +357,22 @@ const CURRENCIES: CurrencyCode[] = ['HUF', 'EUR', 'USD'];
                 <input matInput [name]="'infrastructureApplicationServer' + i" [(ngModel)]="group.applicationServerAddress">
               </mat-form-field>
               <mat-form-field appearance="outline">
+                <mat-label>App server type</mat-label>
+                <mat-select [name]="'infrastructureApplicationServerType' + i" [(ngModel)]="group.applicationServerType">
+                  <mat-option [value]="null">Not set</mat-option>
+                  <mat-option *ngFor="let type of applicationServerTypes" [value]="type">{{ type }}</mat-option>
+                </mat-select>
+              </mat-form-field>
+              <mat-form-field appearance="outline">
                 <mat-label>Database server</mat-label>
                 <input matInput [name]="'infrastructureDatabaseServer' + i" [(ngModel)]="group.databaseServerAddress">
+              </mat-form-field>
+              <mat-form-field appearance="outline">
+                <mat-label>DB server type</mat-label>
+                <mat-select [name]="'infrastructureDatabaseServerType' + i" [(ngModel)]="group.databaseServerType">
+                  <mat-option [value]="null">Not set</mat-option>
+                  <mat-option *ngFor="let type of databaseServerTypes" [value]="type">{{ type }}</mat-option>
+                </mat-select>
               </mat-form-field>
               <mat-form-field appearance="outline">
                 <mat-label>Application address</mat-label>
@@ -468,10 +488,11 @@ const CURRENCIES: CurrencyCode[] = ['HUF', 'EUR', 'USD'];
     }
     .license-dialog-content {
       display: grid;
-      width: min(920px, calc(100vw - 48px));
+      box-sizing: border-box;
+      width: 100%;
       max-height: calc(92vh - 112px);
       gap: 18px;
-      padding-top: 18px;
+      padding: 18px 22px 22px !important;
     }
     .detail-hero {
       display: flex;
@@ -534,7 +555,7 @@ const CURRENCIES: CurrencyCode[] = ['HUF', 'EUR', 'USD'];
     }
     .detail-grid {
       display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
       gap: 10px;
     }
     .detail-grid div,
@@ -563,12 +584,14 @@ const CURRENCIES: CurrencyCode[] = ['HUF', 'EUR', 'USD'];
     }
     .infrastructure-card-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      grid-template-columns: repeat(auto-fit, minmax(420px, 1fr));
       gap: 10px;
     }
     .infrastructure-card {
       display: grid;
-      gap: 10px;
+      grid-template-columns: 92px minmax(0, 1fr);
+      gap: 16px;
+      align-items: start;
       min-width: 0;
       padding: 12px;
       border: 1px solid var(--brand-border);
@@ -580,6 +603,7 @@ const CURRENCIES: CurrencyCode[] = ['HUF', 'EUR', 'USD'];
       display: flex;
       align-items: center;
       justify-content: flex-start;
+      min-height: 100%;
     }
     .environment-badge {
       display: inline-flex;
@@ -610,7 +634,9 @@ const CURRENCIES: CurrencyCode[] = ['HUF', 'EUR', 'USD'];
     }
     .infrastructure-lines {
       display: grid;
-      gap: 8px;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 16px;
+      align-items: start;
     }
     .infrastructure-lines div {
       min-width: 0;
@@ -627,8 +653,16 @@ const CURRENCIES: CurrencyCode[] = ['HUF', 'EUR', 'USD'];
       display: block;
       min-width: 0;
       color: #111827;
-      font-size: 13px;
+      font-size: 14px;
       line-height: 1.35;
+      overflow-wrap: anywhere;
+    }
+    .infrastructure-lines small {
+      display: block;
+      margin-top: 2px;
+      color: var(--brand-muted);
+      font-size: 12px;
+      line-height: 1.3;
       overflow-wrap: anywhere;
     }
     .notes-readonly {
@@ -846,7 +880,30 @@ const CURRENCIES: CurrencyCode[] = ['HUF', 'EUR', 'USD'];
       grid-template-columns: 1.1fr 1.2fr 1fr 0.8fr auto;
     }
     .infrastructure-group-row {
-      grid-template-columns: 0.7fr 1.2fr 1.2fr 1.2fr auto;
+      grid-template-columns: minmax(140px, 0.55fr) repeat(4, minmax(180px, 1fr)) auto;
+    }
+    .infrastructure-group-row mat-form-field:nth-child(1) {
+      grid-column: 1 / 2;
+    }
+    .infrastructure-group-row mat-form-field:nth-child(2) {
+      grid-column: 2 / 4;
+    }
+    .infrastructure-group-row mat-form-field:nth-child(3) {
+      grid-column: 4 / 5;
+    }
+    .infrastructure-group-row mat-form-field:nth-child(4) {
+      grid-column: 2 / 4;
+    }
+    .infrastructure-group-row mat-form-field:nth-child(5) {
+      grid-column: 4 / 5;
+    }
+    .infrastructure-group-row mat-form-field:nth-child(6) {
+      grid-column: 5 / 6;
+      grid-row: 1 / 2;
+    }
+    .infrastructure-group-row > .mat-mdc-icon-button {
+      grid-column: 6 / 7;
+      grid-row: 1 / 2;
     }
     .vpn-row {
       grid-template-columns: 1fr 1fr auto;
@@ -872,6 +929,17 @@ const CURRENCIES: CurrencyCode[] = ['HUF', 'EUR', 'USD'];
       .mini-table-row.three-col {
         grid-template-columns: 1fr;
       }
+      .infrastructure-card {
+        grid-template-columns: 1fr;
+      }
+      .infrastructure-card-head {
+        min-height: 0;
+      }
+      .infrastructure-group-row mat-form-field,
+      .infrastructure-group-row > .mat-mdc-icon-button {
+        grid-column: auto;
+        grid-row: auto;
+      }
     }
   `]
 })
@@ -880,6 +948,8 @@ export class LicenseDialogComponent {
   contactAreas = CONTACT_AREAS;
   addressEnvironments = ADDRESS_ENVIRONMENTS;
   currencies = CURRENCIES;
+  databaseServerTypes = DATABASE_SERVER_TYPES;
+  applicationServerTypes = APPLICATION_SERVER_TYPES;
   model: LicensePayload;
   expiryDate: Date | null = null;
   isEditing = false;
@@ -1058,7 +1128,9 @@ export class LicenseDialogComponent {
       return license.infrastructureGroups.map((group) => ({
         environment: this.coerceEnvironment(group.environment),
         applicationServerAddress: group.applicationServerAddress || '',
+        applicationServerType: group.applicationServerType || null,
         databaseServerAddress: group.databaseServerAddress || '',
+        databaseServerType: group.databaseServerType || null,
         applicationAddress: group.applicationAddress || ''
       }));
     }
@@ -1071,19 +1143,24 @@ export class LicenseDialogComponent {
       const group: InfrastructureGroup = {
         environment: key,
         applicationServerAddress: '',
+        applicationServerType: null,
         databaseServerAddress: '',
+        databaseServerType: null,
         applicationAddress: ''
       };
       groups.set(key, group);
       return group;
     };
 
-    if (license?.applicationServerAddress) {
-      ensureGroup('prod').applicationServerAddress = license.applicationServerAddress;
+    if (license?.applicationServerAddress || license?.applicationServerType) {
+      const group = ensureGroup('prod');
+      group.applicationServerAddress = license.applicationServerAddress || '';
+      group.applicationServerType = license.applicationServerType || null;
     }
     for (const item of license?.databaseAddresses || []) {
       const group = ensureGroup(item.environment);
       if (!group.databaseServerAddress) group.databaseServerAddress = item.address || '';
+      if (!group.databaseServerType) group.databaseServerType = item.databaseType || null;
     }
     for (const item of license?.applicationAddresses || []) {
       const group = ensureGroup(item.environment);
@@ -1094,7 +1171,11 @@ export class LicenseDialogComponent {
     }
 
     return Array.from(groups.values()).filter((group) => (
-      group.applicationServerAddress || group.databaseServerAddress || group.applicationAddress
+      group.applicationServerAddress ||
+      group.applicationServerType ||
+      group.databaseServerAddress ||
+      group.databaseServerType ||
+      group.applicationAddress
     ));
   }
 
@@ -1112,10 +1193,18 @@ export class LicenseDialogComponent {
       .map((group) => ({
         environment: group.environment || 'prod',
         applicationServerAddress: String(group.applicationServerAddress || '').trim(),
+        applicationServerType: group.applicationServerType || null,
         databaseServerAddress: String(group.databaseServerAddress || '').trim(),
+        databaseServerType: group.databaseServerType || null,
         applicationAddress: String(group.applicationAddress || '').trim()
       }))
-      .filter((group) => group.applicationServerAddress || group.databaseServerAddress || group.applicationAddress);
+      .filter((group) => (
+        group.applicationServerAddress ||
+        group.applicationServerType ||
+        group.databaseServerAddress ||
+        group.databaseServerType ||
+        group.applicationAddress
+      ));
     if (!customerName || !this.model.status || !this.model.objectLimitOption || !expiresAt) return;
     if (this.model.objectLimitOption === 'custom' && (!Number.isInteger(customObjectLimit) || customObjectLimit < 1)) return;
     if (!Number.isInteger(licensePrice) || licensePrice < 0 || !Number.isInteger(supportPrice) || supportPrice < 0) return;
@@ -1134,13 +1223,13 @@ export class LicenseDialogComponent {
           .map((group) => ({
             address: group.databaseServerAddress,
             environment: group.environment,
-            databaseType: null
+            databaseType: group.databaseServerType || null
           }))
-          .filter((item) => item.address),
+          .filter((item) => item.address || item.databaseType),
         databaseServerAddress: infrastructureGroups[0]?.databaseServerAddress || '',
-        databaseServerType: null,
+        databaseServerType: infrastructureGroups[0]?.databaseServerType || null,
         applicationServerAddress: infrastructureGroups[0]?.applicationServerAddress || '',
-        applicationServerType: this.model.applicationServerType || null,
+        applicationServerType: infrastructureGroups[0]?.applicationServerType || null,
         applicationAddresses: infrastructureGroups
           .map((group) => ({
             address: group.applicationAddress,
@@ -1225,7 +1314,9 @@ export class LicenseDialogComponent {
       {
         environment: 'prod',
         applicationServerAddress: '',
+        applicationServerType: null,
         databaseServerAddress: '',
+        databaseServerType: null,
         applicationAddress: ''
       }
     ];
@@ -1341,8 +1432,8 @@ export class LicensesComponent implements OnInit {
 
   async openLicenseDialog(license?: LicenseCustomer): Promise<void> {
     const ref = this.dialog.open(LicenseDialogComponent, {
-      width: '960px',
-      maxWidth: 'calc(100vw - 32px)',
+      width: '1280px',
+      maxWidth: 'calc(100vw - 24px)',
       data: { license }
     });
     const result = await firstValueFrom(ref.afterClosed());

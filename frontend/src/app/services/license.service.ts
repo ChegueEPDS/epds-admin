@@ -36,7 +36,9 @@ export type TypedAddress = {
 export type InfrastructureGroup = {
   environment: AddressEnvironment;
   applicationServerAddress: string;
+  applicationServerType: ApplicationServerType | null;
   databaseServerAddress: string;
+  databaseServerType: DatabaseServerType | null;
   applicationAddress: string;
 };
 

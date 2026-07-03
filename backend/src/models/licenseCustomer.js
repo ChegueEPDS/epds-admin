@@ -48,7 +48,9 @@ const LicenseCustomerSchema = new mongoose.Schema(
     infrastructureGroups: [{
       environment: { type: String, enum: ADDRESS_ENVIRONMENTS, default: 'prod' },
       applicationServerAddress: { type: String, trim: true, default: '' },
+      applicationServerType: { type: String, enum: APPLICATION_SERVER_TYPES },
       databaseServerAddress: { type: String, trim: true, default: '' },
+      databaseServerType: { type: String, enum: DATABASE_SERVER_TYPES },
       applicationAddress: { type: String, trim: true, default: '' }
     }],
     accessAddresses: [{
