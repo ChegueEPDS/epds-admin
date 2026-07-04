@@ -387,7 +387,7 @@
 
 .response-line {
   stroke: url(#chartLineGradient);
-  stroke-width: 2.5;
+  stroke-width: 3;
   stroke-linecap: round;
   stroke-linejoin: round;
   opacity: 0.9;
@@ -428,12 +428,12 @@
 
 .chart-tooltip text {
   fill: #6b7280;
-  font-size: 10.5px;
+  font-size: 14px;
 }
 
 .chart-tooltip .tooltip-status {
   fill: #111827;
-  font-size: 11.5px;
+  font-size: 16px;
   font-weight: 700;
 }
 

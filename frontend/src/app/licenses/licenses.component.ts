@@ -167,7 +167,7 @@ export class LicensesComponent implements OnInit {
   objectLimitText(license: LicenseCustomer): string {
     if (license.objectLimitOption === 'unlimited') return 'Unlimited';
     const value = license.objectLimitOption === 'custom' ? license.customObjectLimit : Number(license.objectLimitOption);
-    return `${Number(value || 0).toLocaleString('hu-HU')} objects`;
+    return `${Number(value || 0).toLocaleString('hu-HU')}`;
   }
 
   private showError(message: string): void {
