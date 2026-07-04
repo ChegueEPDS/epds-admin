@@ -167,7 +167,13 @@ export class LicensesComponent implements OnInit {
   objectLimitText(license: LicenseCustomer): string {
     if (license.objectLimitOption === 'unlimited') return 'Unlimited';
     const value = license.objectLimitOption === 'custom' ? license.customObjectLimit : Number(license.objectLimitOption);
-    return `${Number(value || 0).toLocaleString('hu-HU')}`;
+    return this.formatObjectCount(value);
+  }
+
+  private formatObjectCount(value: number | string | null | undefined): string {
+    const numericValue = Number(value);
+    if (!Number.isFinite(numericValue)) return '-';
+    return String(Math.trunc(numericValue)).replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
   }
 
   private showError(message: string): void {

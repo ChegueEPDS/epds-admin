@@ -138,13 +138,19 @@ export class LicenseDialogComponent {
   objectLimitLabel(option: ObjectLimitOption): string {
     if (option === 'custom') return 'Custom';
     if (option === 'unlimited') return 'Unlimited';
-    return Number(option).toLocaleString('hu-HU');
+    return this.formatObjectCount(option);
   }
 
   objectLimitText(): string {
     if (this.model.objectLimitOption === 'unlimited') return 'Unlimited';
     const value = this.model.objectLimitOption === 'custom' ? this.model.customObjectLimit : Number(this.model.objectLimitOption);
-    return `${Number(value || 0).toLocaleString('hu-HU')} objects`;
+    return `${this.formatObjectCount(value)}`;
+  }
+
+  private formatObjectCount(value: number | string | null | undefined): string {
+    const numericValue = Number(value);
+    if (!Number.isFinite(numericValue)) return '-';
+    return String(Math.trunc(numericValue)).replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
   }
 
   statusText(): string {
