@@ -179,10 +179,19 @@
       <div class="timeline-chart" *ngIf="checks.length; else emptyTimeline">
         <svg viewBox="0 0 720 500" role="img" aria-label="Domain response time timeline" (mouseleave)="setActiveChartPoint(null)">
           <defs>
-            <linearGradient id="chartLineGradient" x1="0" y1="1" x2="0" y2="0">
+            <linearGradient
+              id="chartLineGradient"
+              gradientUnits="userSpaceOnUse"
+              [attr.x1]="0"
+              [attr.y1]="chart.bottom"
+              [attr.x2]="0"
+              [attr.y2]="chart.top"
+            >
               <stop offset="0%" stop-color="#047857"></stop>
-              <stop offset="58%" stop-color="#0f766e"></stop>
-              <stop offset="78%" stop-color="#b45309"></stop>
+              <stop offset="15%" stop-color="#047857"></stop>
+              <stop offset="30%" stop-color="#b45309"></stop>
+              <stop offset="45%" stop-color="#b45309"></stop>
+              <stop offset="60%" stop-color="#b91c1c"></stop>
               <stop offset="100%" stop-color="#b91c1c"></stop>
             </linearGradient>
             <filter id="tooltipShadow" x="-20%" y="-20%" width="140%" height="140%">
