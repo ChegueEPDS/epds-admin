@@ -1,56 +1,37 @@
-<div class="editor-field">
-  <label *ngIf="label">{{ label }}</label>
+<div class="editor-field" [class.editor-field-disabled]="disabled" [class.editor-field-readonly]="readonly" [class.editor-field-error]="errorText">
+  <label *ngIf="label">
+    {{ label }}
+    <span *ngIf="required" class="required-marker">*</span>
+  </label>
+
   <div class="editor-toolbar" aria-label="Rich text formatting">
-    <button mat-icon-button type="button" matTooltip="Bold" (click)="format('bold')">
+    <button mat-icon-button type="button" matTooltip="Undo" [disabled]="disabled || readonly || isHtmlMode" (click)="format('undo')">
+      <mat-icon class="material-symbols-outlined">undo</mat-icon>
+    </button>
+    <button mat-icon-button type="button" matTooltip="Redo" [disabled]="disabled || readonly || isHtmlMode" (click)="format('redo')">
+      <mat-icon class="material-symbols-outlined">redo</mat-icon>
+    </button>
+
+    <span class="toolbar-divider"></span>
+
+    <button mat-icon-button type="button" matTooltip="Bold" [class.active]="activeStates.bold" [disabled]="disabled || readonly || isHtmlMode" (click)="format('bold')">
       <mat-icon class="material-symbols-outlined">format_bold</mat-icon>
     </button>
-    <button mat-icon-button type="button" matTooltip="Italic" (click)="format('italic')">
+    <button mat-icon-button type="button" matTooltip="Italic" [class.active]="activeStates.italic" [disabled]="disabled || readonly || isHtmlMode" (click)="format('italic')">
       <mat-icon class="material-symbols-outlined">format_italic</mat-icon>
     </button>
-    <button mat-icon-button type="button" matTooltip="Underline" (click)="format('underline')">
+    <button mat-icon-button type="button" matTooltip="Underline" [class.active]="activeStates.underline" [disabled]="disabled || readonly || isHtmlMode" (click)="format('underline')">
       <mat-icon class="material-symbols-outlined">format_underlined</mat-icon>
     </button>
-    <button mat-icon-button type="button" matTooltip="Strikethrough" (click)="format('strikeThrough')">
+    <button mat-icon-button type="button" matTooltip="Strikethrough" [class.active]="activeStates.strikeThrough" [disabled]="disabled || readonly || isHtmlMode" (click)="format('strikeThrough')">
       <mat-icon class="material-symbols-outlined">strikethrough_s</mat-icon>
     </button>
+
     <span class="toolbar-divider"></span>
-    <select class="editor-select" aria-label="Font size" [value]="selectedFontSize" (change)="setFontSize($any($event.target).value)">
-      <option value="2">Small</option>
-      <option value="3">Normal</option>
-      <option value="5">Large</option>
-    </select>
-    <span class="toolbar-divider"></span>
-    <button mat-icon-button type="button" matTooltip="Align left" (click)="format('justifyLeft')">
-      <mat-icon class="material-symbols-outlined">format_align_left</mat-icon>
-    </button>
-    <button mat-icon-button type="button" matTooltip="Align center" (click)="format('justifyCenter')">
-      <mat-icon class="material-symbols-outlined">format_align_center</mat-icon>
-    </button>
-    <button mat-icon-button type="button" matTooltip="Align right" (click)="format('justifyRight')">
-      <mat-icon class="material-symbols-outlined">format_align_right</mat-icon>
-    </button>
-    <button mat-icon-button type="button" matTooltip="Justify" (click)="format('justifyFull')">
-      <mat-icon class="material-symbols-outlined">format_align_justify</mat-icon>
-    </button>
-    <span class="toolbar-divider"></span>
-    <button mat-icon-button type="button" matTooltip="Bulleted list" (click)="format('insertUnorderedList')">
-      <mat-icon class="material-symbols-outlined">format_list_bulleted</mat-icon>
-    </button>
-    <button mat-icon-button type="button" matTooltip="Numbered list" (click)="format('insertOrderedList')">
-      <mat-icon class="material-symbols-outlined">format_list_numbered</mat-icon>
-    </button>
-    <button mat-icon-button type="button" matTooltip="Decrease indent" (click)="format('outdent')">
-      <mat-icon class="material-symbols-outlined">format_indent_decrease</mat-icon>
-    </button>
-    <button mat-icon-button type="button" matTooltip="Increase indent" (click)="format('indent')">
-      <mat-icon class="material-symbols-outlined">format_indent_increase</mat-icon>
-    </button>
-    <span class="toolbar-divider"></span>
+
     <div class="color-menu">
-      <button class="color-menu-trigger" type="button" (click)="toggleTextColorMenu()">
-        <mat-icon class="material-symbols-outlined">format_color_text</mat-icon>
-        <span class="color-swatch" [style.background]="selectedTextColor"></span>
-        {{ colorLabel(selectedTextColor, textColors) }}
+      <button class="color-menu-trigger icon-only-color-trigger" type="button" matTooltip="Text color" [disabled]="disabled || readonly || isHtmlMode" (click)="toggleTextColorMenu()">
+        <mat-icon class="material-symbols-outlined" [style.color]="selectedTextColor">format_color_text</mat-icon>
       </button>
       <div class="color-menu-panel" *ngIf="isTextColorMenuOpen">
         <button type="button" *ngFor="let color of textColors" [class.selected-color]="selectedTextColor === color.value" (click)="applyMenuColor('foreColor', color.value)">
@@ -59,11 +40,10 @@
         </button>
       </div>
     </div>
+
     <div class="color-menu">
-      <button class="color-menu-trigger" type="button" (click)="toggleHighlightMenu()">
+      <button class="color-menu-trigger icon-only-color-trigger" type="button" matTooltip="Highlight color" [class.no-highlight-selected]="selectedHighlightColor === 'transparent'" [style.background]="selectedHighlightColor === 'transparent' ? null : selectedHighlightColor" [disabled]="disabled || readonly || isHtmlMode" (click)="toggleHighlightMenu()">
         <mat-icon class="material-symbols-outlined">format_color_fill</mat-icon>
-        <span class="color-swatch" [class.no-fill]="selectedHighlightColor === 'transparent'" [style.background]="selectedHighlightColor === 'transparent' ? null : selectedHighlightColor"></span>
-        {{ selectedHighlightColor === 'transparent' ? 'No fill' : colorLabel(selectedHighlightColor, highlightColors) }}
       </button>
       <div class="color-menu-panel" *ngIf="isHighlightMenuOpen">
         <button type="button" [class.selected-color]="selectedHighlightColor === 'transparent'" (click)="applyMenuHighlight('transparent')">
@@ -76,24 +56,141 @@
         </button>
       </div>
     </div>
+
     <span class="toolbar-divider"></span>
-    <button mat-icon-button type="button" matTooltip="Insert link" (click)="insertLink()">
+
+    <select class="editor-select" aria-label="Block format" [value]="selectedBlockFormat" [disabled]="disabled || readonly || isHtmlMode" (change)="setBlockFormat($any($event.target).value)">
+      <option value="p">Paragraph</option>
+      <option value="h1">Heading 1</option>
+      <option value="h2">Heading 2</option>
+      <option value="h3">Heading 3</option>
+      <option value="blockquote">Quote</option>
+    </select>
+
+    <select class="editor-select" aria-label="Font size" [value]="selectedFontSize" [disabled]="disabled || readonly || isHtmlMode" (change)="setFontSize($any($event.target).value)">
+      <option value="2">Small</option>
+      <option value="3">Normal</option>
+      <option value="5">Large</option>
+    </select>
+
+    <span class="toolbar-divider"></span>
+
+    <button mat-icon-button type="button" matTooltip="Align left" [class.active]="activeStates.justifyLeft" [disabled]="disabled || readonly || isHtmlMode" (click)="format('justifyLeft')">
+      <mat-icon class="material-symbols-outlined">format_align_left</mat-icon>
+    </button>
+    <button mat-icon-button type="button" matTooltip="Align center" [class.active]="activeStates.justifyCenter" [disabled]="disabled || readonly || isHtmlMode" (click)="format('justifyCenter')">
+      <mat-icon class="material-symbols-outlined">format_align_center</mat-icon>
+    </button>
+    <button mat-icon-button type="button" matTooltip="Align right" [class.active]="activeStates.justifyRight" [disabled]="disabled || readonly || isHtmlMode" (click)="format('justifyRight')">
+      <mat-icon class="material-symbols-outlined">format_align_right</mat-icon>
+    </button>
+    <button mat-icon-button type="button" matTooltip="Justify" [disabled]="disabled || readonly || isHtmlMode" (click)="format('justifyFull')">
+      <mat-icon class="material-symbols-outlined">format_align_justify</mat-icon>
+    </button>
+
+    <span class="toolbar-divider"></span>
+
+    <button mat-icon-button type="button" matTooltip="Bulleted list" [class.active]="activeStates.insertUnorderedList" [disabled]="disabled || readonly || isHtmlMode" (click)="format('insertUnorderedList')">
+      <mat-icon class="material-symbols-outlined">format_list_bulleted</mat-icon>
+    </button>
+    <button mat-icon-button type="button" matTooltip="Numbered list" [class.active]="activeStates.insertOrderedList" [disabled]="disabled || readonly || isHtmlMode" (click)="format('insertOrderedList')">
+      <mat-icon class="material-symbols-outlined">format_list_numbered</mat-icon>
+    </button>
+    <button mat-icon-button type="button" matTooltip="Decrease indent" [disabled]="disabled || readonly || isHtmlMode" (click)="format('outdent')">
+      <mat-icon class="material-symbols-outlined">format_indent_decrease</mat-icon>
+    </button>
+    <button mat-icon-button type="button" matTooltip="Increase indent" [disabled]="disabled || readonly || isHtmlMode" (click)="format('indent')">
+      <mat-icon class="material-symbols-outlined">format_indent_increase</mat-icon>
+    </button>
+
+    <span class="toolbar-divider"></span>
+
+    <button mat-icon-button type="button" matTooltip="Table" [class.active]="isTableMenuOpen" [disabled]="disabled || readonly || isHtmlMode" (click)="toggleTableMenu()">
+      <mat-icon class="material-symbols-outlined">table</mat-icon>
+    </button>
+
+    <span class="toolbar-divider"></span>
+
+    <button mat-icon-button type="button" matTooltip="Insert link" [disabled]="disabled || readonly || isHtmlMode" (click)="insertLink()">
       <mat-icon class="material-symbols-outlined">link</mat-icon>
     </button>
-    <button mat-icon-button type="button" matTooltip="Clear formatting" (click)="format('removeFormat')">
+    <button mat-icon-button type="button" matTooltip="Remove link" [disabled]="disabled || readonly || isHtmlMode" (click)="removeLink()">
+      <mat-icon class="material-symbols-outlined">link_off</mat-icon>
+    </button>
+    <button mat-icon-button type="button" matTooltip="Clear formatting" [disabled]="disabled || readonly || isHtmlMode" (click)="format('removeFormat')">
       <mat-icon class="material-symbols-outlined">format_clear</mat-icon>
     </button>
+
+    <span class="toolbar-divider"></span>
+
+    <button mat-icon-button type="button" matTooltip="HTML view" [class.active]="isHtmlMode" [disabled]="disabled" (click)="toggleHtmlMode()">
+      <mat-icon class="material-symbols-outlined">code</mat-icon>
+    </button>
+
   </div>
+
+  <div class="table-toolbar" [class.table-toolbar-open]="isTableMenuOpen" [attr.aria-hidden]="!isTableMenuOpen" aria-label="Table tools">
+    <span class="table-toolbar-title">Insert table</span>
+
+    <label>
+      Rows
+      <input type="number" min="1" max="20" [value]="tableRows" [disabled]="disabled || readonly || isHtmlMode" (input)="tableRows = +$any($event.target).value" />
+    </label>
+
+    <label>
+      Columns
+      <input type="number" min="1" max="10" [value]="tableColumns" [disabled]="disabled || readonly || isHtmlMode" (input)="tableColumns = +$any($event.target).value" />
+    </label>
+
+    <span class="toolbar-divider"></span>
+
+    <label>
+      Border
+      <input type="number" min="0" max="10" [value]="tableBorderWidth" [disabled]="disabled || readonly || isHtmlMode" (input)="tableBorderWidth = +$any($event.target).value" />
+    </label>
+
+    <select class="editor-select" aria-label="Table border style" [value]="tableBorderStyle" [disabled]="disabled || readonly || isHtmlMode" (change)="tableBorderStyle = $any($event.target).value">
+      <option value="solid">Solid</option>
+      <option value="dashed">Dashed</option>
+      <option value="dotted">Dotted</option>
+      <option value="double">Double</option>
+      <option value="none">None</option>
+    </select>
+
+    <input class="table-color-input" type="color" aria-label="Table border color" [value]="tableBorderColor" [disabled]="disabled || readonly || isHtmlMode" (input)="tableBorderColor = $any($event.target).value" />
+
+    <button type="button" class="table-action table-action-primary" [disabled]="disabled || readonly || isHtmlMode" (mousedown)="$event.preventDefault()" (click)="insertTable()">
+      Insert
+    </button>
+
+    <button type="button" class="table-action" [disabled]="disabled || readonly || isHtmlMode" (click)="applyTableBorder()">
+      Apply to selected table
+    </button>
+  </div>
+
   <div
     #editor
     class="wysiwyg-editor"
-    contenteditable="true"
+    [class.html-mode]="isHtmlMode"
+    [attr.contenteditable]="disabled || readonly ? 'false' : 'true'"
     role="textbox"
     dir="ltr"
     [attr.aria-label]="ariaLabel"
+    [attr.aria-required]="required"
+    [attr.aria-invalid]="!!errorText"
     [attr.data-placeholder]="placeholder"
     [style.min-height]="minHeight"
     (input)="syncEditor($event)"
     (blur)="syncEditor($event)"
+    (paste)="handlePaste($event)"
+    (keydown)="handleKeydown($event)"
+    (keyup)="updateActiveStates()"
+    (mouseup)="updateActiveStates()"
   ></div>
+
+  <div class="editor-footer">
+    <span class="editor-error" *ngIf="errorText">{{ errorText }}</span>
+    <span class="editor-counter" *ngIf="maxLength !== null">{{ plainTextLength }} / {{ maxLength }}</span>
+    <span class="editor-counter" *ngIf="maxLength === null">{{ plainTextLength }} characters</span>
+  </div>
 </div>
