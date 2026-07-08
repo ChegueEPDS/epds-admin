@@ -14,6 +14,9 @@
   justify-content: space-between;
   gap: 16px;
 }
+.deep-scan-head button mat-icon {
+  margin-right: 6px;
+}
 .deep-scan-head strong,
 .deep-scan-head span {
   display: block;
@@ -33,10 +36,44 @@
   min-height: 180px;
   color: #6b7280;
 }
+.compact-loading {
+  min-height: 44px;
+  justify-content: flex-start;
+  padding: 10px 12px;
+  border: 1px solid var(--brand-border);
+  border-radius: 8px;
+  background: #f8fafc;
+}
 .deep-scan-error,
 .scan-error,
 .scan-failed {
   color: #b91c1c;
+}
+.empty-state {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-height: 140px;
+  border: 1px dashed var(--brand-border);
+  border-radius: 8px;
+  color: #6b7280;
+}
+.latest-meta {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--brand-border);
+  border-radius: 8px;
+  background: #fff;
+}
+.latest-meta span,
+.latest-meta small {
+  color: #6b7280;
+}
+.latest-meta strong {
+  color: #111827;
 }
 .deep-scan-results {
   display: grid;
@@ -116,10 +153,73 @@
 .opportunity-row strong {
   white-space: nowrap;
 }
+.history-stats {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid var(--brand-border);
+  border-radius: 8px;
+  background: #fff;
+}
+.section-title {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+.section-title h3 {
+  margin: 0;
+}
+.section-title span {
+  color: #6b7280;
+  font-size: 12px;
+}
+.history-summary {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 8px;
+}
+.history-summary div {
+  padding: 8px;
+  border: 1px solid var(--brand-border);
+  border-radius: 8px;
+  background: #f8fafc;
+}
+.history-summary span,
+.history-table .history-header span {
+  color: #6b7280;
+  font-size: 11px;
+}
+.history-summary span,
+.history-summary strong {
+  display: block;
+}
+.history-table {
+  display: grid;
+  border-top: 1px solid var(--brand-border);
+}
+.history-row {
+  display: grid;
+  grid-template-columns: 1.4fr repeat(5, minmax(0, 1fr));
+  gap: 10px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--brand-border);
+  font-size: 12px;
+}
+.history-row span {
+  min-width: 0;
+}
 @media (max-width: 900px) {
   .deep-scan-results,
   .score-grid,
-  .metric-list {
+  .metric-list,
+  .history-summary,
+  .history-row {
     grid-template-columns: 1fr;
+  }
+  .latest-meta,
+  .section-title {
+    align-items: flex-start;
+    flex-direction: column;
   }
 }

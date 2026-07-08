@@ -14,6 +14,7 @@ export type EffortTask = {
   netMs: number;
   grossMs: number;
   active: boolean;
+  activeByCurrentUser: boolean;
   activeStartedAt: string | null;
   sessionCount: number;
   hasStarted: boolean;
@@ -22,6 +23,7 @@ export type EffortTask = {
   closedGrossMs: number;
   createdAt: string;
   updatedAt: string;
+  displayBaseAt?: number;
 };
 
 export type EffortProject = {

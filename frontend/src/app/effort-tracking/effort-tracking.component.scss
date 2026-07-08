@@ -25,7 +25,6 @@
 
 .page-header p,
 .detail-header p,
-.task-card p,
 .comment {
   margin: 6px 0 0;
   color: #64748b;
@@ -154,12 +153,77 @@
 
 .comment {
   padding: 0 2px;
-  white-space: pre-wrap;
+}
+
+.task-note {
+  display: -webkit-box;
+  overflow: hidden;
+  color: #334155;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 6;
+  line-clamp: 6;
+}
+
+.task-note.expanded {
+  display: block;
+  overflow: visible;
+  -webkit-line-clamp: unset;
+  line-clamp: unset;
+}
+
+.show-more-button {
+  justify-self: start;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #0f766e;
+  cursor: pointer;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.show-more-button:hover {
+  color: #115e59;
+  text-decoration: underline;
+}
+
+.rich-content {
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+}
+
+:host ::ng-deep .rich-content p {
+  margin: 6px 0 0;
+}
+
+:host ::ng-deep .rich-content ul,
+:host ::ng-deep .rich-content ol {
+  margin: 8px 0 0;
+  padding-left: 22px;
+}
+
+:host ::ng-deep .rich-content blockquote {
+  margin: 10px 0 0;
+  padding-left: 12px;
+  border-left: 3px solid #e5e7eb;
+  color: #4b5563;
+}
+
+:host ::ng-deep .rich-content table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+:host ::ng-deep .rich-content td,
+:host ::ng-deep .rich-content th {
+  padding: 6px 8px;
+  border: 1px solid #e5e7eb;
 }
 
 .task-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
   gap: 14px;
 }
 
@@ -167,7 +231,7 @@
   display: grid;
   gap: 14px;
   position: relative;
-  padding-top: 44px;
+  align-content: start;
 }
 
 .task-card.active {
@@ -177,16 +241,34 @@
 
 .task-head {
   display: flex;
+  align-items: flex-start;
   justify-content: space-between;
   gap: 12px;
+  min-width: 0;
 }
 
 .task-head h4 {
   margin-top: 0;
+  overflow-wrap: anywhere;
 }
 
-.task-head mat-icon {
+.task-title {
+  min-width: 0;
+}
+
+.task-status {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 8px;
+}
+
+.task-status mat-icon {
   color: #047857;
+  width: 24px;
+  height: 24px;
+  margin: 0;
+  font-size: 24px;
 }
 
 .task-times {
@@ -194,8 +276,49 @@
 }
 
 .task-actions {
-  justify-content: flex-start;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  align-items: center;
+  gap: 10px;
+  justify-content: stretch;
+}
+
+.task-actions button {
+  min-width: 0;
+  width: 100%;
+  padding: 0 6px;
+  font-size: 13px;
+}
+
+.task-actions button mat-icon {
+  width: 20px;
+  height: 20px;
+  margin-right: 4px;
+  font-size: 20px;
+}
+
+.task-actions .task-action-edit {
+  border-color: #9a5b13;
+  color: #8a4b08;
+}
+
+.task-actions .task-action-start {
+  background: #0f766e;
+  color: #ffffff;
+}
+
+.task-actions .task-action-start:hover {
+  background: #115e59;
+}
+
+.task-actions .task-action-stop {
+  border-color: #dc2626;
+  color: #b91c1c;
+}
+
+.task-actions .task-action-close {
+  border-color: #2563eb;
+  color: #1d4ed8;
 }
 
 .task-card small {
@@ -216,8 +339,7 @@
   text-transform: uppercase;
 }
 
-.project-card > .status-pill,
-.task-card .task-head .status-pill {
+.project-card > .status-pill {
   position: absolute;
   top: 14px;
   right: 14px;

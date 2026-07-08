@@ -6,9 +6,11 @@ import { MailboxComponent } from './mailbox/mailbox.component';
 import { DomainHealthComponent } from './domain-health/domain-health.component';
 import { LicensesComponent } from './licenses/licenses.component';
 import { EffortTrackingComponent } from './effort-tracking/effort-tracking.component';
+import { PublicStatusComponent } from './public-status/public-status.component';
 
 export const routes: Routes = [
   { path: 'login', component: LoginComponent },
+  { path: 'status/:owner', component: PublicStatusComponent },
   { path: 'home', component: HomeComponent, canActivate: [AuthGuard] },
   { path: 'mail', component: MailboxComponent, canActivate: [AuthGuard], data: { requiresEpdsEmail: true } },
   { path: 'domain-health', component: DomainHealthComponent, canActivate: [AuthGuard] },

@@ -18,9 +18,27 @@ const DomainMonitorSchema = new mongoose.Schema(
     lastStatusCode: { type: Number },
     lastError: { type: String },
     lastErrorType: { type: String },
+    lastWarning: { type: String },
+    lastWarningType: { type: String },
+    lastFinalUrl: { type: String },
+    lastRedirectCount: { type: Number },
+    lastContentType: { type: String },
+    lastContentLength: { type: Number },
+    lastTlsValidTo: { type: Date },
+    lastTlsDaysRemaining: { type: Number },
     currentIssueSince: { type: Date },
     lastFailureAt: { type: Date },
-    lastRecoveryAt: { type: Date }
+    lastRecoveryAt: { type: Date },
+    healthConfig: {
+      checkPath: { type: String, default: '' },
+      expectedStatusMin: { type: Number, default: 200 },
+      expectedStatusMax: { type: Number, default: 399 },
+      timeoutMs: { type: Number, default: 10000 },
+      warningResponseMs: { type: Number, default: 2500 },
+      errorResponseMs: { type: Number, default: 10000 },
+      followRedirects: { type: Boolean, default: true },
+      tlsWarningDays: { type: Number, default: 30 }
+    }
   },
   { timestamps: true }
 );

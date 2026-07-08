@@ -19,10 +19,14 @@
       <mat-label>Customer</mat-label>
       <input matInput name="projectCustomer" [(ngModel)]="projectForm.customer">
     </mat-form-field>
-    <mat-form-field appearance="outline" class="wide-field">
-      <mat-label>Comment</mat-label>
-      <textarea matInput name="projectComment" rows="2" [(ngModel)]="projectForm.comment"></textarea>
-    </mat-form-field>
+    <app-rich-text-editor
+      class="wide-field"
+      label="Comment"
+      ariaLabel="Project comment"
+      placeholder="Write a comment..."
+      minHeight="180px"
+      [(html)]="projectForm.comment"
+    ></app-rich-text-editor>
     <div class="form-actions">
       <button mat-button type="button" (click)="cancelProjectForm()">Cancel</button>
       <button mat-flat-button color="primary" type="submit" [disabled]="saving">
@@ -49,7 +53,7 @@
         <strong>{{ project.name }}</strong>
         <span>{{ project.customer || 'No customer' }}</span>
         <div class="time-row">
-          <span>Net {{ formatDuration(project.status === 'closed' ? project.closedNetMs : project.netMs) }}</span>
+          <span>Net {{ formatDuration(project.status === 'closed' ? project.closedNetMs : projectDisplayNet(project)) }}</span>
           <span>{{ project.taskCount }} task</span>
         </div>
       </button>
@@ -100,7 +104,7 @@
         </div>
       </div>
 
-      <p class="comment" *ngIf="selectedProject.comment">{{ selectedProject.comment }}</p>
+      <div class="comment rich-content" *ngIf="selectedProject.comment" [innerHTML]="selectedProject.comment"></div>
 
       <div class="section-header">
         <h3>Tasks</h3>
@@ -115,10 +119,14 @@
           <mat-label>Task name</mat-label>
           <input matInput name="taskName" [(ngModel)]="taskForm.name" required>
         </mat-form-field>
-        <mat-form-field appearance="outline" class="wide-field">
-          <mat-label>Note</mat-label>
-          <textarea matInput name="taskNote" rows="2" [(ngModel)]="taskForm.note"></textarea>
-        </mat-form-field>
+        <app-rich-text-editor
+          class="wide-field"
+          label="Note"
+          ariaLabel="Task note"
+          placeholder="Write a note..."
+          minHeight="180px"
+          [(html)]="taskForm.note"
+        ></app-rich-text-editor>
         <div class="form-actions">
           <button mat-button type="button" (click)="cancelTaskForm()">Cancel</button>
           <button mat-flat-button color="primary" type="submit" [disabled]="saving">
@@ -131,13 +139,27 @@
       <div class="task-grid" *ngIf="selectedProject.tasks.length; else noTasks">
         <article class="task-card" *ngFor="let task of selectedProject.tasks" [class.closed]="task.status === 'closed'" [class.active]="task.active">
           <div class="task-head">
-            <div>
-              <span class="status-pill" [class.closed]="task.status === 'closed'" [class.new]="taskStatusText(task) === 'New'">{{ taskStatusText(task) }}</span>
+            <div class="task-title">
               <h4>{{ task.name }}</h4>
             </div>
-            <mat-icon class="material-symbols-outlined" *ngIf="task.active">timer</mat-icon>
+            <div class="task-status">
+              <span class="status-pill" [class.closed]="task.status === 'closed'" [class.new]="taskStatusText(task) === 'New'">{{ taskStatusText(task) }}</span>
+              <mat-icon class="material-symbols-outlined" *ngIf="task.active">timer</mat-icon>
+            </div>
           </div>
-          <p *ngIf="task.note">{{ task.note }}</p>
+          <div
+            class="task-note rich-content"
+            *ngIf="task.note"
+            [class.expanded]="isTaskNoteExpanded(task)"
+            [innerHTML]="task.note">
+          </div>
+          <button
+            class="show-more-button"
+            type="button"
+            *ngIf="shouldShowTaskNoteToggle(task)"
+            (click)="toggleTaskNote(task)">
+            {{ isTaskNoteExpanded(task) ? 'Show less' : 'Show more...' }}
+          </button>
           <div class="task-times">
             <div>
               <span>Net</span>
@@ -149,19 +171,26 @@
             </div>
           </div>
           <div class="task-actions">
-            <button mat-stroked-button type="button" *ngIf="task.status === 'open'" (click)="startEditTask(task)" [disabled]="saving || selectedProject.status === 'closed'">
+            <button class="task-action-edit" mat-stroked-button type="button" *ngIf="task.status === 'open'" (click)="startEditTask(task)" [disabled]="saving || selectedProject.status === 'closed'">
               <mat-icon class="material-symbols-outlined">edit</mat-icon>
               Edit
             </button>
-            <button mat-flat-button color="primary" type="button" *ngIf="!task.active && task.status === 'open'" (click)="startTask(task)" [disabled]="saving || selectedProject.status === 'closed'">
+            <button
+              mat-flat-button
+              class="task-action-start"
+              type="button"
+              *ngIf="!task.active && task.status === 'open'"
+              [matTooltip]="startButtonTooltip(task)"
+              (click)="startTask(task)"
+              [disabled]="saving || selectedProject.status === 'closed'">
               <mat-icon class="material-symbols-outlined">play_arrow</mat-icon>
-              Start
+              {{ startButtonText(task) }}
             </button>
-            <button mat-stroked-button type="button" *ngIf="task.active" (click)="stopTask(task)" [disabled]="saving">
+            <button class="task-action-stop" mat-stroked-button type="button" *ngIf="task.activeByCurrentUser" (click)="stopTask(task)" [disabled]="saving">
               <mat-icon class="material-symbols-outlined">stop</mat-icon>
               Stop
             </button>
-            <button mat-stroked-button type="button" *ngIf="task.status === 'open'" (click)="closeTask(task)" [disabled]="saving || selectedProject.status === 'closed'">
+            <button class="task-action-close" mat-stroked-button type="button" *ngIf="task.status === 'open'" (click)="closeTask(task)" [disabled]="saving || selectedProject.status === 'closed'">
               <mat-icon class="material-symbols-outlined">check_circle</mat-icon>
               Close
             </button>

@@ -5,7 +5,7 @@ import { MatButtonModule } from '@angular/material/button';
 import { MAT_DIALOG_DATA, MatDialogModule } from '@angular/material/dialog';
 import { MatIconModule } from '@angular/material/icon';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
-import { DomainDeepScanResult, DomainHealthService, DomainMonitor } from '../../services/domain-health.service';
+import { DomainDeepScanResult, DomainHealthService, DomainMonitor, DomainPageSpeedOverview } from '../../services/domain-health.service';
 
 @Component({
   selector: 'app-domain-deep-scan-dialog',
@@ -22,7 +22,9 @@ import { DomainDeepScanResult, DomainHealthService, DomainMonitor } from '../../
 })
 export class DomainDeepScanDialogComponent implements OnInit {
   isLoading = true;
+  isRunning = false;
   error = '';
+  overview: DomainPageSpeedOverview | null = null;
   result: DomainDeepScanResult | null = null;
 
   constructor(
@@ -31,18 +33,32 @@ export class DomainDeepScanDialogComponent implements OnInit {
   ) {}
 
   ngOnInit(): void {
-    void this.run();
+    void this.load();
   }
 
-  async run(): Promise<void> {
+  async load(): Promise<void> {
     this.isLoading = true;
     this.error = '';
     try {
-      this.result = await firstValueFrom(this.service.deepScan(this.data.domain.id));
+      this.overview = await firstValueFrom(this.service.getPageSpeed(this.data.domain.id));
+      this.result = this.overview.latest;
     } catch (error: any) {
-      this.error = error?.error?.error || 'Deep scan failed.';
+      this.error = error?.error?.error || 'PageSpeed data failed to load.';
     } finally {
       this.isLoading = false;
+    }
+  }
+
+  async run(): Promise<void> {
+    this.isRunning = true;
+    this.error = '';
+    try {
+      this.result = await firstValueFrom(this.service.runPageSpeed(this.data.domain.id));
+      await this.load();
+    } catch (error: any) {
+      this.error = error?.error?.error || 'PageSpeed scan failed.';
+    } finally {
+      this.isRunning = false;
     }
   }
 
@@ -59,5 +75,17 @@ export class DomainDeepScanDialogComponent implements OnInit {
 
   savingsText(value?: number): string {
     return typeof value === 'number' ? `${value} ms` : '-';
+  }
+
+  metricMsText(value?: number | null): string {
+    return typeof value === 'number' ? `${Math.round(value)} ms` : '-';
+  }
+
+  clsText(value?: number | null): string {
+    return typeof value === 'number' ? value.toFixed(3) : '-';
+  }
+
+  recentHistory() {
+    return [...(this.overview?.history || [])].slice(-10).reverse();
   }
 }

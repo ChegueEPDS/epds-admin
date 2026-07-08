@@ -38,15 +38,26 @@ export type DomainMonitor = {
   lastStatusCode?: number;
   lastError?: string;
   lastErrorType?: string;
+  lastWarning?: string;
+  lastWarningType?: string;
+  lastFinalUrl?: string;
+  lastRedirectCount?: number;
+  lastContentType?: string;
+  lastContentLength?: number;
+  lastTlsValidTo?: string;
+  lastTlsDaysRemaining?: number;
+  healthConfig: DomainHealthConfig;
   currentIssueSince?: string;
   lastFailureAt?: string;
   lastRecoveryAt?: string;
   recentIssueCount: number;
+  recentWarningCount: number;
   availability?: {
     status: DomainMonitorStatus;
     uptimePercent: number | null;
     totalChecks: number;
     recentIssueCount: number;
+    recentWarningCount?: number;
   };
   performance?: {
     status: DomainPerformanceStatus;
@@ -62,10 +73,65 @@ export type DomainCheck = {
   id: string;
   checkedAt: string;
   ok: boolean;
+  status?: 'ok' | 'warning' | 'error';
   statusCode?: number;
   responseMs?: number;
+  finalUrl?: string;
+  redirectCount?: number;
+  contentType?: string;
+  contentLength?: number;
+  tlsValidTo?: string;
+  tlsDaysRemaining?: number;
   errorType?: string;
   errorMessage?: string;
+  warningType?: string;
+  warningMessage?: string;
+};
+
+export type DomainWindowSummary = {
+  label: '24h' | '7d' | '30d';
+  totalChecks: number;
+  uptimePercent: number | null;
+  avgResponseMs: number | null;
+  medianResponseMs: number | null;
+  p95ResponseMs: number | null;
+  incidentCount: number;
+};
+
+export type DomainIncident = {
+  severity: 'warning' | 'error';
+  reasonCode: string;
+  reasonText: string;
+  startedAt: string;
+  endedAt?: string | null;
+  durationMs: number;
+  isOpen: boolean;
+};
+
+export type DomainStatusHistoryBucket = {
+  status: 'ok' | 'warning' | 'error' | 'unknown';
+  bucketStart: string;
+  checkedAt?: string | null;
+  responseMs?: number | null;
+};
+
+export type DomainTlsSummary = {
+  status: 'ok' | 'warning' | 'error' | 'unknown';
+  validTo?: string | null;
+  daysRemaining?: number | null;
+  warningDays: number;
+};
+
+export type DomainStatusOverview = {
+  windows: DomainWindowSummary[];
+  incidents: DomainIncident[];
+  currentIncident?: DomainIncident | null;
+  history24h: DomainStatusHistoryBucket[];
+  lastSuccessfulCheck?: DomainCheck | null;
+  lastFailedCheck?: DomainCheck | null;
+  lastWarningCheck?: DomainCheck | null;
+  lastRecoveryAt?: string | null;
+  tls: DomainTlsSummary;
 };
 
 export type DomainMonitorRuntime = {
@@ -85,8 +151,11 @@ export type PageSpeedMetric = {
 };
 
 export type DomainDeepScanResult = {
+  id?: string;
   checkedAt: string;
   domain: DomainMonitor;
+  domainId?: string;
+  source?: 'manual' | 'scheduled';
   scans: Array<{
     ok: boolean;
     strategy: 'mobile' | 'desktop';
@@ -120,11 +189,75 @@ export type DomainDeepScanResult = {
   }>;
 };
 
+export type DomainPageSpeedHistoryItem = {
+  id: string;
+  checkedAt: string;
+  source: 'manual' | 'scheduled';
+  mobilePerformance: number | null;
+  desktopPerformance: number | null;
+  mobileLcp: number | null;
+  desktopLcp: number | null;
+  mobileCls: number | null;
+  desktopCls: number | null;
+};
+
+export type DomainPageSpeedOverview = {
+  domain: DomainMonitor;
+  latest: DomainDeepScanResult | null;
+  history: DomainPageSpeedHistoryItem[];
+  summary: {
+    count: number;
+    mobilePerformanceAvg: number | null;
+    desktopPerformanceAvg: number | null;
+    mobileLcpAvg: number | null;
+    desktopLcpAvg: number | null;
+  };
+};
+
+export type PublicStatusDomain = {
+  domain: DomainMonitor;
+  overview: DomainStatusOverview;
+  pageSpeed?: {
+    latestCheckedAt?: string | null;
+    latestMobilePerformance?: number | null;
+    latestDesktopPerformance?: number | null;
+    trend7d?: string | null;
+    lcpStatus?: 'good' | 'needs improvement' | 'poor' | 'unknown';
+    lcpMs?: number | null;
+    mainIssue?: string | null;
+  };
+};
+
+export type PublicStatusReport = {
+  owner: DomainOwner | 'All';
+  ownerSlug: string;
+  generatedAt: string;
+  summary: {
+    domainCount: number;
+    okCount: number;
+    warningCount: number;
+    errorCount: number;
+  };
+  domains: PublicStatusDomain[];
+};
+
+export type DomainHealthConfig = {
+  checkPath: string;
+  expectedStatusMin: number;
+  expectedStatusMax: number;
+  timeoutMs: number;
+  warningResponseMs: number;
+  errorResponseMs: number;
+  followRedirects: boolean;
+  tlsWarningDays: number;
+};
+
 export type DomainPayload = {
   name: string;
   baseUrl: string;
   owner: DomainOwner;
   enabled: boolean;
+  healthConfig: DomainHealthConfig;
 };
 
 @Injectable({ providedIn: 'root' })
@@ -163,9 +296,25 @@ export class DomainHealthService {
     return this.http.post<DomainDeepScanResult>(`${this.base}/domains/${id}/deep-scan`, {});
   }
 
+  getPageSpeed(id: string) {
+    return this.http.get<DomainPageSpeedOverview>(`${this.base}/domains/${id}/pagespeed`);
+  }
+
+  runPageSpeed(id: string) {
+    return this.http.post<DomainDeepScanResult>(`${this.base}/domains/${id}/pagespeed`, {});
+  }
+
   getChecks(id: string, range: '24h' | '7d' | '30d') {
-    return this.http.get<{ domain: DomainMonitor; checks: DomainCheck[] }>(`${this.base}/domains/${id}/checks`, {
+    return this.http.get<{ domain: DomainMonitor; checks: DomainCheck[]; overview: DomainStatusOverview }>(`${this.base}/domains/${id}/checks`, {
       params: { range }
     });
+  }
+
+  getPublicStatus(owner: string) {
+    return this.http.get<PublicStatusReport>(`${this.base}/public/domain-status/${owner}`);
+  }
+
+  publicStatusPdfUrl(owner: string) {
+    return `${this.base}/public/domain-status/${encodeURIComponent(owner)}/pdf`;
   }
 }

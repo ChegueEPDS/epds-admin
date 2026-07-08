@@ -1,4 +1,5 @@
 const axios = require('axios');
+const DomainPageSpeedScan = require('../models/domainPageSpeedScan');
 
 const PAGESPEED_ENDPOINT = 'https://pagespeedonline.googleapis.com/pagespeedonline/v5/runPagespeed';
 const PAGESPEED_TIMEOUT_MS = Number(process.env.PAGESPEED_TIMEOUT_MS || 90000);
@@ -107,6 +108,139 @@ async function runDeepScan(url) {
   return { checkedAt, scans };
 }
 
+function scanPerformance(scan) {
+  return scan?.ok && typeof scan.scores?.performance === 'number' ? scan.scores.performance : null;
+}
+
+function scanMetricValue(scan, key) {
+  const metric = scan?.metrics?.[key];
+  return scan?.ok && typeof metric?.numericValue === 'number' ? metric.numericValue : null;
+}
+
+function compactStoredScan(doc) {
+  if (!doc) return null;
+  return {
+    id: String(doc._id),
+    domainId: String(doc.domainId),
+    checkedAt: doc.checkedAt,
+    source: doc.source,
+    scans: doc.scans || []
+  };
+}
+
+function buildPageSpeedHistory(scans = []) {
+  return scans.map((scanDoc) => {
+    const mobile = (scanDoc.scans || []).find((scan) => scan.strategy === 'mobile');
+    const desktop = (scanDoc.scans || []).find((scan) => scan.strategy === 'desktop');
+    return {
+      id: String(scanDoc._id),
+      checkedAt: scanDoc.checkedAt,
+      source: scanDoc.source,
+      mobilePerformance: scanPerformance(mobile),
+      desktopPerformance: scanPerformance(desktop),
+      mobileLcp: scanMetricValue(mobile, 'largestContentfulPaint'),
+      desktopLcp: scanMetricValue(desktop, 'largestContentfulPaint'),
+      mobileCls: scanMetricValue(mobile, 'cumulativeLayoutShift'),
+      desktopCls: scanMetricValue(desktop, 'cumulativeLayoutShift')
+    };
+  });
+}
+
+function average(values) {
+  const numbers = values.filter((value) => typeof value === 'number');
+  if (!numbers.length) return null;
+  return Math.round(numbers.reduce((sum, value) => sum + value, 0) / numbers.length);
+}
+
+function buildPageSpeedSummary(history = []) {
+  return {
+    count: history.length,
+    mobilePerformanceAvg: average(history.map((item) => item.mobilePerformance)),
+    desktopPerformanceAvg: average(history.map((item) => item.desktopPerformance)),
+    mobileLcpAvg: average(history.map((item) => item.mobileLcp)),
+    desktopLcpAvg: average(history.map((item) => item.desktopLcp))
+  };
+}
+
+function lcpStatus(value) {
+  if (typeof value !== 'number') return 'unknown';
+  if (value <= 2500) return 'good';
+  if (value <= 4000) return 'needs improvement';
+  return 'poor';
+}
+
+function trendText(latest, previous) {
+  if (typeof latest !== 'number' || typeof previous !== 'number') return '-';
+  const delta = latest - previous;
+  if (Math.abs(delta) < 2) return 'Stable';
+  return delta > 0 ? `+${delta}` : `${delta}`;
+}
+
+function latestStrategyScan(latest, strategy) {
+  return latest?.scans?.find((scan) => scan.strategy === strategy && scan.ok) || null;
+}
+
+function mainIssue(latest) {
+  const mobile = latestStrategyScan(latest, 'mobile');
+  const desktop = latestStrategyScan(latest, 'desktop');
+  const issue = mobile?.opportunities?.[0] || desktop?.opportunities?.[0];
+  return issue?.title || 'No major opportunity returned';
+}
+
+function buildPublicPageSpeedSummary(overview) {
+  const latest = overview.latest;
+  const mobile = latestStrategyScan(latest, 'mobile');
+  const desktop = latestStrategyScan(latest, 'desktop');
+  const latestHistory = overview.history[overview.history.length - 1] || null;
+  const previous7d = [...overview.history]
+    .reverse()
+    .find((item) => item.id !== latestHistory?.id && Date.now() - new Date(item.checkedAt).getTime() <= 7 * 24 * 60 * 60 * 1000);
+  const mobileLcp = latestHistory?.mobileLcp ?? null;
+  const desktopLcp = latestHistory?.desktopLcp ?? null;
+  const representativeLcp = typeof mobileLcp === 'number' ? mobileLcp : desktopLcp;
+
+  return {
+    latestCheckedAt: latest?.checkedAt || null,
+    latestMobilePerformance: scanPerformance(mobile),
+    latestDesktopPerformance: scanPerformance(desktop),
+    trend7d: trendText(latestHistory?.mobilePerformance, previous7d?.mobilePerformance),
+    lcpStatus: lcpStatus(representativeLcp),
+    lcpMs: representativeLcp ?? null,
+    mainIssue: latest ? mainIssue(latest) : 'No PageSpeed result yet'
+  };
+}
+
+async function storeDomainPageSpeedScan(domain, source = 'manual') {
+  const result = await runDeepScan(domain.baseUrl);
+  const doc = await DomainPageSpeedScan.create({
+    domainId: domain._id,
+    checkedAt: new Date(result.checkedAt),
+    source,
+    scans: result.scans
+  });
+  return compactStoredScan(doc);
+}
+
+async function getDomainPageSpeedOverview(domainId, options = {}) {
+  const days = Number(options.days || 30);
+  const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+  const scans = await DomainPageSpeedScan.find({ domainId, checkedAt: { $gte: since } })
+    .sort({ checkedAt: -1 })
+    .limit(60)
+    .lean();
+  const latest = scans[0] ? compactStoredScan(scans[0]) : null;
+  const history = buildPageSpeedHistory([...scans].reverse());
+  return {
+    latest,
+    history,
+    summary: buildPageSpeedSummary(history),
+    publicSummary: buildPublicPageSpeedSummary({ latest, history })
+  };
+}
+
 module.exports = {
-  runDeepScan
+  buildPublicPageSpeedSummary,
+  getDomainPageSpeedOverview,
+  runDeepScan,
+  storeDomainPageSpeedScan
 };

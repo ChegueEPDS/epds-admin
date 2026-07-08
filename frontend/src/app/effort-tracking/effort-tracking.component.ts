@@ -10,6 +10,7 @@ import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { EffortProject, EffortService, EffortTask } from '../services/effort.service';
+import { RichTextEditorComponent } from '../shared/rich-text-editor/rich-text-editor.component';
 
 type ProjectForm = {
   name: string;
@@ -34,7 +35,8 @@ type TaskForm = {
     MatInputModule,
     MatProgressSpinnerModule,
     MatSnackBarModule,
-    MatTooltipModule
+    MatTooltipModule,
+    RichTextEditorComponent
   ],
   templateUrl: './effort-tracking.component.html',
   styleUrl: './effort-tracking.component.scss'
@@ -51,7 +53,9 @@ export class EffortTrackingComponent implements OnInit, OnDestroy {
   projectForm: ProjectForm = this.emptyProjectForm();
   taskForm: TaskForm = this.emptyTaskForm();
   now = Date.now();
+  expandedTaskNotes = new Set<string>();
   private tickId: ReturnType<typeof setInterval> | null = null;
+  private readonly originalTitle = document.title || 'EPDS Admin';
 
   constructor(
     private effortService: EffortService,
@@ -62,20 +66,23 @@ export class EffortTrackingComponent implements OnInit, OnDestroy {
     this.loadProjects();
     this.tickId = setInterval(() => {
       this.now = Date.now();
+      this.updateDocumentTitle();
     }, 1000);
   }
 
   ngOnDestroy(): void {
     if (this.tickId) clearInterval(this.tickId);
+    document.title = this.originalTitle;
   }
 
   async loadProjects(selectId?: string): Promise<void> {
     this.loading = true;
     try {
-      this.projects = await firstValueFrom(this.effortService.listProjects());
+      this.projects = (await firstValueFrom(this.effortService.listProjects())).map((project) => this.stampProjectDisplayBase(project));
       const selectedId = selectId || this.selectedProject?.id || this.projects[0]?.id;
       this.selectedProject = selectedId ? this.projects.find((project) => project.id === selectedId) || null : null;
       if (this.selectedProject) await this.selectProject(this.selectedProject, false);
+      this.updateDocumentTitle();
     } catch {
       this.snackBar.open('Effort projects could not be loaded.', 'OK', { duration: 3500 });
     } finally {
@@ -86,10 +93,11 @@ export class EffortTrackingComponent implements OnInit, OnDestroy {
   async selectProject(project: EffortProject, setLoading = true): Promise<void> {
     if (setLoading) this.loading = true;
     try {
-      this.selectedProject = await firstValueFrom(this.effortService.getProject(project.id));
+      this.selectedProject = this.stampProjectDisplayBase(await firstValueFrom(this.effortService.getProject(project.id)));
       this.upsertProject(this.selectedProject);
       this.cancelTaskForm();
       this.cancelProjectForm();
+      this.updateDocumentTitle();
     } catch {
       this.snackBar.open('Project details could not be loaded.', 'OK', { duration: 3500 });
     } finally {
@@ -133,12 +141,13 @@ export class EffortTrackingComponent implements OnInit, OnDestroy {
 
     this.saving = true;
     try {
-      const saved = this.editingProject && this.selectedProject
+      const saved = this.stampProjectDisplayBase(this.editingProject && this.selectedProject
         ? await firstValueFrom(this.effortService.updateProject(this.selectedProject.id, payload))
-        : await firstValueFrom(this.effortService.createProject(payload));
+        : await firstValueFrom(this.effortService.createProject(payload)));
       this.upsertProject(saved);
       this.selectedProject = saved;
       this.cancelProjectForm();
+      this.updateDocumentTitle();
     } catch {
       this.snackBar.open('Project could not be saved.', 'OK', { duration: 3500 });
     } finally {
@@ -195,6 +204,14 @@ export class EffortTrackingComponent implements OnInit, OnDestroy {
   }
 
   async startTask(task: EffortTask): Promise<void> {
+    const runningTask = this.activeTask();
+    if (runningTask && runningTask.id !== task.id) {
+      const confirmed = window.confirm(
+        `You already have a running task:\n\n${runningTask.name}\n\nStarting "${task.name}" will stop the running timer and start this task. Continue?`
+      );
+      if (!confirmed) return;
+    }
+
     this.saving = true;
     try {
       await firstValueFrom(this.effortService.startTask(task.id));
@@ -234,9 +251,10 @@ export class EffortTrackingComponent implements OnInit, OnDestroy {
     if (!this.selectedProject) return;
     this.saving = true;
     try {
-      const closed = await firstValueFrom(this.effortService.closeProject(this.selectedProject.id));
+      const closed = this.stampProjectDisplayBase(await firstValueFrom(this.effortService.closeProject(this.selectedProject.id)));
       this.upsertProject(closed);
       this.selectedProject = closed;
+      this.updateDocumentTitle();
     } catch {
       this.snackBar.open('Project could not be closed.', 'OK', { duration: 3500 });
     } finally {
@@ -248,9 +266,10 @@ export class EffortTrackingComponent implements OnInit, OnDestroy {
     if (!this.selectedProject) return;
     this.saving = true;
     try {
-      const reopened = await firstValueFrom(this.effortService.reopenProject(this.selectedProject.id));
+      const reopened = this.stampProjectDisplayBase(await firstValueFrom(this.effortService.reopenProject(this.selectedProject.id)));
       this.upsertProject(reopened);
       this.selectedProject = reopened;
+      this.updateDocumentTitle();
     } catch {
       this.snackBar.open('Project could not be reopened.', 'OK', { duration: 3500 });
     } finally {
@@ -260,7 +279,7 @@ export class EffortTrackingComponent implements OnInit, OnDestroy {
 
   taskDisplayNet(task: EffortTask): number {
     if (!task.active || !task.activeStartedAt) return task.netMs || 0;
-    return (task.netMs || 0) + Math.max(0, this.now - new Date(task.activeStartedAt).getTime());
+    return (task.netMs || 0) + Math.max(0, this.now - (task.displayBaseAt || this.now));
   }
 
   projectDisplayNet(project: EffortProject | null = this.selectedProject): number {
@@ -294,11 +313,49 @@ export class EffortTrackingComponent implements OnInit, OnDestroy {
     return 'Open';
   }
 
+  startButtonText(task: EffortTask): string {
+    const runningTask = this.activeTask();
+    return runningTask && runningTask.id !== task.id ? 'Switch' : 'Start';
+  }
+
+  startButtonTooltip(task: EffortTask): string {
+    const runningTask = this.activeTask();
+    return runningTask && runningTask.id !== task.id
+      ? `Stops "${runningTask.name}" and starts this task after confirmation.`
+      : 'Start timer';
+  }
+
+  isTaskNoteExpanded(task: EffortTask): boolean {
+    return this.expandedTaskNotes.has(task.id);
+  }
+
+  toggleTaskNote(task: EffortTask): void {
+    if (this.expandedTaskNotes.has(task.id)) this.expandedTaskNotes.delete(task.id);
+    else this.expandedTaskNotes.add(task.id);
+  }
+
+  shouldShowTaskNoteToggle(task: EffortTask): boolean {
+    const text = this.plainText(task.note || '');
+    return text.length > 260 || (text.match(/\n/g) || []).length >= 6;
+  }
+
   private async refreshSelected(): Promise<void> {
     if (!this.selectedProject) return;
-    const project = await firstValueFrom(this.effortService.getProject(this.selectedProject.id));
+    const project = this.stampProjectDisplayBase(await firstValueFrom(this.effortService.getProject(this.selectedProject.id)));
     this.selectedProject = project;
     this.upsertProject(project);
+    this.updateDocumentTitle();
+  }
+
+  private stampProjectDisplayBase(project: EffortProject): EffortProject {
+    const displayBaseAt = Date.now();
+    return {
+      ...project,
+      tasks: (project.tasks || []).map((task) => ({
+        ...task,
+        displayBaseAt: task.activeByCurrentUser ? displayBaseAt : undefined
+      }))
+    };
   }
 
   private upsertProject(project: EffortProject): void {
@@ -306,6 +363,31 @@ export class EffortTrackingComponent implements OnInit, OnDestroy {
     if (index >= 0) this.projects[index] = project;
     else this.projects.unshift(project);
     this.projects = [...this.projects].sort((a, b) => Number(a.status === 'closed') - Number(b.status === 'closed') || b.updatedAt.localeCompare(a.updatedAt));
+  }
+
+  private activeTask(): EffortTask | null {
+    for (const project of this.projects) {
+      const task = (project.tasks || []).find((item) => item.activeByCurrentUser);
+      if (task) return task;
+    }
+    return null;
+  }
+
+  private updateDocumentTitle(): void {
+    const task = this.activeTask();
+    document.title = task ? `🔴 REC ${this.formatDuration(this.taskDisplayNet(task))} | ${task.name}` : this.originalTitle;
+  }
+
+  private plainText(html: string): string {
+    return html
+      .replace(/<br\s*\/?>/gi, '\n')
+      .replace(/<\/(p|div|li|h[1-6]|blockquote)>/gi, '\n')
+      .replace(/<[^>]*>/g, '')
+      .replace(/&nbsp;/g, ' ')
+      .replace(/&amp;/g, '&')
+      .replace(/&lt;/g, '<')
+      .replace(/&gt;/g, '>')
+      .trim();
   }
 
   private emptyProjectForm(): ProjectForm {

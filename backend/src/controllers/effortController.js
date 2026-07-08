@@ -37,8 +37,13 @@ function taskGrossMs(task) {
   return Number(task.closedGrossMs || 0);
 }
 
-function presentTask(task, now = new Date()) {
+function activeByUser(task, userId) {
+  return Boolean(task.activeTimer?.startedAt && String(task.activeTimer.userId || '') === String(userId || ''));
+}
+
+function presentTask(task, now = new Date(), userId = null) {
   const sessionCount = (task.sessions || []).length;
+  const active = Boolean(task.activeTimer?.startedAt);
   return {
     id: String(task._id),
     projectId: String(task.projectId),
@@ -47,7 +52,8 @@ function presentTask(task, now = new Date()) {
     status: task.status,
     netMs: task.status === 'closed' ? Number(task.closedNetMs || 0) : taskNetMs(task, now),
     grossMs: taskGrossMs(task),
-    active: Boolean(task.activeTimer?.startedAt),
+    active,
+    activeByCurrentUser: activeByUser(task, userId),
     activeStartedAt: task.activeTimer?.startedAt || null,
     sessionCount,
     hasStarted: sessionCount > 0 || Boolean(task.activeTimer?.startedAt),
@@ -64,8 +70,8 @@ function projectGrossMs(project) {
   return Number(project.closedGrossMs || 0);
 }
 
-function presentProject(project, tasks = [], now = new Date()) {
-  const presentedTasks = tasks.map((task) => presentTask(task, now));
+function presentProject(project, tasks = [], now = new Date(), userId = null) {
+  const presentedTasks = tasks.map((task) => presentTask(task, now, userId));
   const netMs = project.status === 'closed'
     ? Number(project.closedNetMs || 0)
     : presentedTasks.reduce((total, task) => total + Number(task.netMs || 0), 0);
@@ -135,6 +141,9 @@ async function withErrors(res, fn) {
   try {
     await fn();
   } catch (err) {
+    if (err?.code === 11000 && err?.keyPattern?.['activeTimer.userId']) {
+      return res.status(409).json({ error: 'Only one timer can run for a user at a time' });
+    }
     res.status(err.statusCode || 500).json({ error: err.statusCode ? err.message : 'Internal server error' });
   }
 }
@@ -150,7 +159,7 @@ exports.listProjects = (req, res) => withErrors(res, async () => {
     tasksByProject.get(key).push(task);
   }
   const now = new Date();
-  res.json(projects.map((project) => presentProject(project, tasksByProject.get(String(project._id)) || [], now)));
+  res.json(projects.map((project) => presentProject(project, tasksByProject.get(String(project._id)) || [], now, req.userId)));
 });
 
 exports.createProject = (req, res) => withErrors(res, async () => {
@@ -167,13 +176,13 @@ exports.createProject = (req, res) => withErrors(res, async () => {
     updatedBy: req.userId
   });
 
-  res.status(201).json(presentProject(project, []));
+  res.status(201).json(presentProject(project, [], new Date(), req.userId));
 });
 
 exports.getProject = (req, res) => withErrors(res, async () => {
   const project = await getScopedProject(req.params.id, req.scope);
   const tasks = await EffortTask.find({ ...scopeQuery(req.scope), projectId: project._id }).sort({ status: 1, updatedAt: -1 });
-  res.json(presentProject(project, tasks));
+  res.json(presentProject(project, tasks, new Date(), req.userId));
 });
 
 exports.updateProject = (req, res) => withErrors(res, async () => {
@@ -192,14 +201,14 @@ exports.updateProject = (req, res) => withErrors(res, async () => {
   await project.save();
 
   const tasks = await EffortTask.find({ ...scopeQuery(req.scope), projectId: project._id }).sort({ status: 1, updatedAt: -1 });
-  res.json(presentProject(project, tasks));
+  res.json(presentProject(project, tasks, new Date(), req.userId));
 });
 
 exports.closeProject = (req, res) => withErrors(res, async () => {
   const project = await getScopedProject(req.params.id, req.scope);
   if (project.status === 'closed') {
     const tasks = await EffortTask.find({ ...scopeQuery(req.scope), projectId: project._id }).sort({ status: 1, updatedAt: -1 });
-    return res.json(presentProject(project, tasks));
+    return res.json(presentProject(project, tasks, new Date(), req.userId));
   }
 
   const now = new Date();
@@ -220,7 +229,7 @@ exports.closeProject = (req, res) => withErrors(res, async () => {
   project.updatedBy = req.userId;
   await project.save();
 
-  res.json(presentProject(project, freshTasks, now));
+  res.json(presentProject(project, freshTasks, now, req.userId));
 });
 
 exports.reopenProject = (req, res) => withErrors(res, async () => {
@@ -234,7 +243,7 @@ exports.reopenProject = (req, res) => withErrors(res, async () => {
   await project.save();
 
   const tasks = await EffortTask.find({ ...scopeQuery(req.scope), projectId: project._id }).sort({ status: 1, updatedAt: -1 });
-  res.json(presentProject(project, tasks));
+  res.json(presentProject(project, tasks, new Date(), req.userId));
 });
 
 exports.createTask = (req, res) => withErrors(res, async () => {
@@ -255,7 +264,7 @@ exports.createTask = (req, res) => withErrors(res, async () => {
   project.updatedBy = req.userId;
   await project.save();
 
-  res.status(201).json(presentTask(task));
+  res.status(201).json(presentTask(task, new Date(), req.userId));
 });
 
 exports.updateTask = (req, res) => withErrors(res, async () => {
@@ -272,7 +281,7 @@ exports.updateTask = (req, res) => withErrors(res, async () => {
   if (Object.prototype.hasOwnProperty.call(req.body || {}, 'note')) task.note = normalizeLongText(req.body.note);
   task.updatedBy = req.userId;
   await task.save();
-  res.json(presentTask(task));
+  res.json(presentTask(task, new Date(), req.userId));
 });
 
 exports.startTask = (req, res) => withErrors(res, async () => {
@@ -283,12 +292,15 @@ exports.startTask = (req, res) => withErrors(res, async () => {
 
   const now = new Date();
   await stopActiveTimersForUser(req.scope, req.userId, now, task._id);
+  if (task.activeTimer?.startedAt && !activeByUser(task, req.userId)) {
+    throw httpError('This task is already running for another user', 409);
+  }
   if (!task.activeTimer?.startedAt) {
     task.activeTimer = { userId: req.userId, startedAt: now };
     task.updatedBy = req.userId;
     await task.save();
   }
-  res.json(presentTask(task, now));
+  res.json(presentTask(task, now, req.userId));
 });
 
 exports.stopTask = (req, res) => withErrors(res, async () => {
@@ -300,12 +312,12 @@ exports.stopTask = (req, res) => withErrors(res, async () => {
   stopTaskTimer(task, now);
   task.updatedBy = req.userId;
   await task.save();
-  res.json(presentTask(task, now));
+  res.json(presentTask(task, now, req.userId));
 });
 
 exports.closeTask = (req, res) => withErrors(res, async () => {
   const task = await getScopedTask(req.params.taskId, req.scope);
-  if (task.status === 'closed') return res.json(presentTask(task));
+  if (task.status === 'closed') return res.json(presentTask(task, new Date(), req.userId));
 
   const now = new Date();
   if (task.activeTimer?.startedAt) stopTaskTimer(task, now);
@@ -316,5 +328,5 @@ exports.closeTask = (req, res) => withErrors(res, async () => {
   task.closedBy = req.userId;
   task.updatedBy = req.userId;
   await task.save();
-  res.json(presentTask(task, now));
+  res.json(presentTask(task, now, req.userId));
 });

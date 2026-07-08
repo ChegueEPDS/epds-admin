@@ -1,15 +1,23 @@
-<h2 mat-dialog-title>Deep scan</h2>
+<h2 mat-dialog-title>PageSpeed</h2>
 <mat-dialog-content class="deep-scan-dialog">
   <div class="deep-scan-head">
     <div>
       <strong>{{ data.domain.name }}</strong>
       <span>{{ data.domain.baseUrl }}</span>
     </div>
-    <mat-progress-spinner *ngIf="isLoading" diameter="28" mode="indeterminate"></mat-progress-spinner>
+    <button mat-stroked-button type="button" (click)="run()" [disabled]="isLoading || isRunning">
+      <mat-icon class="material-symbols-outlined">speed</mat-icon>
+      {{ isRunning ? 'Running...' : 'Run PageSpeed' }}
+    </button>
   </div>
 
   <div *ngIf="isLoading" class="deep-scan-loading">
     <mat-icon class="material-symbols-outlined">speed</mat-icon>
+    <span>Loading latest PageSpeed result...</span>
+  </div>
+
+  <div *ngIf="isRunning" class="deep-scan-loading compact-loading">
+    <mat-progress-spinner diameter="24" mode="indeterminate"></mat-progress-spinner>
     <span>Running mobile and desktop PageSpeed scan...</span>
   </div>
 
@@ -18,11 +26,22 @@
     <span>{{ error }}</span>
   </div>
 
+  <div *ngIf="!isLoading && !result && !error" class="empty-state">
+    <mat-icon class="material-symbols-outlined">monitoring</mat-icon>
+    <span>No PageSpeed result yet.</span>
+  </div>
+
+  <div *ngIf="!isLoading && result" class="latest-meta">
+    <span>Latest result</span>
+    <strong>{{ result.checkedAt | date:'MMM d, y, HH:mm' }}</strong>
+    <small>{{ result.source === 'scheduled' ? 'Automatic daily scan' : 'Manual scan' }}</small>
+  </div>
+
   <div *ngIf="!isLoading && result" class="deep-scan-results">
     <section *ngFor="let scan of result.scans" class="scan-card">
       <div class="scan-card-head">
         <h3>{{ scan.strategy | titlecase }}</h3>
-        <span *ngIf="scan.ok">{{ scan.fetchedAt | date:'short' }}</span>
+        <span *ngIf="scan.ok">{{ scan.fetchedAt | date:'M/d/yy, HH:mm' }}</span>
         <span *ngIf="!scan.ok" class="scan-failed">Failed</span>
       </div>
 
@@ -82,6 +101,55 @@
       </ng-container>
     </section>
   </div>
+
+  <section *ngIf="!isLoading && overview?.history?.length" class="history-stats">
+    <div class="section-title">
+      <h3>Historical stats</h3>
+      <span>Last 30 days</span>
+    </div>
+
+    <div class="history-summary">
+      <div>
+        <span>Scans</span>
+        <strong>{{ overview?.summary?.count ?? 0 }}</strong>
+      </div>
+      <div>
+        <span>Mobile avg</span>
+        <strong>{{ scoreText(overview?.summary?.mobilePerformanceAvg) }}</strong>
+      </div>
+      <div>
+        <span>Desktop avg</span>
+        <strong>{{ scoreText(overview?.summary?.desktopPerformanceAvg) }}</strong>
+      </div>
+      <div>
+        <span>Mobile LCP avg</span>
+        <strong>{{ metricMsText(overview?.summary?.mobileLcpAvg) }}</strong>
+      </div>
+      <div>
+        <span>Desktop LCP avg</span>
+        <strong>{{ metricMsText(overview?.summary?.desktopLcpAvg) }}</strong>
+      </div>
+    </div>
+
+    <div class="history-table">
+      <div class="history-row history-header">
+        <span>Date</span>
+        <span>Mobile</span>
+        <span>Desktop</span>
+        <span>Mobile LCP</span>
+        <span>Desktop LCP</span>
+        <span>CLS</span>
+      </div>
+      <div class="history-row" *ngFor="let item of recentHistory()">
+        <span>{{ item.checkedAt | date:'M/d/yy, HH:mm' }}</span>
+        <span>{{ scoreText(item.mobilePerformance) }}</span>
+        <span>{{ scoreText(item.desktopPerformance) }}</span>
+        <span>{{ metricMsText(item.mobileLcp) }}</span>
+        <span>{{ metricMsText(item.desktopLcp) }}</span>
+        <span>{{ clsText(item.mobileCls) }} / {{ clsText(item.desktopCls) }}</span>
+      </div>
+    </div>
+  </section>
 </mat-dialog-content>
 <mat-dialog-actions align="end">
   <button mat-button mat-dialog-close>Close</button>

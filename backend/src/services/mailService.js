@@ -60,8 +60,7 @@ class GraphMailService {
     if (!this.inlineLogo) return { html, attachments };
     const inputHtml = String(html || '');
     const logoUrl = [
-      'https://certs.atexdb.eu/public/index_logo.png',
-      'https://certs.atexdb.eu/public/ATEXdb.png'
+      'https://certs.atexdb.eu/public/logo.svg',
     ].find((url) => inputHtml.includes(url));
     if (!logoUrl) return { html, attachments };
 

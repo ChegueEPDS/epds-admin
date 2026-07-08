@@ -82,7 +82,7 @@ function nextReportDate(now = new Date()) {
 
 function statusLabel(domain) {
   if (domain.displayStatus === 'error') return 'Down';
-  if (domain.displayStatus === 'warning') return 'Recent issue';
+  if (domain.displayStatus === 'warning') return 'Warning';
   if (domain.displayStatus === 'ok') return 'Healthy';
   return 'No data';
 }
@@ -97,7 +97,7 @@ function performanceLabel(domain) {
 
 function issueText(domain) {
   if (domain.displayStatus === 'error') return domain.lastError || 'Current issue';
-  if (domain.displayStatus === 'warning') return `${domain.recentIssueCount} issue in 24h`;
+  if (domain.displayStatus === 'warning') return domain.lastWarning || `${domain.recentWarningCount || 0} warning in 24h`;
   if (domain.displayStatus === 'ok') return 'No recent issues';
   return 'No check yet';
 }
@@ -118,6 +118,17 @@ function msText(value) {
 function uptimeText(domain) {
   const uptime = domain.availability?.uptimePercent;
   return typeof uptime === 'number' ? `${uptime}%` : '-';
+}
+
+function tlsText(domain) {
+  const days = domain.lastTlsDaysRemaining;
+  if (typeof days !== 'number') return '-';
+  if (days <= 0) return 'Expired';
+  return `${days} nap`;
+}
+
+function redirectText(domain) {
+  return typeof domain.lastRedirectCount === 'number' ? String(domain.lastRedirectCount) : '-';
 }
 
 function rowColor(domain) {
@@ -142,6 +153,8 @@ function buildReportHtml(domains) {
       <td><strong>${escapeHtml(statusLabel(domain))}</strong></td>
       <td>${escapeHtml(performanceLabel(domain))}</td>
       <td>${escapeHtml(msText(domain.lastResponseMs))}</td>
+      <td>${escapeHtml(tlsText(domain))}</td>
+      <td>${escapeHtml(redirectText(domain))}</td>
       <td>${escapeHtml(uptimeText(domain))}</td>
       <td>${escapeHtml(formatDate(domain.lastCheckedAt))}</td>
       <td>${escapeHtml(issueText(domain))}</td>
@@ -161,13 +174,15 @@ function buildReportHtml(domains) {
             <th align="left" style="padding:10px;border-bottom:1px solid #e5e7eb">Státusz</th>
             <th align="left" style="padding:10px;border-bottom:1px solid #e5e7eb">Performance</th>
             <th align="left" style="padding:10px;border-bottom:1px solid #e5e7eb">Utolsó válasz</th>
+            <th align="left" style="padding:10px;border-bottom:1px solid #e5e7eb">TLS</th>
+            <th align="left" style="padding:10px;border-bottom:1px solid #e5e7eb">Redirect</th>
             <th align="left" style="padding:10px;border-bottom:1px solid #e5e7eb">24h uptime</th>
             <th align="left" style="padding:10px;border-bottom:1px solid #e5e7eb">Utolsó mérés</th>
             <th align="left" style="padding:10px;border-bottom:1px solid #e5e7eb">Issue</th>
           </tr>
         </thead>
         <tbody>
-          ${rows || '<tr><td colspan="9" style="padding:12px;color:#6b7280">Nincs felvett domain.</td></tr>'}
+          ${rows || '<tr><td colspan="11" style="padding:12px;color:#6b7280">Nincs aktív domain.</td></tr>'}
         </tbody>
       </table>
     </div>
@@ -181,7 +196,8 @@ async function sendDomainDailyReport() {
   try {
     const to = recipientList();
     if (!to.length) throw new Error('DOMAIN_DAILY_REPORT_TO is empty');
-    const domains = await buildDomainList({ tenantName: process.env.EPDS_ADMIN_GLOBAL_TENANT_NAME || 'epds' });
+    const domains = (await buildDomainList({ tenantName: process.env.EPDS_ADMIN_GLOBAL_TENANT_NAME || 'epds' }))
+      .filter((domain) => domain.enabled !== false);
     await mailService.sendMail({
       to,
       subject: `EPDS Admin Domain Health riport - ${new Intl.DateTimeFormat('hu-HU', { timeZone: REPORT_TIME_ZONE }).format(new Date())}`,

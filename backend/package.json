@@ -19,6 +19,7 @@
     "express-rate-limit": "^7.4.0",
     "jsonwebtoken": "^9.0.2",
     "mongoose": "^8.9.5",
+    "pdfkit": "^0.19.1",
     "undici": "^7.15.0"
   }
 }

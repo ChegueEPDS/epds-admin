@@ -1,0 +1,162 @@
+<section class="status-page">
+  <div class="status-hero">
+    <div>
+      <p class="eyebrow">Service status</p>
+      <h1>{{ report?.owner === 'All' ? 'All monitored domains' : (report?.owner || 'Domain status') }}</h1>
+      <p class="hero-copy">30 days availability and performance staus, 24 hour history, recent incidents and TLS status.</p>
+    </div>
+    <div class="hero-meta" *ngIf="report">
+      <span>Generated {{ report.generatedAt | date:'MMM d, y, HH:mm' }}</span>
+      <button mat-stroked-button type="button" class="pdf-button" (click)="exportPdf()">
+        <mat-icon class="material-symbols-outlined">picture_as_pdf</mat-icon>
+        Generate PDF
+      </button>
+    </div>
+  </div>
+
+  <div class="summary-row" *ngIf="report">
+    <div class="summary-card">
+      <span>Domains <mat-icon class="info-icon material-symbols-outlined" matTooltip="Number of active monitored domains included in this status report.">info</mat-icon></span>
+      <strong>{{ report.summary.domainCount }}</strong>
+    </div>
+    <div class="summary-card ok-card">
+      <span>Healthy <mat-icon class="info-icon material-symbols-outlined" matTooltip="Domains that are currently available and have no active warning.">info</mat-icon></span>
+      <strong>{{ report.summary.okCount }}</strong>
+    </div>
+    <div class="summary-card warning-card">
+      <span>Warnings <mat-icon class="info-icon material-symbols-outlined" matTooltip="Domains that are available but have a recent issue, slow response, expiring certificate, or another warning.">info</mat-icon></span>
+      <strong>{{ report.summary.warningCount }}</strong>
+    </div>
+    <div class="summary-card error-card">
+      <span>Down <mat-icon class="info-icon material-symbols-outlined" matTooltip="Domains that are currently failing checks and may not be reachable.">info</mat-icon></span>
+      <strong>{{ report.summary.errorCount }}</strong>
+    </div>
+  </div>
+
+  <div class="loading-state" *ngIf="isLoading">
+    <mat-progress-spinner diameter="36" mode="indeterminate"></mat-progress-spinner>
+    <span>Loading status report...</span>
+  </div>
+
+  <div class="error-state" *ngIf="!isLoading && error">
+    <mat-icon class="material-symbols-outlined">error</mat-icon>
+    <span>{{ error }}</span>
+  </div>
+
+  <mat-accordion class="domain-report-list" multi *ngIf="!isLoading && report">
+    <mat-expansion-panel class="domain-report" *ngFor="let item of report.domains" [expanded]="true">
+      <mat-expansion-panel-header class="domain-head">
+        <div>
+          <h2>{{ item.domain.name }}</h2>
+          <a [href]="item.domain.baseUrl" target="_blank" rel="noopener">{{ item.domain.baseUrl }}</a>
+        </div>
+        <span class="status-badge" [class]="'status-badge status-' + item.domain.displayStatus">{{ statusLabel(item.domain.displayStatus) }}</span>
+      </mat-expansion-panel-header>
+
+      <div class="domain-summary-grid">
+        <div>
+          <span>30d uptime <mat-icon class="info-icon material-symbols-outlined" matTooltip="Percentage of successful checks during the last 30 days. Higher means the website was available more consistently.">info</mat-icon></span>
+          <strong>{{ uptimeText(item.overview.windows[2]?.uptimePercent) }}</strong>
+        </div>
+        <div>
+          <span>30d avg <mat-icon class="info-icon material-symbols-outlined" matTooltip="Average response time during successful checks in the last 30 days. Lower is better.">info</mat-icon></span>
+          <strong>{{ msText(item.overview.windows[2]?.avgResponseMs) }}</strong>
+        </div>
+        <div>
+          <span>30d P95 <mat-icon class="info-icon material-symbols-outlined" matTooltip="95% of successful checks were faster than this value during the last 30 days. It shows slow outliers better than the average.">info</mat-icon></span>
+          <strong>{{ msText(item.overview.windows[2]?.p95ResponseMs) }}</strong>
+        </div>
+        <div>
+          <span>30d incidents <mat-icon class="info-icon material-symbols-outlined" matTooltip="Number of warning or outage periods detected during the last 30 days.">info</mat-icon></span>
+          <strong>{{ item.overview.windows[2]?.incidentCount ?? 0 }}</strong>
+        </div>
+        <div>
+          <span>TLS <mat-icon class="info-icon material-symbols-outlined" matTooltip="Days remaining until the HTTPS certificate expires. Expired or soon-expiring certificates can block visitors.">info</mat-icon></span>
+          <strong>{{ tlsText(item.overview.tls.daysRemaining) }}</strong>
+        </div>
+        <div>
+          <span>Valid to <mat-icon class="info-icon material-symbols-outlined" matTooltip="The date when the current HTTPS certificate expires.">info</mat-icon></span>
+          <strong>{{ item.overview.tls.validTo ? (item.overview.tls.validTo | date:'mediumDate') : '-' }}</strong>
+        </div>
+      </div>
+
+      <div class="history-block">
+        <div class="history-head">
+          <h3>24 hour status history</h3>
+          <span>{{ item.overview.currentIncident ? 'Incident open' : 'No current incident' }}</span>
+        </div>
+        <div class="history-strip">
+          <span
+            *ngFor="let bucket of item.overview.history24h"
+            class="history-segment"
+            [class]="'history-segment history-' + bucket.status"
+            [title]="historyTitle(bucket)"
+          ></span>
+        </div>
+      </div>
+
+      <div class="performance-block">
+        <div class="history-head">
+          <h3>Performance trend</h3>
+          <span>{{ item.pageSpeed?.latestCheckedAt ? (item.pageSpeed?.latestCheckedAt | date:'M/d/yy, HH:mm') : 'No PageSpeed data' }}</span>
+        </div>
+        <div class="performance-grid">
+          <div>
+            <span>Mobile <mat-icon class="info-icon material-symbols-outlined" matTooltip="Latest Google PageSpeed performance score for mobile. Higher is better; 90+ is good.">info</mat-icon></span>
+            <strong>{{ scoreText(item.pageSpeed?.latestMobilePerformance) }}</strong>
+          </div>
+          <div>
+            <span>Desktop <mat-icon class="info-icon material-symbols-outlined" matTooltip="Latest Google PageSpeed performance score for desktop. Higher is better; 90+ is good.">info</mat-icon></span>
+            <strong>{{ scoreText(item.pageSpeed?.latestDesktopPerformance) }}</strong>
+          </div>
+          <div>
+            <span>7d trend <mat-icon class="info-icon material-symbols-outlined" matTooltip="Change in the latest mobile PageSpeed score compared with the previous result from the last 7 days.">info</mat-icon></span>
+            <strong>{{ item.pageSpeed?.trend7d || '-' }}</strong>
+          </div>
+          <div [class]="lcpStatusClass(item.pageSpeed?.lcpStatus)">
+            <span>LCP <mat-icon class="info-icon material-symbols-outlined" matTooltip="Largest Contentful Paint shows how quickly the main visible content loads. Good is under 2.5 seconds.">info</mat-icon></span>
+            <strong>{{ lcpStatusText(item.pageSpeed?.lcpStatus) }}</strong>
+          </div>
+          <div class="main-issue">
+            <span>Main issue <mat-icon class="info-icon material-symbols-outlined" matTooltip="The most relevant PageSpeed improvement opportunity detected for this website.">info</mat-icon></span>
+            <strong>{{ item.pageSpeed?.mainIssue || 'No PageSpeed result yet' }}</strong>
+          </div>
+        </div>
+      </div>
+
+      <div class="history-head incidents-head">
+        <h3>Incidents</h3>
+      </div>
+      <div class="detail-grid">
+        <div>
+          <span>Last incident <mat-icon class="info-icon material-symbols-outlined" matTooltip="Most recent detected problem or warning for this domain.">info</mat-icon></span>
+          <strong>{{ item.overview.incidents[0]?.reasonText || 'No recent incident' }}</strong>
+        </div>
+        <div>
+          <span>Last successful check <mat-icon class="info-icon material-symbols-outlined" matTooltip="Most recent check where the website responded successfully.">info</mat-icon></span>
+          <strong>{{ item.overview.lastSuccessfulCheck?.checkedAt ? (item.overview.lastSuccessfulCheck?.checkedAt | date:'M/d/yy, HH:mm') : '-' }}</strong>
+        </div>
+        <div>
+          <span>Last failed check <mat-icon class="info-icon material-symbols-outlined" matTooltip="Most recent check where the website was down or returned a critical error.">info</mat-icon></span>
+          <strong>{{ item.overview.lastFailedCheck?.checkedAt ? (item.overview.lastFailedCheck?.checkedAt | date:'M/d/yy, HH:mm') : '-' }}</strong>
+        </div>
+        <div>
+          <span>Last recovery <mat-icon class="info-icon material-symbols-outlined" matTooltip="Most recent time the website recovered after an outage.">info</mat-icon></span>
+          <strong>{{ item.overview.lastRecoveryAt ? (item.overview.lastRecoveryAt | date:'M/d/yy, HH:mm') : '-' }}</strong>
+        </div>
+      </div>
+
+      <div class="incident-list" *ngIf="item.overview.incidents.length">
+        <h3>Recent incidents</h3>
+        <div class="incident-row" *ngFor="let incident of item.overview.incidents.slice(0, 4)">
+          <span class="incident-severity" [class]="'incident-severity incident-' + incident.severity">{{ incident.severity === 'error' ? 'Down' : 'Warning' }}</span>
+          <div>
+            <small class="root-cause-label">Root cause</small>
+            <strong>{{ incident.reasonText }}</strong>
+            <span>{{ incident.startedAt | date:'M/d/yy, HH:mm' }} - {{ incident.endedAt ? (incident.endedAt | date:'M/d/yy, HH:mm') : 'Open' }} · {{ incidentDurationText(incident) }}</span>
+          </div>
+        </div>
+      </div>
+    </mat-expansion-panel>
+  </mat-accordion>
+</section>

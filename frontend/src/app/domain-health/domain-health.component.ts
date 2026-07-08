@@ -15,8 +15,11 @@ import { MatTooltipModule } from '@angular/material/tooltip';
 import {
   DomainCheck,
   DomainHealthService,
+  DomainIncident,
   DomainMonitor,
   DomainMonitorRuntime,
+  DomainStatusHistoryBucket,
+  DomainStatusOverview,
   DomainPerformanceStatus,
   DomainMonitorStatus
 } from '../services/domain-health.service';
@@ -51,6 +54,7 @@ type ChartPoint = {
     MatInputModule,
     MatProgressSpinnerModule,
     MatSelectModule,
+    MatSlideToggleModule,
     MatSnackBarModule,
     MatTooltipModule
   ],
@@ -62,7 +66,9 @@ export class DomainHealthComponent implements OnInit, OnDestroy {
   monitor: DomainMonitorRuntime | null = null;
   selectedDomain: DomainMonitor | null = null;
   checks: DomainCheck[] = [];
+  overview: DomainStatusOverview | null = null;
   searchTerm = '';
+  showDisabledDomains = false;
   statusFilter: StatusFilter = 'all';
   selectedRange: RangeOption = '24h';
   isLoading = false;
@@ -109,6 +115,7 @@ export class DomainHealthComponent implements OnInit, OnDestroy {
       }
       if (this.selectedDomain) {
         this.selectedDomain = this.domains.find((domain) => domain.id === this.selectedDomain?.id) || null;
+        if (!this.selectedDomain) this.overview = null;
       }
     } catch (error: any) {
       if (!options.silent) {
@@ -130,6 +137,7 @@ export class DomainHealthComponent implements OnInit, OnDestroy {
       if (completedAt) this.lastSeenMonitorCompletion = completedAt;
       if (this.selectedDomain) {
         this.selectedDomain = this.domains.find((domain) => domain.id === this.selectedDomain?.id) || null;
+        if (!this.selectedDomain) this.overview = null;
       }
       if (hasNewCompletedRun && this.selectedDomain) {
         await this.loadChecks({ silent: true });
@@ -141,7 +149,7 @@ export class DomainHealthComponent implements OnInit, OnDestroy {
 
   get filteredDomains(): DomainMonitor[] {
     const term = this.searchTerm.trim().toLowerCase();
-    return this.domains.filter((domain) => {
+    return this.visibleDomains.filter((domain) => {
       const matchesSearch = !term ||
         domain.name.toLowerCase().includes(term) ||
         domain.baseUrl.toLowerCase().includes(term);
@@ -154,8 +162,22 @@ export class DomainHealthComponent implements OnInit, OnDestroy {
     });
   }
 
+  get visibleDomains(): DomainMonitor[] {
+    return this.showDisabledDomains ? this.domains : this.domains.filter((domain) => domain.enabled);
+  }
+
   summary(status: DomainMonitorStatus): number {
-    return this.domains.filter((domain) => domain.displayStatus === status).length;
+    return this.visibleDomains.filter((domain) => domain.displayStatus === status).length;
+  }
+
+  setShowDisabledDomains(showDisabled: boolean): void {
+    this.showDisabledDomains = showDisabled;
+    if (!showDisabled && this.selectedDomain && !this.selectedDomain.enabled) {
+      this.selectedDomain = null;
+      this.checks = [];
+      this.overview = null;
+      this.activeChartPoint = null;
+    }
   }
 
   async openDomainDialog(domain?: DomainMonitor): Promise<void> {
@@ -186,6 +208,7 @@ export class DomainHealthComponent implements OnInit, OnDestroy {
       if (this.selectedDomain?.id === domain.id) {
         this.selectedDomain = null;
         this.checks = [];
+        this.overview = null;
       }
       await this.loadDomains();
       this.snackBar.open('Domain deleted.', 'Close', { duration: 2500 });
@@ -206,6 +229,7 @@ export class DomainHealthComponent implements OnInit, OnDestroy {
       const response = await firstValueFrom(this.service.getChecks(this.selectedDomain.id, this.selectedRange));
       this.selectedDomain = response.domain;
       this.checks = response.checks;
+      this.overview = response.overview;
       this.activeChartPoint = null;
     } catch (error: any) {
       if (!options.silent) {
@@ -265,7 +289,7 @@ export class DomainHealthComponent implements OnInit, OnDestroy {
 
   statusLabel(status: DomainMonitorStatus): string {
     if (status === 'error') return 'Down';
-    if (status === 'warning') return 'Recent issue';
+    if (status === 'warning') return 'Warning';
     if (status === 'ok') return 'Healthy';
     return 'No data';
   }
@@ -308,9 +332,99 @@ export class DomainHealthComponent implements OnInit, OnDestroy {
 
   issueText(domain: DomainMonitor): string {
     if (domain.displayStatus === 'error') return domain.lastError || 'Current issue';
-    if (domain.displayStatus === 'warning') return `${domain.recentIssueCount} issue in 24h`;
+    if (domain.displayStatus === 'warning') return domain.lastWarning || `${domain.recentWarningCount || 0} warning in 24h`;
     if (domain.displayStatus === 'ok') return 'No recent issues';
     return 'No check yet';
+  }
+
+  checkTargetText(domain: DomainMonitor): string {
+    return domain.healthConfig?.checkPath || '/';
+  }
+
+  statusRangeText(domain: DomainMonitor): string {
+    const config = domain.healthConfig;
+    if (!config) return '200-399';
+    return `${config.expectedStatusMin}-${config.expectedStatusMax}`;
+  }
+
+  tlsText(domain: DomainMonitor): string {
+    if (typeof domain.lastTlsDaysRemaining !== 'number') return '-';
+    if (domain.lastTlsDaysRemaining <= 0) return 'Expired';
+    return `${domain.lastTlsDaysRemaining}d`;
+  }
+
+  finalUrlText(domain: DomainMonitor): string {
+    return domain.lastFinalUrl || '-';
+  }
+
+  redirectText(domain: DomainMonitor): string {
+    return typeof domain.lastRedirectCount === 'number' ? String(domain.lastRedirectCount) : '-';
+  }
+
+  contentText(domain: DomainMonitor): string {
+    const type = domain.lastContentType || '-';
+    if (typeof domain.lastContentLength !== 'number') return type;
+    return `${type} · ${Math.round(domain.lastContentLength / 1024)} KB`;
+  }
+
+  ownerSlug(owner?: string | null): string {
+    return String(owner || 'all')
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '') || 'all';
+  }
+
+  publicStatusRoute(domain: DomainMonitor): string {
+    return `/status/${this.ownerSlug(domain.owner)}`;
+  }
+
+  windowSummary(label: '24h' | '7d' | '30d') {
+    return this.overview?.windows.find((window) => window.label === label) || null;
+  }
+
+  avgResponseText(label: '24h' | '7d' | '30d'): string {
+    return this.msText(this.windowSummary(label)?.avgResponseMs ?? null);
+  }
+
+  incidentCountText(label: '24h' | '7d' | '30d'): string {
+    const count = this.windowSummary(label)?.incidentCount;
+    return typeof count === 'number' ? String(count) : '-';
+  }
+
+  incidentDurationText(incident: DomainIncident): string {
+    const minutes = Math.round(incident.durationMs / 60000);
+    if (minutes < 60) return `${minutes} min`;
+    const hours = Math.floor(minutes / 60);
+    const remainingMinutes = minutes % 60;
+    return remainingMinutes ? `${hours}h ${remainingMinutes}m` : `${hours}h`;
+  }
+
+  historyTitle(bucket: DomainStatusHistoryBucket): string {
+    const label = bucket.status === 'ok' ? 'OK' : bucket.status === 'warning' ? 'Warning' : bucket.status === 'error' ? 'Down' : 'No data';
+    const detail = typeof bucket.responseMs === 'number' ? `${bucket.responseMs} ms` : 'No sample';
+    return `${label} · ${new Date(bucket.bucketStart).toLocaleString()} · ${detail}`;
+  }
+
+  tlsStatusClass(): string {
+    const status = this.overview?.tls.status || 'unknown';
+    return `tls-${status}`;
+  }
+
+  checkStatus(check: DomainCheck): 'ok' | 'warning' | 'error' {
+    return check.status || (check.ok ? 'ok' : 'error');
+  }
+
+  checkIcon(check: DomainCheck): string {
+    const status = this.checkStatus(check);
+    if (status === 'error') return 'error';
+    if (status === 'warning') return 'warning';
+    return 'check_circle';
+  }
+
+  checkDetailText(check: DomainCheck): string {
+    const prefix = check.ok ? `${check.responseMs || 0} ms · HTTP ${check.statusCode || '-'}` : (check.errorMessage || check.errorType || 'Request failed');
+    const warning = check.warningMessage || check.warningType;
+    return warning ? `${prefix} · ${warning}` : prefix;
   }
 
   ownerText(domain: DomainMonitor): string {
@@ -355,11 +469,12 @@ export class DomainHealthComponent implements OnInit, OnDestroy {
       const value = check.ok ? Math.max(check.responseMs || 0, 1) : this.chartMaxMs();
       const x = this.chart.left + (index / span) * plotWidth;
       const y = this.chartY(value);
-      const color = !check.ok ? '#b91c1c' : (check.responseMs || 0) > 5000 ? '#b91c1c' : (check.responseMs || 0) > 2500 ? '#b45309' : '#047857';
+      const status = this.checkStatus(check);
+      const color = status === 'error' ? '#b91c1c' : status === 'warning' ? '#b45309' : '#047857';
       const timeText = new Date(check.checkedAt).toLocaleString();
       const valueText = check.ok ? `${check.responseMs || 0} ms` : 'Failed';
-      const detailText = check.ok ? `HTTP ${check.statusCode || '-'}` : (check.errorMessage || check.errorType || 'Request failed');
-      const statusText = !check.ok ? 'Down' : (check.responseMs || 0) > 5000 ? 'Very slow' : (check.responseMs || 0) > 2500 ? 'Slow' : 'OK';
+      const detailText = this.checkDetailText(check);
+      const statusText = status === 'error' ? 'Down' : status === 'warning' ? 'Warning' : 'OK';
       const label = `${timeText} · ${valueText} · ${detailText}`;
       return { x, y, color, label, timeText, valueText, detailText, statusText, check };
     });

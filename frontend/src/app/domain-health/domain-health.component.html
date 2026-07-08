@@ -2,7 +2,7 @@
   <div class="page-title">
     <div>
       <h1>Domain Health</h1>
-      <p>Monitors registered domains every 15 minutes with a 10 second GET timeout.</p>
+      <p>Monitors registered domains every 15 minutes with configurable HTTP, redirect and TLS checks.</p>
     </div>
   </div>
 
@@ -15,7 +15,7 @@
     <button type="button" class="summary-tile status-warning" [class.active]="statusFilter === 'warning'" (click)="statusFilter = 'warning'">
       <mat-icon class="material-symbols-outlined">warning</mat-icon>
       <span>{{ summary('warning') }}</span>
-      <strong>Recent issue</strong>
+      <strong>Warnings</strong>
     </button>
     <button type="button" class="summary-tile status-error" [class.active]="statusFilter === 'issues'" (click)="statusFilter = 'issues'">
       <mat-icon class="material-symbols-outlined">error</mat-icon>
@@ -24,7 +24,7 @@
     </button>
     <button type="button" class="summary-tile status-unknown" [class.active]="statusFilter === 'all'" (click)="statusFilter = 'all'">
       <mat-icon class="material-symbols-outlined">dns</mat-icon>
-      <span>{{ domains.length }}</span>
+      <span>{{ visibleDomains.length }}</span>
       <strong>All domains</strong>
     </button>
   </div>
@@ -36,6 +36,13 @@
       <input matInput [(ngModel)]="searchTerm" placeholder="Name or URL">
     </mat-form-field>
     <div class="toolbar-actions">
+      <mat-slide-toggle
+        class="show-disabled-toggle"
+        [ngModel]="showDisabledDomains"
+        (ngModelChange)="setShowDisabledDomains($event)"
+      >
+        Show disabled
+      </mat-slide-toggle>
       <button mat-button type="button" (click)="loadDomains()" [disabled]="isLoading">
         <mat-progress-spinner *ngIf="isLoading" diameter="18" mode="indeterminate"></mat-progress-spinner>
         <mat-icon *ngIf="!isLoading" class="material-symbols-outlined">refresh</mat-icon>
@@ -57,6 +64,7 @@
             <col class="domain-col">
             <col *ngIf="auth.hasEpdsEmail()" class="owner-col">
             <col class="performance-col">
+            <col class="tls-col">
             <col class="checked-col">
             <col class="issue-col">
             <col class="actions-col-width">
@@ -67,6 +75,7 @@
               <th>Domain</th>
               <th *ngIf="auth.hasEpdsEmail()">Owner</th>
               <th>Perf.</th>
+              <th>TLS</th>
               <th>Checked</th>
               <th>Issue</th>
               <th class="actions-col">Actions</th>
@@ -103,7 +112,11 @@
                   {{ responseText(domain) }} · P95 {{ msText(domain.performance?.p95ResponseMs) }}
                 </span>
               </td>
-              <td>{{ domain.lastCheckedAt ? (domain.lastCheckedAt | date:'short') : '-' }}</td>
+              <td>
+                <span>{{ tlsText(domain) }}</span>
+                <span class="metric-subtext">redirects {{ redirectText(domain) }}</span>
+              </td>
+              <td>{{ domain.lastCheckedAt ? (domain.lastCheckedAt | date:'M/d/yy, HH:mm') : '-' }}</td>
               <td>
                 <span>{{ issueText(domain) }}</span>
                 <span class="metric-subtext">24h uptime {{ uptimeText(domain) }}</span>
@@ -124,7 +137,7 @@
               </td>
             </tr>
             <tr *ngIf="!filteredDomains.length">
-              <td [attr.colspan]="auth.hasEpdsEmail() ? 7 : 6" class="empty-state">
+              <td [attr.colspan]="auth.hasEpdsEmail() ? 8 : 7" class="empty-state">
                 <mat-icon class="material-symbols-outlined">domain_disabled</mat-icon>
                 No domains match the current filter.
               </td>
@@ -163,11 +176,99 @@
           <span>24h P95</span>
           <strong>{{ msText(selectedDomain.performance?.p95ResponseMs) }}</strong>
         </div>
+        <div>
+          <span>TLS</span>
+          <strong>{{ tlsText(selectedDomain) }}</strong>
+        </div>
+        <div>
+          <span>Redirects</span>
+          <strong>{{ redirectText(selectedDomain) }}</strong>
+        </div>
+        <div>
+          <span>Expected HTTP</span>
+          <strong>{{ statusRangeText(selectedDomain) }}</strong>
+        </div>
+        <div>
+          <span>Check path</span>
+          <strong>{{ checkTargetText(selectedDomain) }}</strong>
+        </div>
+      </div>
+
+      <div class="diagnostic-grid">
+        <div>
+          <span>Final URL</span>
+          <strong>{{ finalUrlText(selectedDomain) }}</strong>
+        </div>
+        <div>
+          <span>Content</span>
+          <strong>{{ contentText(selectedDomain) }}</strong>
+        </div>
+        <div>
+          <span>TLS valid to</span>
+          <strong>{{ selectedDomain.lastTlsValidTo ? (selectedDomain.lastTlsValidTo | date:'mediumDate') : '-' }}</strong>
+        </div>
+        <div>
+          <span>Last diagnosis</span>
+          <strong>{{ issueText(selectedDomain) }}</strong>
+        </div>
+        <div>
+          <span>Last successful check</span>
+          <strong>{{ overview?.lastSuccessfulCheck?.checkedAt ? (overview?.lastSuccessfulCheck?.checkedAt | date:'M/d/yy, HH:mm') : '-' }}</strong>
+        </div>
+        <div>
+          <span>Last failed check</span>
+          <strong>{{ overview?.lastFailedCheck?.checkedAt ? (overview?.lastFailedCheck?.checkedAt | date:'M/d/yy, HH:mm') : '-' }}</strong>
+        </div>
+        <div>
+          <span>Last recovery</span>
+          <strong>{{ overview?.lastRecoveryAt ? (overview?.lastRecoveryAt | date:'M/d/yy, HH:mm') : '-' }}</strong>
+        </div>
+        <div>
+          <span>Customer view</span>
+          <strong><a [href]="publicStatusRoute(selectedDomain)" target="_blank" rel="noopener">Open status report</a></strong>
+        </div>
+      </div>
+
+      <div class="aggregate-grid" *ngIf="overview">
+        <div>
+          <span>24h avg</span>
+          <strong>{{ avgResponseText('24h') }}</strong>
+          <small>{{ incidentCountText('24h') }} incidents</small>
+        </div>
+        <div>
+          <span>7d uptime</span>
+          <strong>{{ windowSummary('7d')?.uptimePercent ?? '-' }}{{ windowSummary('7d')?.uptimePercent !== null ? '%' : '' }}</strong>
+          <small>P95 {{ msText(windowSummary('7d')?.p95ResponseMs ?? null) }}</small>
+        </div>
+        <div>
+          <span>30d uptime</span>
+          <strong>{{ windowSummary('30d')?.uptimePercent ?? '-' }}{{ windowSummary('30d')?.uptimePercent !== null ? '%' : '' }}</strong>
+          <small>{{ incidentCountText('30d') }} incidents</small>
+        </div>
+        <div [class]="tlsStatusClass()">
+          <span>TLS threshold</span>
+          <strong>{{ selectedDomain.healthConfig.tlsWarningDays }}d</strong>
+          <small>{{ overview.tls.status | titlecase }}</small>
+        </div>
+      </div>
+
+      <div class="history-panel" *ngIf="overview">
+        <div class="section-head">
+          <h3>Status history (24h)</h3>
+        </div>
+        <div class="history-strip">
+          <span
+            *ngFor="let bucket of overview.history24h"
+            class="history-segment"
+            [class]="'history-segment history-' + bucket.status"
+            [matTooltip]="historyTitle(bucket)"
+          ></span>
+        </div>
       </div>
 
       <button mat-stroked-button type="button" class="deep-scan-button" (click)="openDeepScan(selectedDomain)">
         <mat-icon class="material-symbols-outlined">speed</mat-icon>
-        Deep scan
+        PageSpeed
       </button>
 
       <div class="range-row">
@@ -229,9 +330,9 @@
           </g>
         </svg>
         <div class="chart-legend" aria-hidden="true">
-          <span><i class="legend-ok"></i>OK &lt; 2.5s</span>
-          <span><i class="legend-warning"></i>Slow 2.5-5s</span>
-          <span><i class="legend-danger"></i>Very slow / Down</span>
+          <span><i class="legend-ok"></i>OK</span>
+          <span><i class="legend-warning"></i>Warning</span>
+          <span><i class="legend-danger"></i>Down</span>
         </div>
       </div>
       <ng-template #emptyTimeline>
@@ -243,12 +344,30 @@
       </ng-template>
 
       <div class="event-list">
-        <h3>Recent checks</h3>
-        <div class="event-row" *ngFor="let check of checks.slice().reverse().slice(0, 10); trackBy: trackByCheck" [class.failed]="!check.ok">
-          <mat-icon class="material-symbols-outlined">{{ check.ok ? 'check_circle' : 'error' }}</mat-icon>
+        <div class="section-head">
+          <h3>Incidents</h3>
+        </div>
+        <div class="incident-row" *ngFor="let incident of overview?.incidents?.slice(0, 6)">
+          <mat-icon class="material-symbols-outlined" [class.status-warning]="incident.severity === 'warning'" [class.status-error]="incident.severity === 'error'">
+            {{ incident.severity === 'error' ? 'error' : 'warning' }}
+          </mat-icon>
           <div>
-            <strong>{{ check.checkedAt | date:'short' }}</strong>
-            <span>{{ check.ok ? ((check.responseMs || 0) + ' ms · HTTP ' + check.statusCode) : (check.errorMessage || check.errorType) }}</span>
+            <small class="root-cause-label">Root cause</small>
+            <strong>{{ incident.reasonText }}</strong>
+            <span>{{ incident.startedAt | date:'M/d/yy, HH:mm' }} - {{ incident.endedAt ? (incident.endedAt | date:'M/d/yy, HH:mm') : 'Open' }} · {{ incidentDurationText(incident) }}</span>
+          </div>
+        </div>
+        <div class="empty-incidents" *ngIf="overview && !overview.incidents.length">No incidents in the retained 30d history.</div>
+
+        <div class="section-head checks-head">
+        <h3>Recent checks</h3>
+        </div>
+        <div class="event-row" *ngFor="let check of checks.slice().reverse().slice(0, 10); trackBy: trackByCheck" [class.failed]="checkStatus(check) === 'error'" [class.warning]="checkStatus(check) === 'warning'">
+          <mat-icon class="material-symbols-outlined">{{ checkIcon(check) }}</mat-icon>
+          <div>
+            <strong>{{ check.checkedAt | date:'M/d/yy, HH:mm' }}</strong>
+            <span>{{ checkDetailText(check) }}</span>
+            <span *ngIf="check.finalUrl">{{ check.finalUrl }}</span>
           </div>
         </div>
       </div>

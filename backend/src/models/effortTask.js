@@ -34,5 +34,16 @@ const EffortTaskSchema = new mongoose.Schema(
 
 EffortTaskSchema.index({ tenantId: 1, projectId: 1, status: 1, updatedAt: -1 });
 EffortTaskSchema.index({ tenantId: 1, 'activeTimer.userId': 1 });
+EffortTaskSchema.index(
+  { 'activeTimer.userId': 1 },
+  {
+    unique: true,
+    partialFilterExpression: {
+      'activeTimer.userId': { $exists: true },
+      'activeTimer.startedAt': { $exists: true }
+    },
+    name: 'unique_active_effort_timer_per_user'
+  }
+);
 
 module.exports = mongoose.models.EffortTask || mongoose.model('EffortTask', EffortTaskSchema);

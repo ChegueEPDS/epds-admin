@@ -18,6 +18,7 @@ const licenseRoutes = require('./routes/licenseRoutes');
 const effortRoutes = require('./routes/effortRoutes');
 const { startDomainHealthMonitor } = require('./services/domainMonitorService');
 const { startDomainDailyReportScheduler } = require('./services/domainDailyReportService');
+const { startDomainPageSpeedScheduler } = require('./services/domainPageSpeedSchedulerService');
 
 const app = express();
 
@@ -84,6 +85,7 @@ if (require.main === module) {
     .then(() => {
       startDomainHealthMonitor();
       startDomainDailyReportScheduler();
+      startDomainPageSpeedScheduler();
       app.listen(port, () => console.log(`[app] EPDS Admin API listening on ${port}`));
     })
     .catch((err) => {

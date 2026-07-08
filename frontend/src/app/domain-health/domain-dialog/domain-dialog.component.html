@@ -16,6 +16,41 @@
       </mat-select>
     </mat-form-field>
     <mat-slide-toggle name="enabled" [(ngModel)]="model.enabled">Enabled</mat-slide-toggle>
+
+    <section class="health-policy-section">
+      <h3>Health policy</h3>
+      <mat-form-field appearance="outline">
+        <mat-label>Check path</mat-label>
+        <input matInput name="checkPath" [(ngModel)]="model.healthConfig.checkPath" placeholder="/health">
+      </mat-form-field>
+      <div class="policy-grid">
+        <mat-form-field appearance="outline">
+          <mat-label>Expected status min</mat-label>
+          <input matInput type="number" name="expectedStatusMin" [(ngModel)]="model.healthConfig.expectedStatusMin" min="100" max="599">
+        </mat-form-field>
+        <mat-form-field appearance="outline">
+          <mat-label>Expected status max</mat-label>
+          <input matInput type="number" name="expectedStatusMax" [(ngModel)]="model.healthConfig.expectedStatusMax" min="100" max="599">
+        </mat-form-field>
+        <mat-form-field appearance="outline">
+          <mat-label>Timeout ms</mat-label>
+          <input matInput type="number" name="timeoutMs" [(ngModel)]="model.healthConfig.timeoutMs" min="1000" max="120000">
+        </mat-form-field>
+        <mat-form-field appearance="outline">
+          <mat-label>Warning response ms</mat-label>
+          <input matInput type="number" name="warningResponseMs" [(ngModel)]="model.healthConfig.warningResponseMs" min="100" max="60000">
+        </mat-form-field>
+        <mat-form-field appearance="outline">
+          <mat-label>Error response ms</mat-label>
+          <input matInput type="number" name="errorResponseMs" [(ngModel)]="model.healthConfig.errorResponseMs" min="100" max="120000">
+        </mat-form-field>
+        <mat-form-field appearance="outline">
+          <mat-label>TLS warning days</mat-label>
+          <input matInput type="number" name="tlsWarningDays" [(ngModel)]="model.healthConfig.tlsWarningDays" min="1" max="365">
+        </mat-form-field>
+      </div>
+      <mat-slide-toggle name="followRedirects" [(ngModel)]="model.healthConfig.followRedirects">Follow redirects</mat-slide-toggle>
+    </section>
   </mat-dialog-content>
   <mat-dialog-actions align="end">
     <button mat-button type="button" mat-dialog-close>Cancel</button>

@@ -1,13 +1,17 @@
 const dns = require('dns').promises;
 const DomainMonitor = require('../models/domainMonitor');
 const DomainHealthCheck = require('../models/domainHealthCheck');
-const { runDeepScan } = require('../services/pageSpeedService');
+const { getDomainPageSpeedOverview, storeDomainPageSpeedScan } = require('../services/pageSpeedService');
+const { generatePublicStatusPdf } = require('../services/domainStatusPdfService');
 const {
   normalizeBaseUrl,
   assertPublicUrl,
   buildDomainList,
+  buildPublicStatusReport,
+  getDomainStatusDetails,
   domainScopeQuery,
   getDomainMonitorRuntime,
+  ownerSlug,
   presentDomain,
   runDomainCheck,
   summarizeRecentChecks
@@ -26,6 +30,42 @@ function status(ok, warning = false) {
 function normalizeOwner(input) {
   const raw = String(input || '').trim();
   return DomainMonitor.owners.find((owner) => owner.toLowerCase() === raw.toLowerCase()) || null;
+}
+
+function ownerFromSlug(input) {
+  const raw = String(input || '').trim().toLowerCase();
+  if (!raw || raw === 'all') return 'All';
+  return DomainMonitor.owners.find((owner) => ownerSlug(owner) === raw) || null;
+}
+
+function boundedNumber(value, fallback, min, max) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) return fallback;
+  return Math.min(Math.max(Math.round(number), min), max);
+}
+
+function normalizeCheckPath(input) {
+  const raw = String(input || '').trim();
+  if (!raw || raw === '/') return '';
+  return raw.startsWith('/') ? raw : `/${raw}`;
+}
+
+function normalizeHealthConfig(input = {}) {
+  const expectedStatusMin = boundedNumber(input.expectedStatusMin, 200, 100, 599);
+  const expectedStatusMax = boundedNumber(input.expectedStatusMax, 399, expectedStatusMin, 599);
+  const warningResponseMs = boundedNumber(input.warningResponseMs, 2500, 100, 60000);
+  const errorResponseMs = boundedNumber(input.errorResponseMs, 10000, warningResponseMs, 120000);
+
+  return {
+    checkPath: normalizeCheckPath(input.checkPath),
+    expectedStatusMin,
+    expectedStatusMax,
+    timeoutMs: boundedNumber(input.timeoutMs, 10000, 1000, 120000),
+    warningResponseMs,
+    errorResponseMs,
+    followRedirects: input.followRedirects !== false,
+    tlsWarningDays: boundedNumber(input.tlsWarningDays, 30, 1, 365)
+  };
 }
 
 exports.checkDomainHealth = async (req, res) => {
@@ -102,6 +142,7 @@ exports.createDomain = async (req, res, next) => {
       owner,
       tenantId: req.scope?.tenantId,
       enabled: req.body?.enabled !== false,
+      healthConfig: normalizeHealthConfig(req.body?.healthConfig),
       createdBy: req.userId
     });
 
@@ -141,6 +182,10 @@ exports.updateDomain = async (req, res, next) => {
 
     if (Object.prototype.hasOwnProperty.call(req.body, 'enabled')) {
       domain.enabled = req.body.enabled !== false;
+    }
+
+    if (Object.prototype.hasOwnProperty.call(req.body, 'healthConfig')) {
+      domain.healthConfig = normalizeHealthConfig(req.body.healthConfig);
     }
 
     domain.updatedBy = req.userId;
@@ -185,13 +230,28 @@ exports.deepScanDomain = async (req, res, next) => {
     const domain = await DomainMonitor.findOne({ _id: req.params.id, ...domainScopeQuery(req.scope) });
     if (!domain) return res.status(404).json({ error: 'Domain not found' });
 
-    const result = await runDeepScan(domain.baseUrl);
+    const result = await storeDomainPageSpeedScan(domain, 'manual');
     return res.json({
       domain: presentDomain(domain, await summarizeRecentChecks(domain._id)),
       ...result
     });
   } catch (err) {
     if (err.statusCode) return res.status(err.statusCode).json({ error: err.message });
+    return next(err);
+  }
+};
+
+exports.getDomainPageSpeed = async (req, res, next) => {
+  try {
+    const domain = await DomainMonitor.findOne({ _id: req.params.id, ...domainScopeQuery(req.scope) });
+    if (!domain) return res.status(404).json({ error: 'Domain not found' });
+
+    const pageSpeed = await getDomainPageSpeedOverview(domain._id);
+    return res.json({
+      domain: presentDomain(domain, await summarizeRecentChecks(domain._id)),
+      ...pageSpeed
+    });
+  } catch (err) {
     return next(err);
   }
 };
@@ -209,20 +269,57 @@ exports.getDomainChecks = async (req, res, next) => {
       .limit(3000)
       .lean();
 
-    const summary = await summarizeRecentChecks(domain._id);
+    const details = await getDomainStatusDetails(domain, checks);
 
     return res.json({
-      domain: presentDomain(domain, summary),
+      domain: details.domain,
+      overview: details.overview,
       checks: checks.map((check) => ({
         id: String(check._id),
         checkedAt: check.checkedAt,
         ok: check.ok,
+        status: check.status || (check.ok ? 'ok' : 'error'),
         statusCode: check.statusCode,
         responseMs: check.responseMs,
+        finalUrl: check.finalUrl,
+        redirectCount: check.redirectCount,
+        contentType: check.contentType,
+        contentLength: check.contentLength,
+        tlsValidTo: check.tlsValidTo,
+        tlsDaysRemaining: check.tlsDaysRemaining,
         errorType: check.errorType,
-        errorMessage: check.errorMessage
+        errorMessage: check.errorMessage,
+        warningType: check.warningType,
+        warningMessage: check.warningMessage
       }))
     });
+  } catch (err) {
+    return next(err);
+  }
+};
+
+exports.getPublicStatusReport = async (req, res, next) => {
+  try {
+    const owner = ownerFromSlug(req.params.owner);
+    if (!owner) return res.status(404).json({ error: 'Owner not found' });
+    const report = await buildPublicStatusReport({ owner: owner === 'All' ? 'all' : owner });
+    return res.json(report);
+  } catch (err) {
+    return next(err);
+  }
+};
+
+exports.downloadPublicStatusReportPdf = async (req, res, next) => {
+  try {
+    const owner = ownerFromSlug(req.params.owner);
+    if (!owner) return res.status(404).json({ error: 'Owner not found' });
+    const report = await buildPublicStatusReport({ owner: owner === 'All' ? 'all' : owner });
+    const pdf = await generatePublicStatusPdf(report);
+    const fileOwner = owner === 'All' ? 'all-domains' : ownerSlug(owner);
+    const fileDate = new Date(report.generatedAt).toISOString().slice(0, 10);
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="domain-status-${fileOwner}-${fileDate}.pdf"`);
+    return res.send(pdf);
   } catch (err) {
     return next(err);
   }

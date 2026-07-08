@@ -1,9 +1,35 @@
 .domain-dialog-content {
   display: grid;
-  min-width: min(520px, calc(100vw - 48px));
+  min-width: min(620px, calc(100vw - 48px));
   gap: 12px;
   padding-top: 8px;
 }
+
+.health-policy-section {
+  display: grid;
+  gap: 12px;
+  padding-top: 6px;
+  border-top: 1px solid var(--brand-border);
+}
+
+.health-policy-section h3 {
+  margin: 0;
+  font-size: 14px;
+  color: var(--brand-ink);
+}
+
+.policy-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
 button mat-icon {
   margin-right: 6px;
+}
+
+@media (max-width: 640px) {
+  .policy-grid {
+    grid-template-columns: 1fr;
+  }
 }
