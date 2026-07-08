@@ -49,6 +49,18 @@ function tenantNameFromEmail(email) {
   return slugifyTenantName(base);
 }
 
+function namePartsFromMicrosoftToken(decodedToken, email) {
+  const displayName = String(decodedToken.name || '').trim();
+  const emailLocalPart = String(email || '').split('@')[0] || 'user';
+  const nameSegments = displayName.split(/\s+/).filter(Boolean);
+  const firstName = String(decodedToken.given_name || nameSegments[0] || emailLocalPart || 'User').trim();
+  const lastName = String(decodedToken.family_name || nameSegments.slice(1).join(' ') || firstName || 'User').trim();
+  return {
+    firstName: firstName || 'User',
+    lastName: lastName || firstName || 'User'
+  };
+}
+
 async function ensureCompanyTenantForEmail(user, email) {
   const name = tenantNameFromEmail(email);
   let tenant = await Tenant.findOne({ name });
@@ -81,12 +93,13 @@ exports.microsoftLogin = async (req, res) => {
     if (!email) return res.status(400).json({ error: 'Email is missing in the Microsoft token' });
     assertAllowedCompanyEmail(email);
 
+    const tokenName = namePartsFromMicrosoftToken(decodedToken, email);
     let user = await User.findOne({ $or: [{ azureId }, { email }] });
     if (!user) {
       user = await User.create({
         azureId,
-        firstName: decodedToken.given_name || decodedToken.name || 'User',
-        lastName: decodedToken.family_name || '',
+        firstName: tokenName.firstName,
+        lastName: tokenName.lastName,
         email,
         role: 'User',
         emailVerified: true
@@ -94,8 +107,8 @@ exports.microsoftLogin = async (req, res) => {
     } else {
       user.azureId = user.azureId || azureId;
       user.email = user.email || email;
-      user.firstName = user.firstName || decodedToken.given_name || decodedToken.name || 'User';
-      user.lastName = user.lastName || decodedToken.family_name || '';
+      user.firstName = user.firstName || tokenName.firstName;
+      user.lastName = user.lastName || tokenName.lastName;
       user.emailVerified = true;
       await user.save();
     }

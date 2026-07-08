@@ -23,6 +23,8 @@ type TaskForm = {
   note: string;
 };
 
+type TaskAction = 'start' | 'stop' | 'close';
+
 @Component({
   selector: 'app-effort-tracking',
   standalone: true,
@@ -54,6 +56,7 @@ export class EffortTrackingComponent implements OnInit, OnDestroy {
   taskForm: TaskForm = this.emptyTaskForm();
   now = Date.now();
   expandedTaskNotes = new Set<string>();
+  taskAction: { taskId: string; action: TaskAction } | null = null;
   private tickId: ReturnType<typeof setInterval> | null = null;
   private readonly originalTitle = document.title || 'EPDS Admin';
 
@@ -204,7 +207,9 @@ export class EffortTrackingComponent implements OnInit, OnDestroy {
   }
 
   async startTask(task: EffortTask): Promise<void> {
+    if (this.saving) return;
     const runningTask = this.activeTask();
+    const previousSnapshot = this.snapshotSelectedProject();
     if (runningTask && runningTask.id !== task.id) {
       const confirmed = window.confirm(
         `You already have a running task:\n\n${runningTask.name}\n\nStarting "${task.name}" will stop the running timer and start this task. Continue?`
@@ -213,30 +218,42 @@ export class EffortTrackingComponent implements OnInit, OnDestroy {
     }
 
     this.saving = true;
+    this.taskAction = { taskId: task.id, action: 'start' };
+    if (runningTask && runningTask.id !== task.id) this.stopTaskTimerOnScreen(runningTask);
     try {
       await firstValueFrom(this.effortService.startTask(task.id));
       await this.refreshSelected();
     } catch {
+      this.restoreSelectedProject(previousSnapshot);
       this.snackBar.open('Timer could not be started.', 'OK', { duration: 3500 });
     } finally {
       this.saving = false;
+      this.taskAction = null;
     }
   }
 
   async stopTask(task: EffortTask): Promise<void> {
+    if (this.saving) return;
+    const previousSnapshot = this.snapshotSelectedProject();
     this.saving = true;
+    this.taskAction = { taskId: task.id, action: 'stop' };
+    this.stopTaskTimerOnScreen(task);
     try {
       await firstValueFrom(this.effortService.stopTask(task.id));
       await this.refreshSelected();
     } catch {
+      this.restoreSelectedProject(previousSnapshot);
       this.snackBar.open('Timer could not be stopped.', 'OK', { duration: 3500 });
     } finally {
       this.saving = false;
+      this.taskAction = null;
     }
   }
 
   async closeTask(task: EffortTask): Promise<void> {
+    if (this.saving) return;
     this.saving = true;
+    this.taskAction = { taskId: task.id, action: 'close' };
     try {
       await firstValueFrom(this.effortService.closeTask(task.id));
       await this.refreshSelected();
@@ -244,6 +261,7 @@ export class EffortTrackingComponent implements OnInit, OnDestroy {
       this.snackBar.open('Task could not be closed.', 'OK', { duration: 3500 });
     } finally {
       this.saving = false;
+      this.taskAction = null;
     }
   }
 
@@ -325,6 +343,10 @@ export class EffortTrackingComponent implements OnInit, OnDestroy {
       : 'Start timer';
   }
 
+  isTaskActionRunning(task: EffortTask, action: TaskAction): boolean {
+    return this.taskAction?.taskId === task.id && this.taskAction.action === action;
+  }
+
   isTaskNoteExpanded(task: EffortTask): boolean {
     return this.expandedTaskNotes.has(task.id);
   }
@@ -344,6 +366,28 @@ export class EffortTrackingComponent implements OnInit, OnDestroy {
     const project = this.stampProjectDisplayBase(await firstValueFrom(this.effortService.getProject(this.selectedProject.id)));
     this.selectedProject = project;
     this.upsertProject(project);
+    this.updateDocumentTitle();
+  }
+
+  private stopTaskTimerOnScreen(task: EffortTask): void {
+    const displayNet = this.taskDisplayNet(task);
+    task.netMs = displayNet;
+    task.active = false;
+    task.activeByCurrentUser = false;
+    task.activeStartedAt = null;
+    task.displayBaseAt = undefined;
+    this.now = Date.now();
+    this.updateDocumentTitle();
+  }
+
+  private snapshotSelectedProject(): EffortProject | null {
+    return this.selectedProject ? structuredClone(this.selectedProject) : null;
+  }
+
+  private restoreSelectedProject(snapshot: EffortProject | null): void {
+    if (!snapshot) return;
+    this.selectedProject = snapshot;
+    this.upsertProject(snapshot);
     this.updateDocumentTitle();
   }
 

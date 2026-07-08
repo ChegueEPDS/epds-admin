@@ -32,7 +32,7 @@ const EffortTaskSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-EffortTaskSchema.index({ tenantId: 1, projectId: 1, status: 1, updatedAt: -1 });
+EffortTaskSchema.index({ tenantId: 1, createdBy: 1, projectId: 1, status: 1, updatedAt: -1 });
 EffortTaskSchema.index({ tenantId: 1, 'activeTimer.userId': 1 });
 EffortTaskSchema.index(
   { 'activeTimer.userId': 1 },

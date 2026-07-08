@@ -228,10 +228,10 @@
 }
 
 .task-card {
-  display: grid;
+  display: flex;
+  flex-direction: column;
   gap: 14px;
   position: relative;
-  align-content: start;
 }
 
 .task-card.active {
@@ -273,6 +273,7 @@
 
 .task-times {
   grid-template-columns: 1fr 1fr;
+  margin-top: auto;
 }
 
 .task-actions {
@@ -295,6 +296,12 @@
   height: 20px;
   margin-right: 4px;
   font-size: 20px;
+}
+
+.task-actions button mat-progress-spinner {
+  width: 18px;
+  height: 18px;
+  margin-right: 4px;
 }
 
 .task-actions .task-action-edit {

@@ -183,15 +183,18 @@
               [matTooltip]="startButtonTooltip(task)"
               (click)="startTask(task)"
               [disabled]="saving || selectedProject.status === 'closed'">
-              <mat-icon class="material-symbols-outlined">play_arrow</mat-icon>
+              <mat-progress-spinner *ngIf="isTaskActionRunning(task, 'start')" diameter="18" mode="indeterminate"></mat-progress-spinner>
+              <mat-icon class="material-symbols-outlined" *ngIf="!isTaskActionRunning(task, 'start')">play_arrow</mat-icon>
               {{ startButtonText(task) }}
             </button>
-            <button class="task-action-stop" mat-stroked-button type="button" *ngIf="task.activeByCurrentUser" (click)="stopTask(task)" [disabled]="saving">
-              <mat-icon class="material-symbols-outlined">stop</mat-icon>
+            <button class="task-action-stop" mat-stroked-button type="button" *ngIf="task.activeByCurrentUser || isTaskActionRunning(task, 'stop')" (click)="stopTask(task)" [disabled]="saving">
+              <mat-progress-spinner *ngIf="isTaskActionRunning(task, 'stop')" diameter="18" mode="indeterminate"></mat-progress-spinner>
+              <mat-icon class="material-symbols-outlined" *ngIf="!isTaskActionRunning(task, 'stop')">stop</mat-icon>
               Stop
             </button>
             <button class="task-action-close" mat-stroked-button type="button" *ngIf="task.status === 'open'" (click)="closeTask(task)" [disabled]="saving || selectedProject.status === 'closed'">
-              <mat-icon class="material-symbols-outlined">check_circle</mat-icon>
+              <mat-progress-spinner *ngIf="isTaskActionRunning(task, 'close')" diameter="18" mode="indeterminate"></mat-progress-spinner>
+              <mat-icon class="material-symbols-outlined" *ngIf="!isTaskActionRunning(task, 'close')">check_circle</mat-icon>
               Close
             </button>
           </div>

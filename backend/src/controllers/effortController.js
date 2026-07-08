@@ -5,6 +5,10 @@ function scopeQuery(scope) {
   return scope?.tenantId ? { tenantId: scope.tenantId } : { tenantId: null };
 }
 
+function ownerScopeQuery(scope, userId) {
+  return { ...scopeQuery(scope), createdBy: userId };
+}
+
 function normalizeText(input) {
   return String(input || '').trim().replace(/\s+/g, ' ');
 }
@@ -96,14 +100,14 @@ function presentProject(project, tasks = [], now = new Date(), userId = null) {
   };
 }
 
-async function getScopedProject(projectId, scope) {
-  const project = await EffortProject.findOne({ _id: projectId, ...scopeQuery(scope) });
+async function getScopedProject(projectId, scope, userId) {
+  const project = await EffortProject.findOne({ _id: projectId, ...ownerScopeQuery(scope, userId) });
   if (!project) throw httpError('Project not found', 404);
   return project;
 }
 
-async function getScopedTask(taskId, scope) {
-  const task = await EffortTask.findOne({ _id: taskId, ...scopeQuery(scope) });
+async function getScopedTask(taskId, scope, userId) {
+  const task = await EffortTask.findOne({ _id: taskId, ...ownerScopeQuery(scope, userId) });
   if (!task) throw httpError('Task not found', 404);
   return task;
 }
@@ -149,9 +153,9 @@ async function withErrors(res, fn) {
 }
 
 exports.listProjects = (req, res) => withErrors(res, async () => {
-  const projects = await EffortProject.find(scopeQuery(req.scope)).sort({ status: 1, updatedAt: -1 });
+  const projects = await EffortProject.find(ownerScopeQuery(req.scope, req.userId)).sort({ status: 1, updatedAt: -1 });
   const projectIds = projects.map((project) => project._id);
-  const tasks = await EffortTask.find({ ...scopeQuery(req.scope), projectId: { $in: projectIds } }).sort({ updatedAt: -1 });
+  const tasks = await EffortTask.find({ ...ownerScopeQuery(req.scope, req.userId), projectId: { $in: projectIds } }).sort({ updatedAt: -1 });
   const tasksByProject = new Map();
   for (const task of tasks) {
     const key = String(task.projectId);
@@ -180,13 +184,13 @@ exports.createProject = (req, res) => withErrors(res, async () => {
 });
 
 exports.getProject = (req, res) => withErrors(res, async () => {
-  const project = await getScopedProject(req.params.id, req.scope);
-  const tasks = await EffortTask.find({ ...scopeQuery(req.scope), projectId: project._id }).sort({ status: 1, updatedAt: -1 });
+  const project = await getScopedProject(req.params.id, req.scope, req.userId);
+  const tasks = await EffortTask.find({ ...ownerScopeQuery(req.scope, req.userId), projectId: project._id }).sort({ status: 1, updatedAt: -1 });
   res.json(presentProject(project, tasks, new Date(), req.userId));
 });
 
 exports.updateProject = (req, res) => withErrors(res, async () => {
-  const project = await getScopedProject(req.params.id, req.scope);
+  const project = await getScopedProject(req.params.id, req.scope, req.userId);
   if (project.status === 'closed') throw httpError('Closed project must be reopened before editing');
 
   if (Object.prototype.hasOwnProperty.call(req.body || {}, 'name')) {
@@ -200,19 +204,19 @@ exports.updateProject = (req, res) => withErrors(res, async () => {
   project.updatedBy = req.userId;
   await project.save();
 
-  const tasks = await EffortTask.find({ ...scopeQuery(req.scope), projectId: project._id }).sort({ status: 1, updatedAt: -1 });
+  const tasks = await EffortTask.find({ ...ownerScopeQuery(req.scope, req.userId), projectId: project._id }).sort({ status: 1, updatedAt: -1 });
   res.json(presentProject(project, tasks, new Date(), req.userId));
 });
 
 exports.closeProject = (req, res) => withErrors(res, async () => {
-  const project = await getScopedProject(req.params.id, req.scope);
+  const project = await getScopedProject(req.params.id, req.scope, req.userId);
   if (project.status === 'closed') {
-    const tasks = await EffortTask.find({ ...scopeQuery(req.scope), projectId: project._id }).sort({ status: 1, updatedAt: -1 });
+    const tasks = await EffortTask.find({ ...ownerScopeQuery(req.scope, req.userId), projectId: project._id }).sort({ status: 1, updatedAt: -1 });
     return res.json(presentProject(project, tasks, new Date(), req.userId));
   }
 
   const now = new Date();
-  const tasks = await EffortTask.find({ ...scopeQuery(req.scope), projectId: project._id }).sort({ status: 1, updatedAt: -1 });
+  const tasks = await EffortTask.find({ ...ownerScopeQuery(req.scope, req.userId), projectId: project._id }).sort({ status: 1, updatedAt: -1 });
   for (const task of tasks) {
     if (stopTaskTimer(task, now)) {
       task.updatedBy = req.userId;
@@ -220,7 +224,7 @@ exports.closeProject = (req, res) => withErrors(res, async () => {
     }
   }
 
-  const freshTasks = await EffortTask.find({ ...scopeQuery(req.scope), projectId: project._id }).sort({ status: 1, updatedAt: -1 });
+  const freshTasks = await EffortTask.find({ ...ownerScopeQuery(req.scope, req.userId), projectId: project._id }).sort({ status: 1, updatedAt: -1 });
   project.status = 'closed';
   project.closedAt = now;
   project.closedNetMs = freshTasks.reduce((total, task) => total + taskNetMs(task, now), 0);
@@ -233,7 +237,7 @@ exports.closeProject = (req, res) => withErrors(res, async () => {
 });
 
 exports.reopenProject = (req, res) => withErrors(res, async () => {
-  const project = await getScopedProject(req.params.id, req.scope);
+  const project = await getScopedProject(req.params.id, req.scope, req.userId);
   project.status = 'open';
   project.closedAt = undefined;
   project.closedNetMs = 0;
@@ -242,12 +246,12 @@ exports.reopenProject = (req, res) => withErrors(res, async () => {
   project.updatedBy = req.userId;
   await project.save();
 
-  const tasks = await EffortTask.find({ ...scopeQuery(req.scope), projectId: project._id }).sort({ status: 1, updatedAt: -1 });
+  const tasks = await EffortTask.find({ ...ownerScopeQuery(req.scope, req.userId), projectId: project._id }).sort({ status: 1, updatedAt: -1 });
   res.json(presentProject(project, tasks, new Date(), req.userId));
 });
 
 exports.createTask = (req, res) => withErrors(res, async () => {
-  const project = await getScopedProject(req.params.id, req.scope);
+  const project = await getScopedProject(req.params.id, req.scope, req.userId);
   if (project.status === 'closed') throw httpError('Closed project must be reopened before adding tasks');
 
   const name = normalizeText(req.body?.name);
@@ -268,9 +272,9 @@ exports.createTask = (req, res) => withErrors(res, async () => {
 });
 
 exports.updateTask = (req, res) => withErrors(res, async () => {
-  const task = await getScopedTask(req.params.taskId, req.scope);
+  const task = await getScopedTask(req.params.taskId, req.scope, req.userId);
   if (task.status === 'closed') throw httpError('Closed task cannot be edited');
-  const project = await getScopedProject(task.projectId, req.scope);
+  const project = await getScopedProject(task.projectId, req.scope, req.userId);
   if (project.status === 'closed') throw httpError('Closed project must be reopened before editing tasks');
 
   if (Object.prototype.hasOwnProperty.call(req.body || {}, 'name')) {
@@ -285,9 +289,9 @@ exports.updateTask = (req, res) => withErrors(res, async () => {
 });
 
 exports.startTask = (req, res) => withErrors(res, async () => {
-  const task = await getScopedTask(req.params.taskId, req.scope);
+  const task = await getScopedTask(req.params.taskId, req.scope, req.userId);
   if (task.status === 'closed') throw httpError('Closed task cannot be started');
-  const project = await getScopedProject(task.projectId, req.scope);
+  const project = await getScopedProject(task.projectId, req.scope, req.userId);
   if (project.status === 'closed') throw httpError('Closed project must be reopened before starting tasks');
 
   const now = new Date();
@@ -304,7 +308,7 @@ exports.startTask = (req, res) => withErrors(res, async () => {
 });
 
 exports.stopTask = (req, res) => withErrors(res, async () => {
-  const task = await getScopedTask(req.params.taskId, req.scope);
+  const task = await getScopedTask(req.params.taskId, req.scope, req.userId);
   const now = new Date();
   if (String(task.activeTimer?.userId || '') !== String(req.userId || '')) {
     throw httpError('This task is not running for the current user', 409);
@@ -316,7 +320,7 @@ exports.stopTask = (req, res) => withErrors(res, async () => {
 });
 
 exports.closeTask = (req, res) => withErrors(res, async () => {
-  const task = await getScopedTask(req.params.taskId, req.scope);
+  const task = await getScopedTask(req.params.taskId, req.scope, req.userId);
   if (task.status === 'closed') return res.json(presentTask(task, new Date(), req.userId));
 
   const now = new Date();

@@ -18,6 +18,6 @@ const EffortProjectSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-EffortProjectSchema.index({ tenantId: 1, status: 1, updatedAt: -1 });
+EffortProjectSchema.index({ tenantId: 1, createdBy: 1, status: 1, updatedAt: -1 });
 
 module.exports = mongoose.models.EffortProject || mongoose.model('EffortProject', EffortProjectSchema);
