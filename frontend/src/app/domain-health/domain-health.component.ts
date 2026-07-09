@@ -24,6 +24,7 @@ import {
   DomainMonitorStatus
 } from '../services/domain-health.service';
 import { AuthService } from '../services/auth.service';
+import { AdminService } from '../services/admin.service';
 import { DomainDialogComponent } from './domain-dialog/domain-dialog.component';
 import { DomainDeepScanDialogComponent } from './deep-scan-dialog/deep-scan-dialog.component';
 
@@ -74,6 +75,7 @@ export class DomainHealthComponent implements OnInit, OnDestroy {
   isLoading = false;
   isChecking = false;
   isLoadingChecks = false;
+  showDetails = false;
   activeChartPoint: ChartPoint | null = null;
   private refreshTimer?: ReturnType<typeof setInterval>;
   private lastSeenMonitorCompletion = '';
@@ -90,6 +92,7 @@ export class DomainHealthComponent implements OnInit, OnDestroy {
     private service: DomainHealthService,
     private snackBar: MatSnackBar,
     private dialog: MatDialog,
+    private admin: AdminService,
     public auth: AuthService
   ) {}
 
@@ -181,8 +184,11 @@ export class DomainHealthComponent implements OnInit, OnDestroy {
   }
 
   async openDomainDialog(domain?: DomainMonitor): Promise<void> {
+    const tenants = this.auth.isSuperAdmin() ? await firstValueFrom(this.admin.listTenants()) : [];
     const payload = await firstValueFrom(
-      this.dialog.open(DomainDialogComponent, { data: { domain } }).afterClosed()
+      this.dialog.open(DomainDialogComponent, {
+        data: { domain, tenants, canEditOwner: this.auth.isSuperAdmin() }
+      }).afterClosed()
     );
     if (!payload) return;
 
@@ -219,6 +225,7 @@ export class DomainHealthComponent implements OnInit, OnDestroy {
 
   async selectDomain(domain: DomainMonitor): Promise<void> {
     this.selectedDomain = domain;
+    this.showDetails = false;
     await this.loadChecks();
   }
 
@@ -428,7 +435,7 @@ export class DomainHealthComponent implements OnInit, OnDestroy {
   }
 
   ownerText(domain: DomainMonitor): string {
-    return domain.owner || 'EPDS';
+    return domain.owner || domain.tenantDisplayName || domain.tenantName || '-';
   }
 
   chartMaxMs(): number {

@@ -41,7 +41,15 @@
         <mat-icon *ngIf="!isLoading" class="material-symbols-outlined">refresh</mat-icon>
         Refresh
       </button>
-      <button mat-flat-button color="primary" type="button" (click)="openLicenseDialog()">
+      <button
+        mat-flat-button
+        color="primary"
+        type="button"
+        *ngIf="auth.canEditFeature('licenses')"
+        [disabled]="!clientTenants.length"
+        [matTooltip]="clientTenants.length ? 'Add customer' : 'Create a client tenant first'"
+        (click)="openLicenseDialog()"
+      >
         <mat-icon class="material-symbols-outlined">add</mat-icon>
         Add customer
       </button>

@@ -110,7 +110,7 @@
       </mat-card>
     </mat-tab>
 
-    <mat-tab label="Compose">
+    <mat-tab label="Compose" *ngIf="auth.canEditFeature('mail')">
       <mat-card class="compose-card">
         <mat-card-content>
           <form class="compose-form" (ngSubmit)="send()">

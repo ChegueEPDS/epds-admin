@@ -429,29 +429,59 @@ mat-checkbox {
   grid-template-columns: 1.1fr 1.2fr 1fr 0.8fr auto;
 }
 .infrastructure-group-row {
-  grid-template-columns: minmax(140px, 0.55fr) repeat(4, minmax(180px, 1fr)) auto;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
 }
-.infrastructure-group-row mat-form-field:nth-child(1) {
+.infrastructure-block {
   grid-column: 1 / 2;
+  display: grid;
+  align-items: start;
+  gap: 8px;
+  min-width: 0;
 }
-.infrastructure-group-row mat-form-field:nth-child(2) {
-  grid-column: 2 / 4;
+.infrastructure-block-title {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  color: #374151;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.2;
+  text-transform: uppercase;
 }
-.infrastructure-group-row mat-form-field:nth-child(3) {
-  grid-column: 4 / 5;
+.infrastructure-block-title mat-divider {
+  min-width: 0;
+  border-top-color: #e5e7eb;
 }
-.infrastructure-group-row mat-form-field:nth-child(4) {
-  grid-column: 2 / 4;
+.infrastructure-fields {
+  display: grid;
+  align-items: start;
+  gap: 10px;
+  min-width: 0;
 }
-.infrastructure-group-row mat-form-field:nth-child(5) {
-  grid-column: 4 / 5;
+.infrastructure-application-fields {
+  grid-template-columns: minmax(140px, 0.55fr) minmax(260px, 1.7fr) minmax(180px, 0.9fr);
 }
-.infrastructure-group-row mat-form-field:nth-child(6) {
-  grid-column: 5 / 6;
-  grid-row: 1 / 2;
+.infrastructure-server-fields {
+  grid-template-columns: minmax(260px, 1.7fr) minmax(180px, 0.8fr);
+}
+.infrastructure-database-fields {
+  grid-template-columns: minmax(220px, 1fr) minmax(220px, 1fr) minmax(240px, 1fr);
+}
+.infrastructure-mail-fields {
+  grid-template-columns: repeat(4, minmax(180px, 1fr));
+}
+.infrastructure-address-fields {
+  grid-template-columns: minmax(260px, 1.1fr);
+  justify-content: start;
+}
+.infrastructure-address-fields mat-form-field {
+  max-width: 420px;
 }
 .infrastructure-group-row > .mat-mdc-icon-button {
-  grid-column: 6 / 7;
+  grid-column: 2 / 3;
   grid-row: 1 / 2;
 }
 .vpn-row {
@@ -469,6 +499,8 @@ button mat-icon {
   .group-controls.single-control,
   .contact-row,
   .infrastructure-group-row,
+  .infrastructure-block,
+  .infrastructure-fields,
   .vpn-row,
   .mini-table-head,
   .mini-table-row,
@@ -481,7 +513,10 @@ button mat-icon {
   .infrastructure-lines {
     padding-right: 0;
   }
-  .infrastructure-group-row mat-form-field,
+  .infrastructure-address-fields mat-form-field {
+    max-width: none;
+  }
+  .infrastructure-block,
   .infrastructure-group-row > .mat-mdc-icon-button {
     grid-column: auto;
     grid-row: auto;

@@ -1,10 +1,19 @@
 const mongoose = require('mongoose');
 
+const FeatureAccessSchema = new mongoose.Schema(
+  {
+    enabled: { type: Boolean, default: false },
+    edit: { type: Boolean, default: false },
+    delete: { type: Boolean, default: false }
+  },
+  { _id: false }
+);
+
 const TenantSchema = new mongoose.Schema(
   {
     name: { type: String, required: true, trim: true, lowercase: true, unique: true },
-    type: { type: String, enum: ['personal', 'company'], required: true },
-    plan: { type: String, enum: ['free', 'pro', 'team'], required: true },
+    displayName: { type: String, trim: true },
+    type: { type: String, enum: ['company', 'client'], default: 'company', required: true },
     ownerUserId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', index: true },
     seats: {
       max: { type: Number, default: 0, min: 0 },
@@ -12,12 +21,10 @@ const TenantSchema = new mongoose.Schema(
     },
     seatsManaged: { type: String, enum: ['stripe', 'manual'], default: 'stripe' },
     features: {
-      maintenance: { type: Boolean, default: false },
-      professionRbac: { type: Boolean, default: false },
-      groupRbac: { type: Boolean, default: false },
-      customFields: { type: Boolean, default: false },
-      customSchemas: { type: Boolean, default: false },
-      documentation: { type: Boolean, default: false }
+      mail: { type: FeatureAccessSchema, default: () => ({}) },
+      domainHealth: { type: FeatureAccessSchema, default: () => ({}) },
+      licenses: { type: FeatureAccessSchema, default: () => ({}) },
+      effortTracking: { type: FeatureAccessSchema, default: () => ({}) }
     },
     professionRbacEnabled: { type: Boolean, default: false, index: true }
   },

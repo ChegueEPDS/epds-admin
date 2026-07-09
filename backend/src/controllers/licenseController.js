@@ -1,7 +1,18 @@
 const LicenseCustomer = require('../models/licenseCustomer');
+const Tenant = require('../models/tenant');
 
 function licenseScopeQuery(scope) {
+  if (canManageAllLicenses(scope)) return {};
   return scope?.tenantId ? { tenantId: scope.tenantId } : { tenantId: null };
+}
+
+function canManageAllLicenses(scope = {}) {
+  if (scope.role === 'SuperAdmin') return true;
+  return ['epds', 'developer', 'epds-admin'].includes(String(scope.tenantName || '').trim().toLowerCase());
+}
+
+function tenantLabel(tenant) {
+  return String(tenant?.displayName || tenant?.name || '').trim();
 }
 
 function normalizeCustomerName(input) {
@@ -113,6 +124,17 @@ function normalizeInfrastructureGroups(input) {
       applicationServerType: normalizeOptionalEnum(item?.applicationServerType, LicenseCustomer.applicationServerTypes, 'application server type'),
       databaseServerAddress: String(item?.databaseServerAddress || '').trim(),
       databaseServerType: normalizeOptionalEnum(item?.databaseServerType, LicenseCustomer.databaseServerTypes, 'database server type'),
+      databaseName: String(item?.databaseName || '').trim(),
+      databaseLoginName: String(item?.databaseLoginName || '').trim(),
+      databaseAuthenticationMethod: normalizeOptionalEnum(
+        item?.databaseAuthenticationMethod,
+        LicenseCustomer.databaseAuthenticationMethods,
+        'database authentication method'
+      ),
+      mailServer: String(item?.mailServer || '').trim(),
+      mailServerPortProtocol: String(item?.mailServerPortProtocol || '').trim(),
+      mailUsername: String(item?.mailUsername || '').trim(),
+      mailSenderAddress: String(item?.mailSenderAddress || '').trim(),
       applicationAddress: String(item?.applicationAddress || '').trim()
     }))
     .filter((item) => (
@@ -120,6 +142,13 @@ function normalizeInfrastructureGroups(input) {
       item.applicationServerType ||
       item.databaseServerAddress ||
       item.databaseServerType ||
+      item.databaseName ||
+      item.databaseLoginName ||
+      item.databaseAuthenticationMethod ||
+      item.mailServer ||
+      item.mailServerPortProtocol ||
+      item.mailUsername ||
+      item.mailSenderAddress ||
       item.applicationAddress
     ));
 }
@@ -138,6 +167,13 @@ function buildInfrastructureGroups(license, databaseAddresses, applicationAddres
         applicationServerType: undefined,
         databaseServerAddress: '',
         databaseServerType: undefined,
+        databaseName: '',
+        databaseLoginName: '',
+        databaseAuthenticationMethod: undefined,
+        mailServer: '',
+        mailServerPortProtocol: '',
+        mailUsername: '',
+        mailSenderAddress: '',
         applicationAddress: ''
       });
     }
@@ -166,11 +202,19 @@ function buildInfrastructureGroups(license, databaseAddresses, applicationAddres
     item.applicationServerType ||
     item.databaseServerAddress ||
     item.databaseServerType ||
+    item.databaseName ||
+    item.databaseLoginName ||
+    item.databaseAuthenticationMethod ||
+    item.mailServer ||
+    item.mailServerPortProtocol ||
+    item.mailUsername ||
+    item.mailSenderAddress ||
     item.applicationAddress
   ));
 }
 
 function presentLicense(license) {
+  const tenant = license.tenantId && typeof license.tenantId === 'object' ? license.tenantId : null;
   const objectLimit = license.objectLimitOption === 'custom'
     ? license.customObjectLimit
     : license.objectLimitOption === 'unlimited'
@@ -242,10 +286,20 @@ function presentLicense(license) {
       password: credential.password || ''
     })),
     notesHtml: license.notesHtml || '',
-    tenantId: license.tenantId ? String(license.tenantId) : null,
+    tenantId: tenant?._id ? String(tenant._id) : (license.tenantId ? String(license.tenantId) : null),
+    tenantName: tenant?.name || null,
+    tenantDisplayName: tenantLabel(tenant) || null,
     createdAt: license.createdAt,
     updatedAt: license.updatedAt
   };
+}
+
+async function clientTenantFromPayload(body) {
+  const tenantId = String(body?.tenantId || '').trim();
+  if (!tenantId) throw httpError('Customer is required');
+  const tenant = await Tenant.findOne({ _id: tenantId, type: 'client' });
+  if (!tenant) throw httpError('Valid client customer is required', 404);
+  return tenant;
 }
 
 function applyLicensePayload(license, body) {
@@ -391,8 +445,21 @@ exports.listLicenses = async (req, res, next) => {
   try {
     const licenses = await LicenseCustomer.find(licenseScopeQuery(req.scope))
       .sort({ customerName: 1 })
+      .populate('tenantId', 'name displayName type')
       .lean();
-    return res.json({ licenses: licenses.map(presentLicense), objectLimitOptions: LicenseCustomer.objectLimitOptions });
+    const clientTenants = canManageAllLicenses(req.scope)
+      ? await Tenant.find({ type: 'client' }).sort({ displayName: 1, name: 1 }).select('name displayName type').lean()
+      : [];
+    return res.json({
+      licenses: licenses.map(presentLicense),
+      objectLimitOptions: LicenseCustomer.objectLimitOptions,
+      clientTenants: clientTenants.map((tenant) => ({
+        id: String(tenant._id),
+        name: tenant.name,
+        displayName: tenantLabel(tenant),
+        type: tenant.type
+      }))
+    });
   } catch (err) {
     return next(err);
   }
@@ -400,8 +467,9 @@ exports.listLicenses = async (req, res, next) => {
 
 exports.createLicense = async (req, res, next) => {
   try {
+    const clientTenant = canManageAllLicenses(req.scope) ? await clientTenantFromPayload(req.body || {}) : null;
     const license = new LicenseCustomer({
-      tenantId: req.scope?.tenantId,
+      tenantId: clientTenant?._id || req.scope?.tenantId,
       createdBy: req.userId
     });
     for (const field of ['customerName', 'status', 'objectLimitOption', 'expiresAt']) {
@@ -410,7 +478,12 @@ exports.createLicense = async (req, res, next) => {
       }
     }
     applyLicensePayload(license, req.body || {});
+    if (clientTenant) {
+      license.customerName = tenantLabel(clientTenant);
+      license.normalizedCustomerName = license.customerName.toLowerCase();
+    }
     await license.save();
+    await license.populate('tenantId', 'name displayName type');
     return res.status(201).json({ license: presentLicense(license) });
   } catch (err) {
     if (err.code === 11000) return res.status(409).json({ error: 'Customer already has a license record' });
@@ -423,10 +496,22 @@ exports.updateLicense = async (req, res, next) => {
   try {
     const license = await LicenseCustomer.findOne({ _id: req.params.id, ...licenseScopeQuery(req.scope) });
     if (!license) return res.status(404).json({ error: 'License not found' });
+    const isGlobalManager = canManageAllLicenses(req.scope);
+    const clientTenant = isGlobalManager && Object.prototype.hasOwnProperty.call(req.body || {}, 'tenantId')
+      ? await clientTenantFromPayload(req.body || {})
+      : isGlobalManager && license.tenantId
+        ? await Tenant.findOne({ _id: license.tenantId, type: 'client' })
+        : null;
 
     applyLicensePayload(license, req.body || {});
+    if (clientTenant) {
+      license.tenantId = clientTenant._id;
+      license.customerName = tenantLabel(clientTenant);
+      license.normalizedCustomerName = license.customerName.toLowerCase();
+    }
     license.updatedBy = req.userId;
     await license.save();
+    await license.populate('tenantId', 'name displayName type');
     return res.json({ license: presentLicense(license) });
   } catch (err) {
     if (err.code === 11000) return res.status(409).json({ error: 'Customer already has a license record' });

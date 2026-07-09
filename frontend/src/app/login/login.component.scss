@@ -30,6 +30,11 @@ mat-card-content {
   padding: 0;
 }
 
+.login-form {
+  display: grid;
+  gap: 10px;
+}
+
 mat-card-content button {
   width: 100%;
   min-height: 48px;
@@ -37,6 +42,25 @@ mat-card-content button {
 
 mat-card-content mat-icon {
   margin-right: 6px;
+}
+
+.divider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 18px 0;
+  color: rgba(19, 19, 19, 0.56);
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.divider::before,
+.divider::after {
+  content: '';
+  flex: 1 1 auto;
+  height: 1px;
+  background: rgba(19, 19, 19, 0.12);
 }
 
 .shake {

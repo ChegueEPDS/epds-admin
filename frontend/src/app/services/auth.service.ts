@@ -7,6 +7,16 @@ import { environment } from '../../environments/environment';
 import { MsalService } from '@azure/msal-angular';
 import { loginRequest } from './msal.config';
 
+export type TenantFeatureKey = 'mail' | 'domainHealth' | 'licenses' | 'effortTracking';
+
+export type TenantFeatureAccess = {
+  enabled: boolean;
+  edit: boolean;
+  delete: boolean;
+};
+
+export type TenantFeatures = Record<TenantFeatureKey, TenantFeatureAccess>;
+
 export type AuthUser = {
   id?: string;
   userId?: string;
@@ -16,7 +26,9 @@ export type AuthUser = {
   role?: string;
   tenantId?: string | null;
   tenantName?: string | null;
+  tenantDisplayName?: string | null;
   tenantType?: string | null;
+  tenantFeatures?: Partial<TenantFeatures>;
 };
 
 type SessionMeta = {
@@ -31,6 +43,15 @@ type AuthResponse = {
   user: AuthUser | null;
   session?: SessionMeta | null;
 };
+
+const FEATURE_ROUTES: Record<TenantFeatureKey, string> = {
+  mail: '/mail',
+  domainHealth: '/domain-health',
+  licenses: '/licenses',
+  effortTracking: '/effort-tracking'
+};
+
+const FEATURE_ORDER: TenantFeatureKey[] = ['mail', 'domainHealth', 'licenses', 'effortTracking'];
 
 @Injectable({ providedIn: 'root' })
 export class AuthService {
@@ -110,6 +131,21 @@ export class AuthService {
     this.navigatePostLogin();
   }
 
+  loginWithPassword(email: string, password: string): Observable<AuthUser | null> {
+    return this.http.post<AuthResponse>(
+      `${this.baseUrl}/login`,
+      { email, password },
+      { withCredentials: true }
+    ).pipe(
+      tap((res) => this.applyUser(res?.user || null)),
+      map((res) => {
+        if (!res?.user) throw new Error('Login did not return a user');
+        this.navigatePostLogin();
+        return res.user;
+      })
+    );
+  }
+
   logout(): void {
     this.http.post(`${this.baseUrl}/logout`, {}, { withCredentials: true }).subscribe({
       next: () => this.finishLogout(),
@@ -119,6 +155,10 @@ export class AuthService {
 
   private finishLogout(): void {
     this.applyUser(null);
+    if (!this.msalService.instance.getAllAccounts().length) {
+      this.router.navigate(['/login']);
+      return;
+    }
     this.msalService.logoutPopup().subscribe({
       next: () => this.router.navigate(['/login']),
       error: () => this.router.navigate(['/login'])
@@ -138,7 +178,10 @@ export class AuthService {
   }
 
   navigatePostLogin(): void {
-    const target = this.getRedirectUrl() || '/home';
+    const requestedTarget = this.getRedirectUrl() || '/home';
+    const target = requestedTarget === '/home'
+      ? this.defaultRouteAfterLogin()
+      : requestedTarget;
     this.clearRedirectUrl();
     this.router.navigateByUrl(target);
   }
@@ -152,7 +195,45 @@ export class AuthService {
   }
 
   canAccessAdminFeatures(): boolean {
-    return Boolean(this.currentUser?.tenantId || this.currentUser?.tenantName);
+    return this.isSuperAdmin() || Boolean(this.currentUser?.tenantId || this.currentUser?.tenantName);
+  }
+
+  canAccessFeature(featureKey: TenantFeatureKey): boolean {
+    if (this.isSuperAdmin()) return true;
+    return Boolean(this.currentUser?.tenantFeatures?.[featureKey]?.enabled);
+  }
+
+  enabledFeatureKeys(): TenantFeatureKey[] {
+    return FEATURE_ORDER.filter((featureKey) => this.canAccessFeature(featureKey));
+  }
+
+  hasSingleFeatureAccess(): boolean {
+    return !this.isSuperAdmin() && this.enabledFeatureKeys().length === 1;
+  }
+
+  singleFeatureRoute(): string | null {
+    if (!this.hasSingleFeatureAccess()) return null;
+    return FEATURE_ROUTES[this.enabledFeatureKeys()[0]];
+  }
+
+  defaultRouteAfterLogin(): string {
+    return this.singleFeatureRoute() || '/home';
+  }
+
+  canEditFeature(featureKey: TenantFeatureKey): boolean {
+    if (this.isSuperAdmin()) return true;
+    const feature = this.currentUser?.tenantFeatures?.[featureKey];
+    return Boolean(feature?.enabled && feature?.edit);
+  }
+
+  canDeleteFeature(featureKey: TenantFeatureKey): boolean {
+    if (this.isSuperAdmin()) return true;
+    const feature = this.currentUser?.tenantFeatures?.[featureKey];
+    return Boolean(feature?.enabled && feature?.delete);
+  }
+
+  isSuperAdmin(): boolean {
+    return this.currentUser?.role === 'SuperAdmin';
   }
 
   hasEpdsEmail(): boolean {

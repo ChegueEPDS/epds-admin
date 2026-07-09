@@ -343,6 +343,38 @@
   margin-bottom: 16px;
 }
 
+.details-toggle {
+  align-self: flex-start;
+  margin: 0 0 8px;
+  padding-left: 0;
+  font-weight: 600;
+}
+
+.details-toggle mat-icon {
+  margin-right: 4px;
+}
+
+.details-collapse {
+  display: grid;
+  grid-template-rows: 0fr;
+  opacity: 0;
+  overflow: hidden;
+  transform: translateY(-4px);
+  transition: grid-template-rows 220ms ease, opacity 180ms ease, transform 220ms ease, margin 220ms ease;
+}
+
+.details-collapse.open {
+  grid-template-rows: 1fr;
+  opacity: 1;
+  transform: translateY(0);
+  margin-bottom: 8px;
+}
+
+.details-collapse > .diagnostic-grid {
+  min-height: 0;
+  overflow: hidden;
+}
+
 .diagnostic-grid strong {
   font-size: 13px;
 }
@@ -686,7 +718,8 @@
     flex-wrap: wrap;
   }
 
-  .metric-grid {
+  .metric-grid,
+  .diagnostic-grid {
     grid-template-columns: 1fr;
   }
 }

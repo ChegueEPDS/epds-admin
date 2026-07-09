@@ -4,7 +4,7 @@
       <h1>Effort Tracking</h1>
       <p>Projects, task timers, and net/gross effort summaries.</p>
     </div>
-    <button mat-flat-button color="primary" type="button" (click)="startCreateProject()">
+    <button mat-flat-button color="primary" type="button" *ngIf="auth.canEditFeature('effortTracking')" (click)="startCreateProject()">
       <mat-icon class="material-symbols-outlined">add</mat-icon>
       New project
     </button>
@@ -69,7 +69,7 @@
           <h2>{{ selectedProject.name }}</h2>
           <p>{{ selectedProject.customer || 'No customer' }}</p>
         </div>
-        <div class="detail-actions">
+        <div class="detail-actions" *ngIf="auth.canEditFeature('effortTracking')">
           <button mat-stroked-button type="button" (click)="startEditProject()" [disabled]="selectedProject.status === 'closed'">
             <mat-icon class="material-symbols-outlined">edit</mat-icon>
             Edit
@@ -108,7 +108,7 @@
 
       <div class="section-header">
         <h3>Tasks</h3>
-        <button mat-stroked-button type="button" (click)="startCreateTask()" [disabled]="selectedProject.status === 'closed'">
+        <button mat-stroked-button type="button" *ngIf="auth.canEditFeature('effortTracking')" (click)="startCreateTask()" [disabled]="selectedProject.status === 'closed'">
           <mat-icon class="material-symbols-outlined">add</mat-icon>
           Add task
         </button>
@@ -170,7 +170,7 @@
               <strong>{{ grossText(task) }}</strong>
             </div>
           </div>
-          <div class="task-actions">
+          <div class="task-actions" *ngIf="auth.canEditFeature('effortTracking')">
             <button class="task-action-edit" mat-stroked-button type="button" *ngIf="task.status === 'open'" (click)="startEditTask(task)" [disabled]="saving || selectedProject.status === 'closed'">
               <mat-icon class="material-symbols-outlined">edit</mat-icon>
               Edit

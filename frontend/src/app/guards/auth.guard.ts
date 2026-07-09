@@ -14,7 +14,18 @@ export class AuthGuard implements CanActivate {
       take(1),
       map(([, loggedIn]) => {
         if (loggedIn) {
+          if (route.routeConfig?.path === 'home') {
+            const singleFeatureRoute = this.auth.singleFeatureRoute();
+            if (singleFeatureRoute) return this.router.createUrlTree([singleFeatureRoute]);
+          }
           if (route.data?.['requiresAdminFeatures'] && !this.auth.canAccessAdminFeatures()) {
+            return this.router.createUrlTree(['/home']);
+          }
+          if (route.data?.['requiresSuperAdmin'] && !this.auth.isSuperAdmin()) {
+            return this.router.createUrlTree(['/home']);
+          }
+          const featureKey = route.data?.['featureKey'];
+          if (featureKey && !this.auth.canAccessFeature(featureKey)) {
             return this.router.createUrlTree(['/home']);
           }
           if (route.data?.['requiresEpdsEmail'] && !this.auth.hasEpdsEmail()) {

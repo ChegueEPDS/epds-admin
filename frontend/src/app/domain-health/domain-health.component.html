@@ -48,7 +48,7 @@
         <mat-icon *ngIf="!isLoading" class="material-symbols-outlined">refresh</mat-icon>
         Refresh
       </button>
-      <button mat-flat-button color="primary" type="button" (click)="openDomainDialog()">
+      <button mat-flat-button color="primary" type="button" *ngIf="auth.canEditFeature('domainHealth')" (click)="openDomainDialog()">
         <mat-icon class="material-symbols-outlined">add</mat-icon>
         Add domain
       </button>
@@ -62,7 +62,7 @@
           <colgroup>
             <col class="status-col">
             <col class="domain-col">
-            <col *ngIf="auth.hasEpdsEmail()" class="owner-col">
+            <col *ngIf="auth.isSuperAdmin()" class="owner-col">
             <col class="performance-col">
             <col class="tls-col">
             <col class="checked-col">
@@ -73,7 +73,7 @@
             <tr>
               <th>Status</th>
               <th>Domain</th>
-              <th *ngIf="auth.hasEpdsEmail()">Owner</th>
+              <th *ngIf="auth.isSuperAdmin()">Owner</th>
               <th>Perf.</th>
               <th>TLS</th>
               <th>Checked</th>
@@ -100,7 +100,7 @@
                 <strong>{{ domain.name }}</strong>
                 <span class="domain-url">{{ domain.baseUrl }}</span>
               </td>
-              <td *ngIf="auth.hasEpdsEmail()">
+              <td *ngIf="auth.isSuperAdmin()">
                 <span class="owner-pill">{{ ownerText(domain) }}</span>
               </td>
               <td>
@@ -125,19 +125,19 @@
                 <a mat-icon-button [href]="domain.baseUrl" target="_blank" rel="noopener" matTooltip="Open website" (click)="$event.stopPropagation()">
                   <mat-icon class="material-symbols-outlined">open_in_new</mat-icon>
                 </a>
-                <button mat-icon-button type="button" matTooltip="Run check now" (click)="checkNow(domain, $event)" [disabled]="isChecking">
+                <button mat-icon-button type="button" *ngIf="auth.canEditFeature('domainHealth')" matTooltip="Run check now" (click)="checkNow(domain, $event)" [disabled]="isChecking">
                   <mat-icon class="material-symbols-outlined">play_arrow</mat-icon>
                 </button>
-                <button mat-icon-button type="button" matTooltip="Edit domain" (click)="$event.stopPropagation(); openDomainDialog(domain)">
+                <button mat-icon-button type="button" *ngIf="auth.canEditFeature('domainHealth')" matTooltip="Edit domain" (click)="$event.stopPropagation(); openDomainDialog(domain)">
                   <mat-icon class="material-symbols-outlined">edit</mat-icon>
                 </button>
-                <button mat-icon-button type="button" matTooltip="Delete domain" (click)="deleteDomain(domain, $event)">
+                <button mat-icon-button type="button" *ngIf="auth.canDeleteFeature('domainHealth')" matTooltip="Delete domain" (click)="deleteDomain(domain, $event)">
                   <mat-icon class="material-symbols-outlined">delete</mat-icon>
                 </button>
               </td>
             </tr>
             <tr *ngIf="!filteredDomains.length">
-              <td [attr.colspan]="auth.hasEpdsEmail() ? 8 : 7" class="empty-state">
+              <td [attr.colspan]="auth.isSuperAdmin() ? 8 : 7" class="empty-state">
                 <mat-icon class="material-symbols-outlined">domain_disabled</mat-icon>
                 No domains match the current filter.
               </td>
@@ -194,38 +194,50 @@
         </div>
       </div>
 
-      <div class="diagnostic-grid">
-        <div>
-          <span>Final URL</span>
-          <strong>{{ finalUrlText(selectedDomain) }}</strong>
-        </div>
-        <div>
-          <span>Content</span>
-          <strong>{{ contentText(selectedDomain) }}</strong>
-        </div>
-        <div>
-          <span>TLS valid to</span>
-          <strong>{{ selectedDomain.lastTlsValidTo ? (selectedDomain.lastTlsValidTo | date:'mediumDate') : '-' }}</strong>
-        </div>
-        <div>
-          <span>Last diagnosis</span>
-          <strong>{{ issueText(selectedDomain) }}</strong>
-        </div>
-        <div>
-          <span>Last successful check</span>
-          <strong>{{ overview?.lastSuccessfulCheck?.checkedAt ? (overview?.lastSuccessfulCheck?.checkedAt | date:'M/d/yy, HH:mm') : '-' }}</strong>
-        </div>
-        <div>
-          <span>Last failed check</span>
-          <strong>{{ overview?.lastFailedCheck?.checkedAt ? (overview?.lastFailedCheck?.checkedAt | date:'M/d/yy, HH:mm') : '-' }}</strong>
-        </div>
-        <div>
-          <span>Last recovery</span>
-          <strong>{{ overview?.lastRecoveryAt ? (overview?.lastRecoveryAt | date:'M/d/yy, HH:mm') : '-' }}</strong>
-        </div>
-        <div>
-          <span>Customer view</span>
-          <strong><a [href]="publicStatusRoute(selectedDomain)" target="_blank" rel="noopener">Open status report</a></strong>
+      <button mat-stroked-button type="button" class="deep-scan-button" (click)="openDeepScan(selectedDomain)">
+        <mat-icon class="material-symbols-outlined">speed</mat-icon>
+        PageSpeed
+      </button>
+
+      <button mat-button type="button" class="details-toggle" (click)="showDetails = !showDetails">
+        <mat-icon class="material-symbols-outlined">{{ showDetails ? 'expand_less' : 'expand_more' }}</mat-icon>
+        {{ showDetails ? 'Show less' : 'Show details...' }}
+      </button>
+
+      <div class="details-collapse" [class.open]="showDetails">
+        <div class="diagnostic-grid">
+          <div>
+            <span>Final URL</span>
+            <strong>{{ finalUrlText(selectedDomain) }}</strong>
+          </div>
+          <div>
+            <span>Content</span>
+            <strong>{{ contentText(selectedDomain) }}</strong>
+          </div>
+          <div>
+            <span>TLS valid to</span>
+            <strong>{{ selectedDomain.lastTlsValidTo ? (selectedDomain.lastTlsValidTo | date:'mediumDate') : '-' }}</strong>
+          </div>
+          <div>
+            <span>Last diagnosis</span>
+            <strong>{{ issueText(selectedDomain) }}</strong>
+          </div>
+          <div>
+            <span>Last successful check</span>
+            <strong>{{ overview?.lastSuccessfulCheck?.checkedAt ? (overview?.lastSuccessfulCheck?.checkedAt | date:'M/d/yy, HH:mm') : '-' }}</strong>
+          </div>
+          <div>
+            <span>Last failed check</span>
+            <strong>{{ overview?.lastFailedCheck?.checkedAt ? (overview?.lastFailedCheck?.checkedAt | date:'M/d/yy, HH:mm') : '-' }}</strong>
+          </div>
+          <div>
+            <span>Last recovery</span>
+            <strong>{{ overview?.lastRecoveryAt ? (overview?.lastRecoveryAt | date:'M/d/yy, HH:mm') : '-' }}</strong>
+          </div>
+          <div>
+            <span>Customer view</span>
+            <strong><a [href]="publicStatusRoute(selectedDomain)" target="_blank" rel="noopener">Open status report</a></strong>
+          </div>
         </div>
       </div>
 
@@ -265,11 +277,6 @@
           ></span>
         </div>
       </div>
-
-      <button mat-stroked-button type="button" class="deep-scan-button" (click)="openDeepScan(selectedDomain)">
-        <mat-icon class="material-symbols-outlined">speed</mat-icon>
-        PageSpeed
-      </button>
 
       <div class="range-row">
         <button mat-button type="button" [class.active-range]="selectedRange === '24h'" (click)="selectedRange = '24h'; loadChecks()">24h</button>

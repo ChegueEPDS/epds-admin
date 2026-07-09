@@ -1,0 +1,25 @@
+.dialog-form {
+  display: block;
+}
+
+mat-dialog-content {
+  display: grid;
+  gap: 12px;
+  min-width: min(460px, calc(100vw - 80px));
+}
+
+.name-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+mat-form-field {
+  width: 100%;
+}
+
+@media (max-width: 560px) {
+  .name-grid {
+    grid-template-columns: 1fr;
+  }
+}

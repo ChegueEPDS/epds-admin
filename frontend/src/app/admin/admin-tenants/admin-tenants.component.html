@@ -1,0 +1,52 @@
+<section class="admin-page">
+  <header class="page-header">
+    <div>
+      <h1>Tenants</h1>
+      <p>{{ tenants().length }} tenants</p>
+    </div>
+    <button mat-flat-button color="primary" type="button" (click)="openAddTenant()">
+      <mat-icon class="material-symbols-outlined">add_business</mat-icon>
+      Add tenant
+    </button>
+  </header>
+
+  <div class="loading" *ngIf="loading()">
+    <mat-spinner diameter="36"></mat-spinner>
+  </div>
+
+  <table mat-table [dataSource]="tenants()" class="admin-table" *ngIf="!loading()">
+    <ng-container matColumnDef="name">
+      <th mat-header-cell *matHeaderCellDef>Name</th>
+      <td mat-cell *matCellDef="let tenant">{{ tenant.displayName || tenant.name }}</td>
+    </ng-container>
+
+    <ng-container matColumnDef="type">
+      <th mat-header-cell *matHeaderCellDef>Type</th>
+      <td mat-cell *matCellDef="let tenant">{{ tenant.type }}</td>
+    </ng-container>
+
+    <ng-container matColumnDef="features">
+      <th mat-header-cell *matHeaderCellDef>Features</th>
+      <td mat-cell *matCellDef="let tenant">{{ enabledFeatureText(tenant) }}</td>
+    </ng-container>
+
+    <ng-container matColumnDef="createdAt">
+      <th mat-header-cell *matHeaderCellDef>Created</th>
+      <td mat-cell *matCellDef="let tenant">{{ tenant.createdAt ? (tenant.createdAt | date:'yyyy-MM-dd') : '-' }}</td>
+    </ng-container>
+
+    <ng-container matColumnDef="actions">
+      <th mat-header-cell *matHeaderCellDef></th>
+      <td mat-cell *matCellDef="let tenant" class="actions-cell">
+        <button mat-icon-button type="button" matTooltip="Edit tenant" (click)="openEditTenant(tenant)">
+          <mat-icon class="material-symbols-outlined">edit</mat-icon>
+        </button>
+      </td>
+    </ng-container>
+
+    <tr mat-header-row *matHeaderRowDef="displayedColumns"></tr>
+    <tr mat-row *matRowDef="let row; columns: displayedColumns;"></tr>
+  </table>
+
+  <div class="empty-state" *ngIf="!loading() && !tenants().length">No tenants.</div>
+</section>

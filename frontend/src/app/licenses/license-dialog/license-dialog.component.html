@@ -4,11 +4,11 @@
     <p>{{ isEditing ? 'Editing license data' : 'Customer license sheet' }}</p>
   </div>
   <div class="dialog-header-actions">
-    <button mat-stroked-button type="button" *ngIf="data.license && !isEditing" (click)="startEdit()">
+    <button mat-stroked-button type="button" *ngIf="data.license && !isEditing && data.canEdit" (click)="startEdit()">
       <mat-icon class="material-symbols-outlined">edit</mat-icon>
       Edit
     </button>
-    <button mat-stroked-button color="warn" type="button" *ngIf="data.license && !isEditing" (click)="deleteFromSheet()">
+    <button mat-stroked-button color="warn" type="button" *ngIf="data.license && !isEditing && data.canDelete" (click)="deleteFromSheet()">
       <mat-icon class="material-symbols-outlined">delete</mat-icon>
       Delete
     </button>
@@ -120,6 +120,33 @@
               </div>
               <mat-divider></mat-divider>
               <div class="infrastructure-line">
+                <mat-icon class="material-symbols-outlined">storage</mat-icon>
+                <div>
+                  <span>Database</span>
+                  <strong>{{ emptyText(group.databaseName) }}</strong>
+                  <small> <b>Login name:</b> {{ emptyText(group.databaseLoginName) }} · <b>Auth. method:</b> {{ group.databaseAuthenticationMethod || '-' }}</small>
+                </div>
+              </div>
+              <mat-divider></mat-divider>
+              <div class="infrastructure-line">
+                <mat-icon class="material-symbols-outlined">outgoing_mail</mat-icon>
+                <div>
+                  <span>Mail server</span>
+                  <strong>{{ emptyText(group.mailServer) }}</strong>
+                  <small> <b>Protocol (port):</b> {{ emptyText(group.mailServerPortProtocol) }}</small>
+                </div>
+              </div>
+              <mat-divider></mat-divider>
+              <div class="infrastructure-line">
+                <mat-icon class="material-symbols-outlined">alternate_email</mat-icon>
+                <div>
+                  <span>Mail account</span>
+                  <strong>{{ emptyText(group.mailUsername) }}</strong>
+                  <small> <b>Sender address:</b> {{ emptyText(group.mailSenderAddress) }}</small>
+                </div>
+              </div>
+              <mat-divider></mat-divider>
+              <div class="infrastructure-line">
                 <mat-icon class="material-symbols-outlined">language</mat-icon>
                 <div>
                   <span>Application address</span>
@@ -183,10 +210,18 @@
     <section class="dialog-section">
       <h3>License</h3>
       <div class="dialog-grid">
-        <mat-form-field appearance="outline">
+        <mat-form-field appearance="outline" *ngIf="data.clientTenants?.length; else customerTextField">
           <mat-label>Customer</mat-label>
-          <input matInput name="customerName" [(ngModel)]="model.customerName" required>
+          <mat-select name="tenantId" [(ngModel)]="model.tenantId" required>
+            <mat-option *ngFor="let tenant of data.clientTenants || []" [value]="tenant.id">{{ clientTenantLabel(tenant) }}</mat-option>
+          </mat-select>
         </mat-form-field>
+        <ng-template #customerTextField>
+          <mat-form-field appearance="outline">
+            <mat-label>Customer</mat-label>
+            <input matInput name="customerName" [(ngModel)]="model.customerName" required>
+          </mat-form-field>
+        </ng-template>
 
         <mat-form-field appearance="outline">
           <mat-label>Status</mat-label>
@@ -295,38 +330,107 @@
       </div>
       <div class="repeater-list" *ngIf="model.infrastructureGroups.length; else emptyInfrastructureGroupsEdit">
         <div class="repeater-row infrastructure-group-row" *ngFor="let group of model.infrastructureGroups; let i = index">
-          <mat-form-field appearance="outline">
-            <mat-label>Type</mat-label>
-            <mat-select [name]="'infrastructureEnvironment' + i" [(ngModel)]="group.environment">
-              <mat-option *ngFor="let environment of addressEnvironments" [value]="environment">{{ environmentLabel(environment) }}</mat-option>
-            </mat-select>
-          </mat-form-field>
-          <mat-form-field appearance="outline">
-            <mat-label>Application server</mat-label>
-            <input matInput [name]="'infrastructureApplicationServer' + i" [(ngModel)]="group.applicationServerAddress">
-          </mat-form-field>
-          <mat-form-field appearance="outline">
-            <mat-label>App server type</mat-label>
-            <mat-select [name]="'infrastructureApplicationServerType' + i" [(ngModel)]="group.applicationServerType">
-              <mat-option [value]="null">Not set</mat-option>
-              <mat-option *ngFor="let type of applicationServerTypes" [value]="type">{{ type }}</mat-option>
-            </mat-select>
-          </mat-form-field>
-          <mat-form-field appearance="outline">
-            <mat-label>Database server</mat-label>
-            <input matInput [name]="'infrastructureDatabaseServer' + i" [(ngModel)]="group.databaseServerAddress">
-          </mat-form-field>
-          <mat-form-field appearance="outline">
-            <mat-label>DB server type</mat-label>
-            <mat-select [name]="'infrastructureDatabaseServerType' + i" [(ngModel)]="group.databaseServerType">
-              <mat-option [value]="null">Not set</mat-option>
-              <mat-option *ngFor="let type of databaseServerTypes" [value]="type">{{ type }}</mat-option>
-            </mat-select>
-          </mat-form-field>
-          <mat-form-field appearance="outline">
-            <mat-label>Application address</mat-label>
-            <input matInput [name]="'infrastructureApplicationAddress' + i" [(ngModel)]="group.applicationAddress">
-          </mat-form-field>
+          <div class="infrastructure-block infrastructure-application-block">
+            <div class="infrastructure-block-title">
+              <span>Application server</span>
+              <mat-divider></mat-divider>
+            </div>
+            <div class="infrastructure-fields infrastructure-application-fields">
+              <mat-form-field appearance="outline" class="environment-field">
+                <mat-label>Type</mat-label>
+                <mat-select [name]="'infrastructureEnvironment' + i" [(ngModel)]="group.environment">
+                  <mat-option *ngFor="let environment of addressEnvironments" [value]="environment">{{ environmentLabel(environment) }}</mat-option>
+                </mat-select>
+              </mat-form-field>
+              <mat-form-field appearance="outline">
+                <mat-label>Server</mat-label>
+                <input matInput [name]="'infrastructureApplicationServer' + i" [(ngModel)]="group.applicationServerAddress">
+              </mat-form-field>
+              <mat-form-field appearance="outline">
+                <mat-label>Type</mat-label>
+                <mat-select [name]="'infrastructureApplicationServerType' + i" [(ngModel)]="group.applicationServerType">
+                  <mat-option [value]="null">Not set</mat-option>
+                  <mat-option *ngFor="let type of applicationServerTypes" [value]="type">{{ type }}</mat-option>
+                </mat-select>
+              </mat-form-field>
+            </div>
+          </div>
+
+          <div class="infrastructure-block infrastructure-database-block">
+            <div class="infrastructure-block-title">
+              <span>Database server</span>
+              <mat-divider></mat-divider>
+            </div>
+            <div class="infrastructure-fields infrastructure-server-fields">
+              <mat-form-field appearance="outline">
+                <mat-label>Server</mat-label>
+                <input matInput [name]="'infrastructureDatabaseServer' + i" [(ngModel)]="group.databaseServerAddress">
+              </mat-form-field>
+              <mat-form-field appearance="outline">
+                <mat-label>Type</mat-label>
+                <mat-select [name]="'infrastructureDatabaseServerType' + i" [(ngModel)]="group.databaseServerType">
+                  <mat-option [value]="null">Not set</mat-option>
+                  <mat-option *ngFor="let type of databaseServerTypes" [value]="type">{{ type }}</mat-option>
+                </mat-select>
+              </mat-form-field>
+            </div>
+            <div class="infrastructure-fields infrastructure-database-fields">
+              <mat-form-field appearance="outline">
+                <mat-label>Database name</mat-label>
+                <input matInput [name]="'infrastructureDatabaseName' + i" [(ngModel)]="group.databaseName">
+              </mat-form-field>
+              <mat-form-field appearance="outline">
+                <mat-label>Login name</mat-label>
+                <input matInput [name]="'infrastructureDatabaseLoginName' + i" [(ngModel)]="group.databaseLoginName">
+              </mat-form-field>
+              <mat-form-field appearance="outline">
+                <mat-label>Authentication method</mat-label>
+                <mat-select [name]="'infrastructureDatabaseAuthenticationMethod' + i" [(ngModel)]="group.databaseAuthenticationMethod">
+                  <mat-option [value]="null">Not set</mat-option>
+                  <mat-option *ngFor="let method of databaseAuthenticationMethods" [value]="method">{{ method }}</mat-option>
+                </mat-select>
+              </mat-form-field>
+            </div>
+          </div>
+
+          <div class="infrastructure-block infrastructure-mail-block">
+            <div class="infrastructure-block-title">
+              <span>Mail server</span>
+              <mat-divider></mat-divider>
+            </div>
+            <div class="infrastructure-fields infrastructure-mail-fields">
+              <mat-form-field appearance="outline">
+                <mat-label>Server</mat-label>
+                <input matInput [name]="'infrastructureMailServer' + i" [(ngModel)]="group.mailServer">
+              </mat-form-field>
+              <mat-form-field appearance="outline">
+                <mat-label>Port (protocol)</mat-label>
+                <input matInput [name]="'infrastructureMailServerPortProtocol' + i" [(ngModel)]="group.mailServerPortProtocol">
+              </mat-form-field>
+              <mat-form-field appearance="outline">
+                <mat-label>Username</mat-label>
+                <input matInput [name]="'infrastructureMailUsername' + i" [(ngModel)]="group.mailUsername">
+              </mat-form-field>
+              <mat-form-field appearance="outline">
+                <mat-label>Sender address</mat-label>
+                <input matInput type="email" [name]="'infrastructureMailSenderAddress' + i" [(ngModel)]="group.mailSenderAddress">
+              </mat-form-field>
+            </div>
+          </div>
+
+          <div class="infrastructure-block infrastructure-address-block">
+            <div class="infrastructure-block-title">
+              <span>Access</span>
+              <mat-divider></mat-divider>
+            </div>
+            <div class="infrastructure-fields infrastructure-address-fields">
+              <mat-form-field appearance="outline">
+                <mat-label>Application URL</mat-label>
+                <input matInput [name]="'infrastructureApplicationAddress' + i" [(ngModel)]="group.applicationAddress">
+              </mat-form-field>
+            </div>
+          </div>
+
           <button mat-icon-button type="button" matTooltip="Remove infrastructure group" (click)="removeInfrastructureGroup(i)">
             <mat-icon class="material-symbols-outlined">delete</mat-icon>
           </button>

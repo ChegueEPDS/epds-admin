@@ -1,6 +1,7 @@
 const dns = require('dns').promises;
 const DomainMonitor = require('../models/domainMonitor');
 const DomainHealthCheck = require('../models/domainHealthCheck');
+const Tenant = require('../models/tenant');
 const { getDomainPageSpeedOverview, storeDomainPageSpeedScan } = require('../services/pageSpeedService');
 const { generatePublicStatusPdf } = require('../services/domainStatusPdfService');
 const {
@@ -32,10 +33,42 @@ function normalizeOwner(input) {
   return DomainMonitor.owners.find((owner) => owner.toLowerCase() === raw.toLowerCase()) || null;
 }
 
-function ownerFromSlug(input) {
+function isSuperAdmin(req) {
+  return req.role === 'SuperAdmin';
+}
+
+async function tenantForDomain(req) {
+  if (!isSuperAdmin(req)) {
+    if (!req.scope?.tenantId) return null;
+    return Tenant.findById(req.scope.tenantId);
+  }
+  const tenantId = String(req.body?.tenantId || '').trim();
+  if (!tenantId) return null;
+  return Tenant.findById(tenantId);
+}
+
+function defaultOwnerForTenant(tenant) {
+  if (tenant?.name === 'exnb-exva') return 'ExNB';
+  return String(tenant?.displayName || tenant?.name || 'EPDS').trim() || 'EPDS';
+}
+
+function ownerForTenant(tenant, input) {
+  if (tenant?.name !== 'exnb-exva') return defaultOwnerForTenant(tenant);
+  return normalizeOwner(input) || defaultOwnerForTenant(tenant);
+}
+
+async function populateDomainTenant(domain) {
+  await domain.populate('tenantId', 'name displayName');
+  return domain;
+}
+
+async function ownerFromSlug(input) {
   const raw = String(input || '').trim().toLowerCase();
   if (!raw || raw === 'all') return 'All';
-  return DomainMonitor.owners.find((owner) => ownerSlug(owner) === raw) || null;
+  const staticOwner = DomainMonitor.owners.find((owner) => ownerSlug(owner) === raw);
+  if (staticOwner) return staticOwner;
+  const owners = await DomainMonitor.distinct('owner');
+  return owners.find((owner) => ownerSlug(owner) === raw) || null;
 }
 
 function boundedNumber(value, fallback, min, max) {
@@ -129,10 +162,12 @@ exports.createDomain = async (req, res, next) => {
   try {
     const name = String(req.body?.name || '').trim();
     const normalizedUrl = normalizeBaseUrl(req.body?.baseUrl);
-    const owner = normalizeOwner(req.body?.owner);
+    const tenant = await tenantForDomain(req);
+    const owner = isSuperAdmin(req) ? ownerForTenant(tenant, req.body?.owner) : defaultOwnerForTenant(tenant);
 
     if (!name) return res.status(400).json({ error: 'Name is required' });
-    if (!owner) return res.status(400).json({ error: 'Valid owner is required' });
+    if (!tenant) return res.status(400).json({ error: 'Valid tenant owner is required' });
+    if (!owner) return res.status(400).json({ error: 'Valid owner badge is required' });
     await assertPublicUrl(normalizedUrl);
 
     const domain = await DomainMonitor.create({
@@ -140,7 +175,7 @@ exports.createDomain = async (req, res, next) => {
       baseUrl: normalizedUrl,
       normalizedUrl,
       owner,
-      tenantId: req.scope?.tenantId,
+      tenantId: tenant._id,
       enabled: req.body?.enabled !== false,
       healthConfig: normalizeHealthConfig(req.body?.healthConfig),
       createdBy: req.userId
@@ -148,7 +183,7 @@ exports.createDomain = async (req, res, next) => {
 
     if (domain.enabled) await runDomainCheck(domain);
     const summary = await summarizeRecentChecks(domain._id);
-    return res.status(201).json({ domain: presentDomain(domain, summary) });
+    return res.status(201).json({ domain: presentDomain(await populateDomainTenant(domain), summary) });
   } catch (err) {
     if (err.code === 11000) return res.status(409).json({ error: 'Domain URL already exists' });
     if (err.statusCode) return res.status(err.statusCode).json({ error: err.message });
@@ -174,9 +209,20 @@ exports.updateDomain = async (req, res, next) => {
       domain.normalizedUrl = normalizedUrl;
     }
 
-    if (Object.prototype.hasOwnProperty.call(req.body, 'owner')) {
-      const owner = normalizeOwner(req.body.owner);
-      if (!owner) return res.status(400).json({ error: 'Valid owner is required' });
+    let selectedTenant = null;
+    if (isSuperAdmin(req) && Object.prototype.hasOwnProperty.call(req.body, 'tenantId')) {
+      const tenantId = String(req.body.tenantId || '').trim();
+      if (!tenantId) return res.status(400).json({ error: 'Valid tenant owner is required' });
+      const tenant = await Tenant.findById(tenantId);
+      if (!tenant) return res.status(404).json({ error: 'Tenant not found' });
+      domain.tenantId = tenant._id;
+      selectedTenant = tenant;
+    }
+
+    if (isSuperAdmin(req) && (selectedTenant || Object.prototype.hasOwnProperty.call(req.body, 'owner'))) {
+      const tenant = selectedTenant || await Tenant.findById(domain.tenantId);
+      const owner = ownerForTenant(tenant, req.body.owner);
+      if (!owner) return res.status(400).json({ error: 'Valid owner badge is required' });
       domain.owner = owner;
     }
 
@@ -191,7 +237,7 @@ exports.updateDomain = async (req, res, next) => {
     domain.updatedBy = req.userId;
     await domain.save();
     const summary = await summarizeRecentChecks(domain._id);
-    return res.json({ domain: presentDomain(domain, summary) });
+    return res.json({ domain: presentDomain(await populateDomainTenant(domain), summary) });
   } catch (err) {
     if (err.code === 11000) return res.status(409).json({ error: 'Domain URL already exists' });
     if (err.statusCode) return res.status(err.statusCode).json({ error: err.message });
@@ -218,7 +264,7 @@ exports.checkDomainNow = async (req, res, next) => {
 
     const check = await runDomainCheck(domain);
     const summary = await summarizeRecentChecks(domain._id);
-    return res.json({ domain: presentDomain(domain, summary), check });
+    return res.json({ domain: presentDomain(await populateDomainTenant(domain), summary), check });
   } catch (err) {
     if (err.statusCode) return res.status(err.statusCode).json({ error: err.message });
     return next(err);
@@ -232,7 +278,7 @@ exports.deepScanDomain = async (req, res, next) => {
 
     const result = await storeDomainPageSpeedScan(domain, 'manual');
     return res.json({
-      domain: presentDomain(domain, await summarizeRecentChecks(domain._id)),
+      domain: presentDomain(await populateDomainTenant(domain), await summarizeRecentChecks(domain._id)),
       ...result
     });
   } catch (err) {
@@ -248,7 +294,7 @@ exports.getDomainPageSpeed = async (req, res, next) => {
 
     const pageSpeed = await getDomainPageSpeedOverview(domain._id);
     return res.json({
-      domain: presentDomain(domain, await summarizeRecentChecks(domain._id)),
+      domain: presentDomain(await populateDomainTenant(domain), await summarizeRecentChecks(domain._id)),
       ...pageSpeed
     });
   } catch (err) {
@@ -269,7 +315,7 @@ exports.getDomainChecks = async (req, res, next) => {
       .limit(3000)
       .lean();
 
-    const details = await getDomainStatusDetails(domain, checks);
+    const details = await getDomainStatusDetails(await populateDomainTenant(domain), checks);
 
     return res.json({
       domain: details.domain,
@@ -300,7 +346,7 @@ exports.getDomainChecks = async (req, res, next) => {
 
 exports.getPublicStatusReport = async (req, res, next) => {
   try {
-    const owner = ownerFromSlug(req.params.owner);
+    const owner = await ownerFromSlug(req.params.owner);
     if (!owner) return res.status(404).json({ error: 'Owner not found' });
     const report = await buildPublicStatusReport({ owner: owner === 'All' ? 'all' : owner });
     return res.json(report);
@@ -311,7 +357,7 @@ exports.getPublicStatusReport = async (req, res, next) => {
 
 exports.downloadPublicStatusReportPdf = async (req, res, next) => {
   try {
-    const owner = ownerFromSlug(req.params.owner);
+    const owner = await ownerFromSlug(req.params.owner);
     if (!owner) return res.status(404).json({ error: 'Owner not found' });
     const report = await buildPublicStatusReport({ owner: owner === 'All' ? 'all' : owner });
     const pdf = await generatePublicStatusPdf(report);

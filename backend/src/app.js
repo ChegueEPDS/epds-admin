@@ -12,6 +12,7 @@ const cookieParser = require('cookie-parser');
 const rateLimit = require('express-rate-limit');
 const { connectDb, checkDbHealth } = require('./db');
 const authRoutes = require('./routes/authRoutes');
+const adminRoutes = require('./routes/adminRoutes');
 const mailRoutes = require('./routes/mailRoutes');
 const domainHealthRoutes = require('./routes/domainHealthRoutes');
 const licenseRoutes = require('./routes/licenseRoutes');
@@ -19,6 +20,8 @@ const effortRoutes = require('./routes/effortRoutes');
 const { startDomainHealthMonitor } = require('./services/domainMonitorService');
 const { startDomainDailyReportScheduler } = require('./services/domainDailyReportService');
 const { startDomainPageSpeedScheduler } = require('./services/domainPageSpeedSchedulerService');
+const { seedSuperAdmin } = require('./services/userSeedService');
+const { normalizeTenantTypes } = require('./services/tenantMigrationService');
 
 const app = express();
 
@@ -69,6 +72,7 @@ app.use(cors({
 app.use(rateLimit({ windowMs: 15 * 60 * 1000, limit: 300 }));
 
 app.use('/api', authRoutes);
+app.use('/api', adminRoutes);
 app.use('/api', mailRoutes);
 app.use('/api', domainHealthRoutes);
 app.use('/api', licenseRoutes);
@@ -82,6 +86,8 @@ app.use((err, req, res, next) => {
 if (require.main === module) {
   const port = Number(process.env.PORT || 4301);
   connectDb()
+    .then(() => normalizeTenantTypes())
+    .then(() => seedSuperAdmin())
     .then(() => {
       startDomainHealthMonitor();
       startDomainDailyReportScheduler();

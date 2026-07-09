@@ -1,31 +1,46 @@
 <div class="app-shell">
   <mat-toolbar class="toolbar" *ngIf="!isPublicStatusRoute">
-    <a class="brand" routerLink="/home" aria-label="EPDS Admin home">
+    <a class="brand" [routerLink]="auth.defaultRouteAfterLogin()" aria-label="EPDS Admin home">
       <img src="/public/logo.svg" alt="EPDS Admin">
-      <span>EPDS Admin</span>
     </a>
 
-    <nav class="nav" *ngIf="(auth.isLoggedIn$ | async) && auth.canAccessAdminFeatures()">
+    <nav class="nav" *ngIf="(auth.isLoggedIn$ | async) && auth.canAccessAdminFeatures() && !auth.hasSingleFeatureAccess()">
       <a mat-button routerLink="/home" routerLinkActive="active-link">HOME</a>
-      <a mat-button routerLink="/mail" routerLinkActive="active-link" *ngIf="auth.hasEpdsEmail()">
+      <a mat-button routerLink="/mail" routerLinkActive="active-link" *ngIf="auth.canAccessFeature('mail')">
         <mat-icon class="material-symbols-outlined">mail</mat-icon>
         MAIL
       </a>
-      <a mat-button routerLink="/domain-health" routerLinkActive="active-link">
+      <a mat-button routerLink="/domain-health" routerLinkActive="active-link" *ngIf="auth.canAccessFeature('domainHealth')">
         <mat-icon class="material-symbols-outlined">health_and_safety</mat-icon>
         DOMAIN HEALTH
       </a>
-      <a mat-button routerLink="/licenses" routerLinkActive="active-link">
+      <a mat-button routerLink="/licenses" routerLinkActive="active-link" *ngIf="auth.canAccessFeature('licenses')">
         <mat-icon class="material-symbols-outlined">license</mat-icon>
         LICENSES
       </a>
-      <a mat-button routerLink="/effort-tracking" routerLinkActive="active-link" *ngIf="auth.hasEpdsEmail()">
+      <a mat-button routerLink="/effort-tracking" routerLinkActive="active-link" *ngIf="auth.canAccessFeature('effortTracking')">
         <mat-icon class="material-symbols-outlined">timer</mat-icon>
         EFFORT TRACKING
       </a>
     </nav>
 
     <span class="spacer"></span>
+
+    <ng-container *ngIf="auth.user$ | async as user">
+      <button mat-icon-button *ngIf="user.role === 'SuperAdmin'" [matMenuTriggerFor]="settingsMenu" aria-label="Settings">
+        <mat-icon class="material-symbols-outlined">settings</mat-icon>
+      </button>
+      <mat-menu #settingsMenu="matMenu">
+        <a mat-menu-item routerLink="/admin/users">
+          <mat-icon class="material-symbols-outlined">group</mat-icon>
+          Users
+        </a>
+        <a mat-menu-item routerLink="/admin/tenants">
+          <mat-icon class="material-symbols-outlined">business</mat-icon>
+          Tenants
+        </a>
+      </mat-menu>
+    </ng-container>
 
     <button mat-button *ngIf="!(auth.isLoggedIn$ | async)" routerLink="/login">
       <mat-icon class="material-symbols-outlined">login</mat-icon>

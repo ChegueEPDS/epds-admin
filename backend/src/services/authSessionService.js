@@ -79,8 +79,23 @@ function parseCookies(req) {
 
 async function buildUserContext(user, session = null) {
   const tenant = user.tenantId
-    ? await Tenant.findById(user.tenantId).lean().select('name type plan features professionRbacEnabled')
+    ? await Tenant.findById(user.tenantId).lean().select('name displayName type features professionRbacEnabled')
     : null;
+  const featureAccess = (value) => {
+    if (typeof value === 'boolean') return { enabled: value, edit: value, delete: value };
+    const enabled = Boolean(value?.enabled);
+    return {
+      enabled,
+      edit: enabled && Boolean(value?.edit),
+      delete: enabled && Boolean(value?.delete)
+    };
+  };
+  const tenantFeatures = {
+    mail: featureAccess(tenant?.features?.mail),
+    domainHealth: featureAccess(tenant?.features?.domainHealth),
+    licenses: featureAccess(tenant?.features?.licenses),
+    effortTracking: featureAccess(tenant?.features?.effortTracking)
+  };
 
   return {
     id: String(user._id),
@@ -88,14 +103,14 @@ async function buildUserContext(user, session = null) {
     role: user.role,
     tenantId: user.tenantId ? String(user.tenantId) : null,
     tenantName: tenant?.name || null,
+    tenantDisplayName: tenant?.displayName || tenant?.name || null,
     tenantType: tenant?.type || null,
     firstName: user.firstName || '',
     lastName: user.lastName || '',
     email: user.email || '',
     nickname: user.nickname || null,
     azureId: user.azureId || null,
-    plan: tenant?.plan || null,
-    tenantFeatures: tenant?.features || {},
+    tenantFeatures,
     professionRbacEnabled: Boolean(tenant?.professionRbacEnabled),
     permissions: ['*:*'],
     professions: user.professions || [],
@@ -124,6 +139,7 @@ async function signAccessToken(user, session) {
     role: ctx.role,
     tenantId: ctx.tenantId,
     tenantName: ctx.tenantName,
+    tenantDisplayName: ctx.tenantDisplayName,
     tenantType: ctx.tenantType,
     firstName: ctx.firstName,
     lastName: ctx.lastName,
@@ -181,7 +197,7 @@ async function rotateRefreshToken({ refreshToken, req }) {
     });
     if (!session) throw new Error('Invalid refresh token');
     const user = await User.findById(session.userId);
-    if (!user || !user.tenantId) throw new Error('Invalid session user');
+    if (!user) throw new Error('Invalid session user');
     const accessToken = await signAccessToken(user, session);
     return {
       session,
@@ -198,7 +214,7 @@ async function rotateRefreshToken({ refreshToken, req }) {
   }
 
   const user = await User.findById(session.userId);
-  if (!user || !user.tenantId) throw new Error('Invalid session user');
+  if (!user) throw new Error('Invalid session user');
 
   const nextRefreshToken = randomToken();
   session.previousRefreshTokenHash = refreshHash;
@@ -236,7 +252,7 @@ async function authenticateAccessToken(token) {
   }
 
   const user = await User.findById(session.userId).lean();
-  if (!user || !user.tenantId) throw new Error('Invalid session user');
+  if (!user) throw new Error('Invalid session user');
   return { decoded, session, user: await buildUserContext(user, session) };
 }
 

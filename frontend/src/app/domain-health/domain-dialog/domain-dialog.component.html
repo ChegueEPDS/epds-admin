@@ -9,8 +9,14 @@
       <mat-label>Base URL</mat-label>
       <input matInput name="baseUrl" [(ngModel)]="model.baseUrl" placeholder="https://example.com" required>
     </mat-form-field>
-    <mat-form-field appearance="outline">
+    <mat-form-field appearance="outline" *ngIf="canEditOwner">
       <mat-label>Owner</mat-label>
+      <mat-select name="tenantId" [(ngModel)]="model.tenantId" required>
+        <mat-option *ngFor="let tenant of data.tenants || []" [value]="tenant.id">{{ tenantLabel(tenant) }}</mat-option>
+      </mat-select>
+    </mat-form-field>
+    <mat-form-field appearance="outline" *ngIf="needsOwnerBadge">
+      <mat-label>Owner badge</mat-label>
       <mat-select name="owner" [(ngModel)]="model.owner" required>
         <mat-option *ngFor="let owner of owners" [value]="owner">{{ owner }}</mat-option>
       </mat-select>

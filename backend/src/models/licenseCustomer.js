@@ -13,6 +13,7 @@ const OBJECT_LIMIT_OPTIONS = [
 ];
 
 const DATABASE_SERVER_TYPES = ['MSSQL', 'PostgreSQL', 'Oracle'];
+const DATABASE_AUTHENTICATION_METHODS = ['Native', 'Kerberos'];
 const APPLICATION_SERVER_TYPES = ['Linux', 'Windows'];
 const CONTACT_AREAS = ['IT', 'Üzlet', 'Beszerzés'];
 const ADDRESS_ENVIRONMENTS = ['prod', 'test', 'dev'];
@@ -51,6 +52,13 @@ const LicenseCustomerSchema = new mongoose.Schema(
       applicationServerType: { type: String, enum: APPLICATION_SERVER_TYPES },
       databaseServerAddress: { type: String, trim: true, default: '' },
       databaseServerType: { type: String, enum: DATABASE_SERVER_TYPES },
+      databaseName: { type: String, trim: true, default: '' },
+      databaseLoginName: { type: String, trim: true, default: '' },
+      databaseAuthenticationMethod: { type: String, enum: DATABASE_AUTHENTICATION_METHODS },
+      mailServer: { type: String, trim: true, default: '' },
+      mailServerPortProtocol: { type: String, trim: true, default: '' },
+      mailUsername: { type: String, trim: true, default: '' },
+      mailSenderAddress: { type: String, trim: true, default: '' },
       applicationAddress: { type: String, trim: true, default: '' }
     }],
     accessAddresses: [{
@@ -89,6 +97,7 @@ LicenseCustomerSchema.index(
 
 LicenseCustomerSchema.statics.objectLimitOptions = OBJECT_LIMIT_OPTIONS;
 LicenseCustomerSchema.statics.databaseServerTypes = DATABASE_SERVER_TYPES;
+LicenseCustomerSchema.statics.databaseAuthenticationMethods = DATABASE_AUTHENTICATION_METHODS;
 LicenseCustomerSchema.statics.applicationServerTypes = APPLICATION_SERVER_TYPES;
 LicenseCustomerSchema.statics.contactAreas = CONTACT_AREAS;
 LicenseCustomerSchema.statics.addressEnvironments = ADDRESS_ENVIRONMENTS;

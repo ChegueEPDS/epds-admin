@@ -7,15 +7,19 @@ import { DomainHealthComponent } from './domain-health/domain-health.component';
 import { LicensesComponent } from './licenses/licenses.component';
 import { EffortTrackingComponent } from './effort-tracking/effort-tracking.component';
 import { PublicStatusComponent } from './public-status/public-status.component';
+import { AdminUsersComponent } from './admin/admin-users/admin-users.component';
+import { AdminTenantsComponent } from './admin/admin-tenants/admin-tenants.component';
 
 export const routes: Routes = [
   { path: 'login', component: LoginComponent },
   { path: 'status/:owner', component: PublicStatusComponent },
   { path: 'home', component: HomeComponent, canActivate: [AuthGuard] },
-  { path: 'mail', component: MailboxComponent, canActivate: [AuthGuard], data: { requiresEpdsEmail: true } },
-  { path: 'domain-health', component: DomainHealthComponent, canActivate: [AuthGuard] },
-  { path: 'licenses', component: LicensesComponent, canActivate: [AuthGuard], data: { requiresAdminFeatures: true } },
-  { path: 'effort-tracking', component: EffortTrackingComponent, canActivate: [AuthGuard], data: { requiresAdminFeatures: true, requiresEpdsEmail: true } },
+  { path: 'mail', component: MailboxComponent, canActivate: [AuthGuard], data: { featureKey: 'mail' } },
+  { path: 'domain-health', component: DomainHealthComponent, canActivate: [AuthGuard], data: { featureKey: 'domainHealth' } },
+  { path: 'licenses', component: LicensesComponent, canActivate: [AuthGuard], data: { featureKey: 'licenses' } },
+  { path: 'effort-tracking', component: EffortTrackingComponent, canActivate: [AuthGuard], data: { featureKey: 'effortTracking' } },
+  { path: 'admin/users', component: AdminUsersComponent, canActivate: [AuthGuard], data: { requiresSuperAdmin: true } },
+  { path: 'admin/tenants', component: AdminTenantsComponent, canActivate: [AuthGuard], data: { requiresSuperAdmin: true } },
   { path: '', pathMatch: 'full', redirectTo: 'home' },
   { path: '**', redirectTo: 'home' }
 ];

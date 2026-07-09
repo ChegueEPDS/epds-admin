@@ -12,11 +12,13 @@ import { MatSelectModule } from '@angular/material/select';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import {
+  LicenseClientTenant,
   LicenseCustomer,
   LicenseService,
   LicenseStatus
 } from '../services/license.service';
 import { LicenseDialogComponent, LicenseDialogResult } from './license-dialog/license-dialog.component';
+import { AuthService } from '../services/auth.service';
 
 type StatusFilter = 'all' | LicenseStatus | 'expired';
 
@@ -41,6 +43,7 @@ type StatusFilter = 'all' | LicenseStatus | 'expired';
 })
 export class LicensesComponent implements OnInit {
   licenses: LicenseCustomer[] = [];
+  clientTenants: LicenseClientTenant[] = [];
   searchTerm = '';
   statusFilter: StatusFilter = 'all';
   isLoading = false;
@@ -48,7 +51,8 @@ export class LicensesComponent implements OnInit {
   constructor(
     private licenseService: LicenseService,
     private dialog: MatDialog,
-    private snackBar: MatSnackBar
+    private snackBar: MatSnackBar,
+    public auth: AuthService
   ) {}
 
   ngOnInit(): void {
@@ -71,6 +75,7 @@ export class LicensesComponent implements OnInit {
     try {
       const response = await firstValueFrom(this.licenseService.listLicenses());
       this.licenses = response.licenses;
+      this.clientTenants = response.clientTenants || [];
     } catch (err) {
       this.showError('Could not load licenses');
     } finally {
@@ -82,7 +87,12 @@ export class LicensesComponent implements OnInit {
     const ref = this.dialog.open(LicenseDialogComponent, {
       width: '1280px',
       maxWidth: 'calc(100vw - 24px)',
-      data: { license }
+      data: {
+        license,
+        clientTenants: this.clientTenants,
+        canEdit: this.auth.canEditFeature('licenses'),
+        canDelete: this.auth.canDeleteFeature('licenses')
+      }
     });
     const result = await firstValueFrom(ref.afterClosed());
     if (!result) return;

@@ -5,6 +5,7 @@ const { requireAuth } = require('../middlewares/authMiddleware');
 const router = express.Router();
 
 router.post('/microsoft-login', controller.microsoftLogin);
+router.post('/login', controller.login);
 router.post('/renew-token', controller.renewToken);
 router.post('/auth/refresh', controller.renewToken);
 router.post('/logout', requireAuth, controller.logout);

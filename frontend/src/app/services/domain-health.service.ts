@@ -22,14 +22,16 @@ export type DomainHealthResult = {
 
 export type DomainMonitorStatus = 'ok' | 'warning' | 'error' | 'unknown';
 export type DomainPerformanceStatus = 'ok' | 'slow' | 'very_slow' | 'unknown';
-export type DomainOwner = 'Stahl' | 'Robex' | 'Veproil' | 'ExNB/Exva' | 'Ind-Ex' | 'EPDS';
+export type DomainOwner = 'Stahl' | 'Robex' | 'Veproil' | 'ExNB' | 'EXVA' | 'IndEx' | 'EPDS';
 
 export type DomainMonitor = {
   id: string;
   name: string;
   baseUrl: string;
-  owner: DomainOwner;
+  owner: string;
   tenantId?: string | null;
+  tenantName?: string | null;
+  tenantDisplayName?: string | null;
   enabled: boolean;
   lastCheckedAt?: string;
   lastStatus: DomainMonitorStatus;
@@ -229,7 +231,7 @@ export type PublicStatusDomain = {
 };
 
 export type PublicStatusReport = {
-  owner: DomainOwner | 'All';
+  owner: string | 'All';
   ownerSlug: string;
   generatedAt: string;
   summary: {
@@ -255,7 +257,8 @@ export type DomainHealthConfig = {
 export type DomainPayload = {
   name: string;
   baseUrl: string;
-  owner: DomainOwner;
+  owner?: DomainOwner;
+  tenantId?: string | null;
   enabled: boolean;
   healthConfig: DomainHealthConfig;
 };

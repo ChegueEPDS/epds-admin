@@ -3,7 +3,7 @@ const mongoose = require('mongoose');
 const SessionSchema = new mongoose.Schema(
   {
     userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true, index: true },
-    tenantId: { type: mongoose.Schema.Types.ObjectId, ref: 'Tenant', required: true, index: true },
+    tenantId: { type: mongoose.Schema.Types.ObjectId, ref: 'Tenant', index: true },
     clientType: { type: String, enum: ['web', 'mobile'], default: 'web', index: true },
     refreshTokenHash: { type: String, required: true, index: true },
     previousRefreshTokenHash: { type: String, default: null, index: true },

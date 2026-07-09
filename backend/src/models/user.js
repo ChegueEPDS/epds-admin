@@ -8,7 +8,7 @@ const UserSchema = new mongoose.Schema(
     email: { type: String, required: true, unique: true, lowercase: true },
     nickname: { type: String },
     tenantId: { type: mongoose.Schema.Types.ObjectId, ref: 'Tenant', index: true },
-    role: { type: String, enum: ['User', 'Admin', 'SuperAdmin'], default: 'User', required: true },
+    role: { type: String, enum: ['User', 'Admin', 'Finance', 'SuperAdmin'], default: 'User', required: true },
     professions: [{ type: String }],
     password: { type: String },
     emailVerified: { type: Boolean, default: true },

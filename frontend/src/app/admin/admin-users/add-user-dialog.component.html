@@ -1,0 +1,50 @@
+<h2 mat-dialog-title>{{ title }}</h2>
+
+<form class="dialog-form" (ngSubmit)="save()">
+  <mat-dialog-content>
+    <div class="name-grid">
+      <mat-form-field appearance="outline">
+        <mat-label>First name</mat-label>
+        <input matInput name="firstName" [(ngModel)]="firstName" [disabled]="isMicrosoftUser" required>
+      </mat-form-field>
+
+      <mat-form-field appearance="outline">
+        <mat-label>Last name</mat-label>
+        <input matInput name="lastName" [(ngModel)]="lastName" [disabled]="isMicrosoftUser" required>
+      </mat-form-field>
+    </div>
+
+    <mat-form-field appearance="outline">
+      <mat-label>Email</mat-label>
+      <input matInput type="email" name="email" [(ngModel)]="email" [disabled]="isMicrosoftUser" required>
+    </mat-form-field>
+
+    <mat-form-field appearance="outline" *ngIf="!isMicrosoftUser">
+      <mat-label>Password</mat-label>
+      <input matInput type="password" name="password" [(ngModel)]="password" [required]="!isEditMode">
+    </mat-form-field>
+
+    <mat-form-field appearance="outline">
+      <mat-label>Tenant</mat-label>
+      <mat-select name="tenantId" [(ngModel)]="tenantId" [disabled]="isMicrosoftUser" required>
+        <mat-option *ngFor="let tenant of data.tenants" [value]="tenant.id">
+          {{ tenantLabel(tenant) }} ({{ tenant.type }})
+        </mat-option>
+      </mat-select>
+    </mat-form-field>
+
+    <mat-form-field appearance="outline">
+      <mat-label>Role</mat-label>
+      <mat-select name="role" [(ngModel)]="role" required>
+        <mat-option *ngFor="let roleOption of roles" [value]="roleOption.value">
+          {{ roleOption.label }}
+        </mat-option>
+      </mat-select>
+    </mat-form-field>
+  </mat-dialog-content>
+
+  <mat-dialog-actions align="end">
+    <button mat-button type="button" mat-dialog-close [disabled]="saving()">Cancel</button>
+    <button mat-flat-button color="primary" type="submit" [disabled]="saving()">{{ submitLabel }}</button>
+  </mat-dialog-actions>
+</form>

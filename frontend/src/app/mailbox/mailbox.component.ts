@@ -14,6 +14,7 @@ import { MatTabsModule } from '@angular/material/tabs';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { MailApiService } from '../services/mail-api.service';
 import { RichTextEditorComponent } from '../shared/rich-text-editor/rich-text-editor.component';
+import { AuthService } from '../services/auth.service';
 
 type MailFolder = 'inbox' | 'sentitems';
 
@@ -83,7 +84,11 @@ export class MailboxComponent implements OnInit {
     subject: '',
     html: ''
   };
-  constructor(private mailApi: MailApiService, private snackBar: MatSnackBar) {}
+  constructor(
+    private mailApi: MailApiService,
+    private snackBar: MatSnackBar,
+    public auth: AuthService
+  ) {}
 
   ngOnInit(): void {
     void this.reload();

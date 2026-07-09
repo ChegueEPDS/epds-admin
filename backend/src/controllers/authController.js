@@ -1,5 +1,6 @@
 const User = require('../models/user');
 const Tenant = require('../models/tenant');
+const bcrypt = require('bcryptjs');
 const { verifyMicrosoftAccessToken } = require('../services/microsoftTokenVerifier');
 const {
   buildSessionMetadata,
@@ -44,9 +45,40 @@ function assertAllowedCompanyEmail(email) {
 }
 
 function tenantNameFromEmail(email) {
+  const normalizedEmail = String(email || '').trim().toLowerCase();
+  if (normalizedEmail === 'development@epds.hu') return 'developer';
   const domain = String(email || '').split('@').pop()?.toLowerCase() || '';
+  const mappedTenant = {
+    'exnb.eu': 'exnb-exva',
+    'exva.hu': 'exnb-exva',
+    'rstahl.hu': 'stahl',
+    'veproil.hu': 'veproil',
+    'epds.hu': 'epds',
+    'ind-ex.ae': 'ind-ex',
+    'ind-ex.eu': 'ind-ex',
+    'robex.hu': 'robex',
+    'robex.ro': 'robex'
+  }[domain];
+  if (mappedTenant) return mappedTenant;
   const base = domain.split('.')[0] || process.env.EPDS_ADMIN_DEFAULT_TENANT_NAME || 'epds-admin';
   return slugifyTenantName(base);
+}
+
+function tenantDisplayNameFromEmail(email, name) {
+  const normalizedEmail = String(email || '').trim().toLowerCase();
+  if (normalizedEmail === 'development@epds.hu') return 'Developer';
+  const domain = String(email || '').split('@').pop()?.toLowerCase() || '';
+  return {
+    'exnb.eu': 'ExNB/EXVA',
+    'exva.hu': 'ExNB/EXVA',
+    'rstahl.hu': 'Stahl',
+    'veproil.hu': 'Veproil',
+    'epds.hu': 'EPDS',
+    'ind-ex.ae': 'IndEx',
+    'ind-ex.eu': 'IndEx',
+    'robex.hu': 'Robex',
+    'robex.ro': 'Robex'
+  }[domain] || name;
 }
 
 function namePartsFromMicrosoftToken(decodedToken, email) {
@@ -63,16 +95,26 @@ function namePartsFromMicrosoftToken(decodedToken, email) {
 
 async function ensureCompanyTenantForEmail(user, email) {
   const name = tenantNameFromEmail(email);
+  const displayName = tenantDisplayNameFromEmail(email, name);
   let tenant = await Tenant.findOne({ name });
   if (!tenant) {
     tenant = await Tenant.create({
       name,
+      displayName,
       type: 'company',
-      plan: 'team',
+      features: {
+        mail: { enabled: false, edit: false, delete: false },
+        domainHealth: { enabled: true, edit: false, delete: false },
+        licenses: { enabled: false, edit: false, delete: false },
+        effortTracking: { enabled: false, edit: false, delete: false }
+      },
       ownerUserId: user._id,
       seats: { max: 0, used: 0 },
       seatsManaged: 'manual'
     });
+  } else if (!tenant.displayName) {
+    tenant.displayName = displayName;
+    await tenant.save();
   }
   if (!user.tenantId || String(user.tenantId) !== String(tenant._id)) {
     user.tenantId = tenant._id;
@@ -122,6 +164,31 @@ exports.microsoftLogin = async (req, res) => {
   } catch (error) {
     console.error('[auth] microsoft login failed:', error);
     return res.status(error.statusCode || 500).json({ error: error.statusCode ? error.message : 'Microsoft login failed' });
+  }
+};
+
+exports.login = async (req, res) => {
+  try {
+    const email = String(req.body?.email || '').trim().toLowerCase();
+    const password = String(req.body?.password || '');
+    if (!email || !password) return res.status(400).json({ error: 'Email and password are required' });
+
+    const user = await User.findOne({ email });
+    if (!user?.password) return res.status(401).json({ error: 'Invalid email or password' });
+    const ok = await bcrypt.compare(password, user.password);
+    if (!ok) return res.status(401).json({ error: 'Invalid email or password' });
+
+    if (email !== 'support@epds.hu' && !['User', 'Admin', 'Finance'].includes(user.role)) {
+      user.role = 'User';
+    }
+    user.lastLoginAt = new Date();
+    await user.save();
+
+    const result = await createSession({ user, req });
+    return sendAuthResult(req, res, result);
+  } catch (error) {
+    console.error('[auth] password login failed:', error);
+    return res.status(500).json({ error: 'Login failed' });
   }
 };
 

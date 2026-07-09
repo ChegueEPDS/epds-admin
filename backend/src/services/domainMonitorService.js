@@ -67,8 +67,7 @@ async function assertPublicUrl(normalizedUrl) {
 }
 
 function isGlobalTenant(scope = {}) {
-  const globalTenant = String(process.env.EPDS_ADMIN_GLOBAL_TENANT_NAME || 'epds').trim().toLowerCase();
-  return String(scope.tenantName || '').trim().toLowerCase() === globalTenant;
+  return scope.role === 'SuperAdmin';
 }
 
 function domainScopeQuery(scope = {}) {
@@ -385,6 +384,7 @@ function summarizeChecks(checks = []) {
 }
 
 function presentDomain(domain, summary = {}) {
+  const tenant = domain.tenantId && typeof domain.tenantId === 'object' ? domain.tenantId : null;
   const recentIssueCount = summary.recentIssueCount || 0;
   const recentWarningCount = summary.recentWarningCount || 0;
   const hasCurrentIssue = domain.lastStatus === 'error';
@@ -403,7 +403,9 @@ function presentDomain(domain, summary = {}) {
     name: domain.name,
     baseUrl: domain.baseUrl,
     owner: domain.owner || 'EPDS',
-    tenantId: domain.tenantId ? String(domain.tenantId) : null,
+    tenantId: tenant?._id ? String(tenant._id) : (domain.tenantId ? String(domain.tenantId) : null),
+    tenantName: tenant?.name || null,
+    tenantDisplayName: tenant?.displayName || tenant?.name || null,
     enabled: domain.enabled,
     lastCheckedAt: domain.lastCheckedAt,
     lastStatus: domain.lastStatus,
@@ -445,7 +447,7 @@ function presentDomain(domain, summary = {}) {
 }
 
 async function buildDomainList(scope = {}) {
-  const domains = await DomainMonitor.find(domainScopeQuery(scope)).sort({ name: 1 }).lean(false);
+  const domains = await DomainMonitor.find(domainScopeQuery(scope)).sort({ name: 1 }).populate('tenantId', 'name displayName').lean(false);
   const since = new Date(Date.now() - RECENT_ISSUE_MS);
   const visibleDomainIds = domains.map((domain) => domain._id);
   const checks = visibleDomainIds.length
@@ -490,7 +492,7 @@ async function getDomainStatusDetails(domain, checks) {
 
 async function buildPublicStatusReport({ owner } = {}) {
   const ownerFilter = owner && owner !== 'all' ? { owner } : {};
-  const domains = await DomainMonitor.find({ enabled: true, ...ownerFilter }).sort({ name: 1 }).lean(false);
+  const domains = await DomainMonitor.find({ enabled: true, ...ownerFilter }).sort({ name: 1 }).populate('tenantId', 'name displayName').lean(false);
   const checksByDomain = await loadChecksForDomains(domains.map((domain) => domain._id));
   const domainsWithOverview = await Promise.all(domains.map(async (domain) => {
     const checks = checksByDomain.get(String(domain._id)) || [];

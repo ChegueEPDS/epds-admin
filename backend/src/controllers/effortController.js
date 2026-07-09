@@ -36,6 +36,21 @@ function taskNetMs(task, now = new Date()) {
   return saved;
 }
 
+function taskFirstStartedAt(task) {
+  const starts = (task.sessions || [])
+    .map((session) => session.startedAt)
+    .concat(task.activeTimer?.startedAt || [])
+    .map((value) => new Date(value).getTime())
+    .filter((value) => value && !Number.isNaN(value));
+  if (!starts.length) return null;
+  return new Date(Math.min(...starts));
+}
+
+function taskGrossSnapshotMs(task, now = new Date()) {
+  const firstStartedAt = taskFirstStartedAt(task);
+  return firstStartedAt ? msBetween(firstStartedAt, now) : 0;
+}
+
 function taskGrossMs(task) {
   if (task.status !== 'closed') return 0;
   return Number(task.closedGrossMs || 0);
@@ -122,6 +137,18 @@ function stopTaskTimer(task, now = new Date()) {
     durationMs
   });
   task.activeTimer = undefined;
+  return true;
+}
+
+function closeTaskSnapshot(task, userId, now = new Date()) {
+  if (task.status === 'closed') return false;
+  if (task.activeTimer?.startedAt) stopTaskTimer(task, now);
+  task.status = 'closed';
+  task.closedAt = now;
+  task.closedNetMs = taskNetMs(task, now);
+  task.closedGrossMs = taskGrossSnapshotMs(task, now);
+  task.closedBy = userId;
+  task.updatedBy = userId;
   return true;
 }
 
@@ -218,8 +245,7 @@ exports.closeProject = (req, res) => withErrors(res, async () => {
   const now = new Date();
   const tasks = await EffortTask.find({ ...ownerScopeQuery(req.scope, req.userId), projectId: project._id }).sort({ status: 1, updatedAt: -1 });
   for (const task of tasks) {
-    if (stopTaskTimer(task, now)) {
-      task.updatedBy = req.userId;
+    if (closeTaskSnapshot(task, req.userId, now)) {
       await task.save();
     }
   }
@@ -227,8 +253,8 @@ exports.closeProject = (req, res) => withErrors(res, async () => {
   const freshTasks = await EffortTask.find({ ...ownerScopeQuery(req.scope, req.userId), projectId: project._id }).sort({ status: 1, updatedAt: -1 });
   project.status = 'closed';
   project.closedAt = now;
-  project.closedNetMs = freshTasks.reduce((total, task) => total + taskNetMs(task, now), 0);
-  project.closedGrossMs = msBetween(project.createdAt, now);
+  project.closedNetMs = freshTasks.reduce((total, task) => total + Number(task.closedNetMs || 0), 0);
+  project.closedGrossMs = freshTasks.reduce((total, task) => total + Number(task.closedGrossMs || 0), 0);
   project.closedBy = req.userId;
   project.updatedBy = req.userId;
   await project.save();
@@ -324,13 +350,7 @@ exports.closeTask = (req, res) => withErrors(res, async () => {
   if (task.status === 'closed') return res.json(presentTask(task, new Date(), req.userId));
 
   const now = new Date();
-  if (task.activeTimer?.startedAt) stopTaskTimer(task, now);
-  task.status = 'closed';
-  task.closedAt = now;
-  task.closedNetMs = taskNetMs(task, now);
-  task.closedGrossMs = msBetween(task.createdAt, now);
-  task.closedBy = req.userId;
-  task.updatedBy = req.userId;
+  closeTaskSnapshot(task, req.userId, now);
   await task.save();
   res.json(presentTask(task, now, req.userId));
 });

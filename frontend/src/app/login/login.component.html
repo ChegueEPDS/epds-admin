@@ -5,6 +5,25 @@
     </mat-card-header>
 
     <mat-card-content>
+      <form class="login-form" (ngSubmit)="loginWithPassword()">
+        <mat-form-field appearance="outline">
+          <mat-label>E-mail</mat-label>
+          <input matInput type="email" name="email" autocomplete="email" [(ngModel)]="email" required>
+        </mat-form-field>
+
+        <mat-form-field appearance="outline">
+          <mat-label>Jelszó</mat-label>
+          <input matInput type="password" name="password" autocomplete="current-password" [(ngModel)]="password" required>
+        </mat-form-field>
+
+        <button mat-flat-button color="primary" type="submit" [disabled]="isLoading()">
+          <mat-icon class="material-symbols-outlined">login</mat-icon>
+          Belépés
+        </button>
+      </form>
+
+      <div class="divider"><span>vagy</span></div>
+
       <button mat-flat-button color="primary" type="button" [disabled]="isLoading()" (click)="loginWithMicrosoft()">
         <mat-icon class="material-symbols-outlined">account_circle</mat-icon>
         Login with Microsoft

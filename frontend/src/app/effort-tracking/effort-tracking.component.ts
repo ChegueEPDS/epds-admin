@@ -11,6 +11,7 @@ import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { EffortProject, EffortService, EffortTask } from '../services/effort.service';
 import { RichTextEditorComponent } from '../shared/rich-text-editor/rich-text-editor.component';
+import { AuthService } from '../services/auth.service';
 
 type ProjectForm = {
   name: string;
@@ -62,7 +63,8 @@ export class EffortTrackingComponent implements OnInit, OnDestroy {
 
   constructor(
     private effortService: EffortService,
-    private snackBar: MatSnackBar
+    private snackBar: MatSnackBar,
+    public auth: AuthService
   ) {}
 
   ngOnInit(): void {

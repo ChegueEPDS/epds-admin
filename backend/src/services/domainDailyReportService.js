@@ -196,7 +196,7 @@ async function sendDomainDailyReport() {
   try {
     const to = recipientList();
     if (!to.length) throw new Error('DOMAIN_DAILY_REPORT_TO is empty');
-    const domains = (await buildDomainList({ tenantName: process.env.EPDS_ADMIN_GLOBAL_TENANT_NAME || 'epds' }))
+    const domains = (await buildDomainList({ role: 'SuperAdmin' }))
       .filter((domain) => domain.enabled !== false);
     await mailService.sendMail({
       to,

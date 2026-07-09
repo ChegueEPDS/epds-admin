@@ -17,8 +17,10 @@ import {
   ApplicationServerType,
   ContactArea,
   CurrencyCode,
+  DatabaseAuthenticationMethod,
   DatabaseServerType,
   InfrastructureGroup,
+  LicenseClientTenant,
   LicenseCustomer,
   LicensePayload,
   ObjectLimitOption
@@ -33,6 +35,7 @@ const CONTACT_AREAS: ContactArea[] = ['IT', 'Üzlet', 'Beszerzés'];
 const ADDRESS_ENVIRONMENTS: AddressEnvironment[] = ['prod', 'test', 'dev'];
 const CURRENCIES: CurrencyCode[] = ['HUF', 'EUR', 'USD'];
 const DATABASE_SERVER_TYPES: DatabaseServerType[] = ['MSSQL', 'PostgreSQL', 'Oracle'];
+const DATABASE_AUTHENTICATION_METHODS: DatabaseAuthenticationMethod[] = ['Native', 'Kerberos'];
 const APPLICATION_SERVER_TYPES: ApplicationServerType[] = ['Linux', 'Windows'];
 
 @Component({
@@ -62,6 +65,7 @@ export class LicenseDialogComponent {
   addressEnvironments = ADDRESS_ENVIRONMENTS;
   currencies = CURRENCIES;
   databaseServerTypes = DATABASE_SERVER_TYPES;
+  databaseAuthenticationMethods = DATABASE_AUTHENTICATION_METHODS;
   applicationServerTypes = APPLICATION_SERVER_TYPES;
   model: LicensePayload;
   expiryDate: Date | null = null;
@@ -70,7 +74,7 @@ export class LicenseDialogComponent {
 
   constructor(
     private dialogRef: MatDialogRef<LicenseDialogComponent, LicenseDialogResult>,
-    @Inject(MAT_DIALOG_DATA) public data: { license?: LicenseCustomer }
+    @Inject(MAT_DIALOG_DATA) public data: { license?: LicenseCustomer; canEdit?: boolean; canDelete?: boolean; clientTenants?: LicenseClientTenant[] }
   ) {
     this.model = this.buildModel(data.license);
     this.expiryDate = this.parseDateInput(this.model.expiresAt);
@@ -81,6 +85,7 @@ export class LicenseDialogComponent {
   private buildModel(license?: LicenseCustomer): LicensePayload {
     return {
       customerName: license?.customerName || '',
+      tenantId: license?.tenantId || this.data.clientTenants?.[0]?.id || null,
       status: license?.status || 'active',
       objectLimitOption: license?.objectLimitOption || '1000',
       customObjectLimit: license?.customObjectLimit || null,
@@ -193,6 +198,14 @@ export class LicenseDialogComponent {
     return 'Forint';
   }
 
+  selectedClientTenant(): LicenseClientTenant | null {
+    return (this.data.clientTenants || []).find((tenant) => tenant.id === this.model.tenantId) || null;
+  }
+
+  clientTenantLabel(tenant: LicenseClientTenant): string {
+    return tenant.displayName || tenant.name;
+  }
+
   phoneText(value: string | null | undefined): string {
     const raw = String(value || '').trim();
     if (!raw) return '-';
@@ -250,6 +263,13 @@ export class LicenseDialogComponent {
         applicationServerType: group.applicationServerType || null,
         databaseServerAddress: group.databaseServerAddress || '',
         databaseServerType: group.databaseServerType || null,
+        databaseName: group.databaseName || '',
+        databaseLoginName: group.databaseLoginName || '',
+        databaseAuthenticationMethod: group.databaseAuthenticationMethod || null,
+        mailServer: group.mailServer || '',
+        mailServerPortProtocol: group.mailServerPortProtocol || '',
+        mailUsername: group.mailUsername || '',
+        mailSenderAddress: group.mailSenderAddress || '',
         applicationAddress: group.applicationAddress || ''
       }));
     }
@@ -265,6 +285,13 @@ export class LicenseDialogComponent {
         applicationServerType: null,
         databaseServerAddress: '',
         databaseServerType: null,
+        databaseName: '',
+        databaseLoginName: '',
+        databaseAuthenticationMethod: null,
+        mailServer: '',
+        mailServerPortProtocol: '',
+        mailUsername: '',
+        mailSenderAddress: '',
         applicationAddress: ''
       };
       groups.set(key, group);
@@ -294,6 +321,13 @@ export class LicenseDialogComponent {
       group.applicationServerType ||
       group.databaseServerAddress ||
       group.databaseServerType ||
+      group.databaseName ||
+      group.databaseLoginName ||
+      group.databaseAuthenticationMethod ||
+      group.mailServer ||
+      group.mailServerPortProtocol ||
+      group.mailUsername ||
+      group.mailSenderAddress ||
       group.applicationAddress
     ));
   }
@@ -304,6 +338,8 @@ export class LicenseDialogComponent {
 
   save(): void {
     const customerName = this.model.customerName.trim();
+    const selectedTenant = this.selectedClientTenant();
+    const resolvedCustomerName = selectedTenant ? this.clientTenantLabel(selectedTenant) : customerName;
     const customObjectLimit = Number(this.model.customObjectLimit);
     const licensePrice = Number(this.model.licensePrice || 0);
     const supportPrice = Number(this.model.supportPrice || 0);
@@ -315,6 +351,13 @@ export class LicenseDialogComponent {
         applicationServerType: group.applicationServerType || null,
         databaseServerAddress: String(group.databaseServerAddress || '').trim(),
         databaseServerType: group.databaseServerType || null,
+        databaseName: String(group.databaseName || '').trim(),
+        databaseLoginName: String(group.databaseLoginName || '').trim(),
+        databaseAuthenticationMethod: group.databaseAuthenticationMethod || null,
+        mailServer: String(group.mailServer || '').trim(),
+        mailServerPortProtocol: String(group.mailServerPortProtocol || '').trim(),
+        mailUsername: String(group.mailUsername || '').trim(),
+        mailSenderAddress: String(group.mailSenderAddress || '').trim(),
         applicationAddress: String(group.applicationAddress || '').trim()
       }))
       .filter((group) => (
@@ -322,9 +365,17 @@ export class LicenseDialogComponent {
         group.applicationServerType ||
         group.databaseServerAddress ||
         group.databaseServerType ||
+        group.databaseName ||
+        group.databaseLoginName ||
+        group.databaseAuthenticationMethod ||
+        group.mailServer ||
+        group.mailServerPortProtocol ||
+        group.mailUsername ||
+        group.mailSenderAddress ||
         group.applicationAddress
       ));
-    if (!customerName || !this.model.status || !this.model.objectLimitOption || !expiresAt) return;
+    if (!resolvedCustomerName || !this.model.status || !this.model.objectLimitOption || !expiresAt) return;
+    if ((this.data.clientTenants || []).length && !this.model.tenantId) return;
     if (this.model.objectLimitOption === 'custom' && (!Number.isInteger(customObjectLimit) || customObjectLimit < 1)) return;
     if (!Number.isInteger(licensePrice) || licensePrice < 0 || !Number.isInteger(supportPrice) || supportPrice < 0) return;
 
@@ -332,7 +383,8 @@ export class LicenseDialogComponent {
       action: 'save',
       payload: {
         ...this.model,
-        customerName,
+        customerName: resolvedCustomerName,
+        tenantId: this.model.tenantId || null,
         status: this.model.status,
         objectLimitOption: this.model.objectLimitOption,
         customObjectLimit: this.model.objectLimitOption === 'custom' ? customObjectLimit : null,
@@ -436,6 +488,13 @@ export class LicenseDialogComponent {
         applicationServerType: null,
         databaseServerAddress: '',
         databaseServerType: null,
+        databaseName: '',
+        databaseLoginName: '',
+        databaseAuthenticationMethod: null,
+        mailServer: '',
+        mailServerPortProtocol: '',
+        mailUsername: '',
+        mailSenderAddress: '',
         applicationAddress: ''
       }
     ];

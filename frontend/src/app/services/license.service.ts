@@ -5,6 +5,7 @@ import { environment } from '../../environments/environment';
 export type LicenseStatus = 'active' | 'inactive';
 export type ObjectLimitOption = '1000' | '6000' | '11000' | '16000' | '21000' | '26000' | '31000' | 'custom' | 'unlimited';
 export type DatabaseServerType = 'MSSQL' | 'PostgreSQL' | 'Oracle';
+export type DatabaseAuthenticationMethod = 'Native' | 'Kerberos';
 export type ApplicationServerType = 'Linux' | 'Windows';
 export type ContactArea = 'IT' | 'Üzlet' | 'Beszerzés';
 export type AddressEnvironment = 'prod' | 'test' | 'dev';
@@ -39,6 +40,13 @@ export type InfrastructureGroup = {
   applicationServerType: ApplicationServerType | null;
   databaseServerAddress: string;
   databaseServerType: DatabaseServerType | null;
+  databaseName: string;
+  databaseLoginName: string;
+  databaseAuthenticationMethod: DatabaseAuthenticationMethod | null;
+  mailServer: string;
+  mailServerPortProtocol: string;
+  mailUsername: string;
+  mailSenderAddress: string;
   applicationAddress: string;
 };
 
@@ -70,12 +78,15 @@ export type LicenseCustomer = {
   vpnCredentials: VpnCredential[];
   notesHtml: string;
   tenantId?: string | null;
+  tenantName?: string | null;
+  tenantDisplayName?: string | null;
   createdAt: string;
   updatedAt: string;
 };
 
 export type LicensePayload = {
   customerName: string;
+  tenantId?: string | null;
   status: LicenseStatus;
   objectLimitOption: ObjectLimitOption;
   customObjectLimit?: number | null;
@@ -101,6 +112,13 @@ export type LicensePayload = {
   notesHtml: string;
 };
 
+export type LicenseClientTenant = {
+  id: string;
+  name: string;
+  displayName: string;
+  type: 'client';
+};
+
 @Injectable({ providedIn: 'root' })
 export class LicenseService {
   private base = `${environment.apiUrl}/api`;
@@ -108,7 +126,11 @@ export class LicenseService {
   constructor(private http: HttpClient) {}
 
   listLicenses() {
-    return this.http.get<{ licenses: LicenseCustomer[]; objectLimitOptions: ObjectLimitOption[] }>(`${this.base}/licenses`);
+    return this.http.get<{
+      licenses: LicenseCustomer[];
+      objectLimitOptions: ObjectLimitOption[];
+      clientTenants?: LicenseClientTenant[];
+    }>(`${this.base}/licenses`);
   }
 
   createLicense(payload: LicensePayload) {

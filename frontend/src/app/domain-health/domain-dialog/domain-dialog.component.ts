@@ -8,7 +8,14 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatInputModule } from '@angular/material/input';
 import { MatSelectModule } from '@angular/material/select';
 import { MatSlideToggleModule } from '@angular/material/slide-toggle';
+import { AdminTenant } from '../../services/admin.service';
 import { DomainHealthConfig, DomainMonitor, DomainOwner, DomainPayload } from '../../services/domain-health.service';
+
+type DomainDialogData = {
+  domain?: DomainMonitor;
+  tenants?: AdminTenant[];
+  canEditOwner?: boolean;
+};
 
 @Component({
   selector: 'app-domain-dialog',
@@ -28,7 +35,7 @@ import { DomainHealthConfig, DomainMonitor, DomainOwner, DomainPayload } from '.
   styleUrl: './domain-dialog.component.scss'
 })
 export class DomainDialogComponent {
-  owners: DomainOwner[] = ['Stahl', 'Robex', 'Veproil', 'ExNB/Exva', 'Ind-Ex', 'EPDS'];
+  owners: DomainOwner[] = ['ExNB', 'EXVA'];
   model: DomainPayload;
   readonly defaultHealthConfig: DomainHealthConfig = {
     checkPath: '',
@@ -43,12 +50,14 @@ export class DomainDialogComponent {
 
   constructor(
     private dialogRef: MatDialogRef<DomainDialogComponent, DomainPayload>,
-    @Inject(MAT_DIALOG_DATA) public data: { domain?: DomainMonitor }
+    @Inject(MAT_DIALOG_DATA) public data: DomainDialogData
   ) {
+    const existingOwner = data.domain?.owner as DomainOwner | undefined;
     this.model = {
       name: data.domain?.name || '',
       baseUrl: data.domain?.baseUrl || '',
-      owner: data.domain?.owner || 'EPDS',
+      owner: existingOwner && this.owners.includes(existingOwner) ? existingOwner : 'ExNB',
+      tenantId: data.domain?.tenantId || data.tenants?.[0]?.id || null,
       enabled: data.domain?.enabled ?? true,
       healthConfig: {
         ...this.defaultHealthConfig,
@@ -57,12 +66,30 @@ export class DomainDialogComponent {
     };
   }
 
+  get canEditOwner(): boolean {
+    return Boolean(this.data.canEditOwner);
+  }
+
+  get selectedTenant(): AdminTenant | null {
+    return (this.data.tenants || []).find((tenant) => tenant.id === this.model.tenantId) || null;
+  }
+
+  get needsOwnerBadge(): boolean {
+    const tenant = this.selectedTenant;
+    return Boolean(this.canEditOwner && tenant?.name === 'exnb-exva');
+  }
+
+  tenantLabel(tenant: AdminTenant): string {
+    return tenant.displayName || tenant.name;
+  }
+
   save(): void {
-    if (!this.model.name.trim() || !this.model.baseUrl.trim() || !this.model.owner) return;
-    this.dialogRef.close({
+    if (!this.model.name.trim() || !this.model.baseUrl.trim()) return;
+    if (this.canEditOwner && !this.model.tenantId) return;
+    if (this.needsOwnerBadge && !this.model.owner) return;
+    const payload: DomainPayload = {
       name: this.model.name.trim(),
       baseUrl: this.model.baseUrl.trim(),
-      owner: this.model.owner,
       enabled: this.model.enabled,
       healthConfig: {
         checkPath: this.model.healthConfig.checkPath.trim(),
@@ -74,6 +101,11 @@ export class DomainDialogComponent {
         followRedirects: this.model.healthConfig.followRedirects,
         tlsWarningDays: Number(this.model.healthConfig.tlsWarningDays)
       }
-    });
+    };
+    if (this.canEditOwner) {
+      payload.tenantId = this.model.tenantId;
+      if (this.needsOwnerBadge) payload.owner = this.model.owner;
+    }
+    this.dialogRef.close(payload);
   }
 }
