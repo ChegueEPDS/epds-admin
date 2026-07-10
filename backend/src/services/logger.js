@@ -107,7 +107,8 @@ function requestLogger(req, res, next) {
       status: res.statusCode,
       durationMs,
       ip: req.ip,
-      userId: req.userId ? String(req.userId) : undefined
+      userId: req.userId ? String(req.userId) : undefined,
+      integrationClientId: req.integrationClientId ? String(req.integrationClientId) : undefined
     };
 
     if (res.statusCode >= 500) error('[request]', payload);

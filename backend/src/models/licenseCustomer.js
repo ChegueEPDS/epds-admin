@@ -23,7 +23,11 @@ const LicenseCustomerSchema = new mongoose.Schema(
   {
     customerName: { type: String, required: true, trim: true },
     normalizedCustomerName: { type: String, required: true, trim: true, lowercase: true },
-    status: { type: String, enum: ['active', 'inactive'], required: true, default: 'active', index: true },
+    description: { type: String, trim: true, maxlength: 32, default: '' },
+    status: { type: String, enum: ['active', 'inactive', 'expired', 'pending', 'ordered'], required: true, default: 'active', index: true },
+    statusVersion: { type: Number, min: 0, default: 0 },
+    integrationEventVersion: { type: Number, min: 0, default: 0 },
+    orderedFromStatus: { type: String, default: '' },
     objectLimitOption: {
       type: String,
       enum: OBJECT_LIMIT_OPTIONS,
@@ -82,6 +86,18 @@ const LicenseCustomerSchema = new mongoose.Schema(
       username: { type: String, trim: true, default: '' },
       password: { type: String, default: '' }
     }],
+    licenseFile: {
+      fileName: { type: String, trim: true, default: '' },
+      blobPath: { type: String, trim: true, default: '' },
+      blobUrl: { type: String, trim: true, default: '' },
+      contentType: { type: String, trim: true, default: '' },
+      size: { type: Number, min: 0, default: 0 },
+      uploadedAt: { type: Date },
+      uploadedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+      uploadedByName: { type: String, trim: true, default: '' },
+      integrationClientId: { type: mongoose.Schema.Types.ObjectId, ref: 'IntegrationClient' },
+      idempotencyKeyHash: { type: String, select: false }
+    },
     notesHtml: { type: String, default: '' },
     tenantId: { type: mongoose.Schema.Types.ObjectId, ref: 'Tenant', index: true },
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },

@@ -20,7 +20,7 @@ import {
 import { LicenseDialogComponent, LicenseDialogResult } from './license-dialog/license-dialog.component';
 import { AuthService } from '../services/auth.service';
 
-type StatusFilter = 'all' | LicenseStatus | 'expired';
+type StatusFilter = 'all' | LicenseStatus | 'expired' | 'pending';
 
 @Component({
   selector: 'app-licenses',
@@ -62,10 +62,11 @@ export class LicensesComponent implements OnInit {
   get filteredLicenses(): LicenseCustomer[] {
     const search = this.searchTerm.trim().toLowerCase();
     return this.licenses.filter((license) => {
-      const matchesSearch = !search || license.customerName.toLowerCase().includes(search);
+      const matchesSearch = !search || this.customerDisplayName(license).toLowerCase().includes(search);
       const matchesStatus = this.statusFilter === 'all'
+        || (this.statusFilter === 'pending' && (license.status === 'pending' || license.status === 'ordered'))
         || license.status === this.statusFilter
-        || (this.statusFilter === 'expired' && this.isExpired(license));
+        || (this.statusFilter === 'expired' && (license.status === 'expired' || this.isExpired(license)));
       return matchesSearch && matchesStatus;
     });
   }
@@ -90,6 +91,7 @@ export class LicensesComponent implements OnInit {
       data: {
         license,
         clientTenants: this.clientTenants,
+        currentUserTenantType: this.auth.getCurrentUser()?.tenantType || null,
         canEdit: this.auth.canEditFeature('licenses'),
         canDelete: this.auth.canDeleteFeature('licenses')
       }
@@ -110,7 +112,7 @@ export class LicensesComponent implements OnInit {
         this.snackBar.open('License updated', 'Close', { duration: 2500 });
       } else {
         const response = await firstValueFrom(this.licenseService.createLicense(result.payload));
-        this.licenses = [...this.licenses, response.license].sort((a, b) => a.customerName.localeCompare(b.customerName));
+        this.licenses = [...this.licenses, response.license].sort((a, b) => this.customerDisplayName(a).localeCompare(this.customerDisplayName(b)));
         this.snackBar.open('License created', 'Close', { duration: 2500 });
       }
     } catch (err: any) {
@@ -133,13 +135,22 @@ export class LicensesComponent implements OnInit {
     return license.id;
   }
 
+  customerDisplayName(license: LicenseCustomer): string {
+    const customerName = String(license.customerName || '').trim();
+    const description = String(license.description || '').trim();
+    return description ? `${customerName} - ${description}` : customerName;
+  }
+
   summary(status: StatusFilter): number {
     if (status === 'all') return this.licenses.length;
-    if (status === 'expired') return this.licenses.filter((license) => this.isExpired(license)).length;
+    if (status === 'pending') return this.licenses.filter((license) => license.status === 'pending' || license.status === 'ordered').length;
+    if (status === 'expired') return this.licenses.filter((license) => license.status === 'expired' || this.isExpired(license)).length;
     return this.licenses.filter((license) => license.status === status).length;
   }
 
   isExpired(license: LicenseCustomer): boolean {
+    if (license.status === 'expired') return true;
+    if (license.status !== 'active') return false;
     const expiresAt = new Date(license.expiresAt);
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -147,6 +158,7 @@ export class LicensesComponent implements OnInit {
   }
 
   expiresSoon(license: LicenseCustomer): boolean {
+    if (license.status !== 'active') return false;
     if (this.isExpired(license)) return false;
     const expiresAt = new Date(license.expiresAt).getTime();
     const soon = Date.now() + 30 * 24 * 60 * 60 * 1000;
@@ -155,21 +167,31 @@ export class LicensesComponent implements OnInit {
 
   statusIcon(license: LicenseCustomer): string {
     if (license.status === 'inactive') return 'pause_circle';
-    if (this.isExpired(license)) return 'event_busy';
+    if (license.status === 'expired' || (license.status === 'active' && this.isExpired(license))) return 'event_busy';
+    if (license.status === 'ordered') return 'order_approve';
+    if (license.status === 'pending') return 'pending_actions';
     if (this.expiresSoon(license)) return 'warning';
     return 'check_circle';
   }
 
   statusLabel(license: LicenseCustomer): string {
     if (license.status === 'inactive') return 'Inactive';
-    if (this.isExpired(license)) return 'Expired';
+    if (license.status === 'expired' || (license.status === 'active' && this.isExpired(license))) return 'Expired';
+    if (license.status === 'ordered') return 'Ordered';
+    if (license.status === 'pending') return 'Pending';
     if (this.expiresSoon(license)) return 'Expires soon';
     return 'Active';
   }
 
-  rowStatusClass(license: LicenseCustomer): string {
+  rowStatusClass(_license: LicenseCustomer): string {
+    return '';
+  }
+
+  statusClass(license: LicenseCustomer): string {
     if (license.status === 'inactive') return 'status-inactive';
-    if (this.isExpired(license)) return 'status-expired';
+    if (license.status === 'ordered') return 'status-ordered';
+    if (license.status === 'pending') return 'status-pending';
+    if (license.status === 'expired' || (license.status === 'active' && this.isExpired(license))) return 'status-expired';
     if (this.expiresSoon(license)) return 'status-warning';
     return 'status-active';
   }

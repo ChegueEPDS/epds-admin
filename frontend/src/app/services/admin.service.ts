@@ -59,6 +59,40 @@ export type UpdateAdminUserPayload = {
   role: AssignableRole;
 };
 
+export type IntegrationClient = {
+  id: string;
+  name: string;
+  keyPrefix: string;
+  status: 'active' | 'revoked';
+  scopes: string[];
+  webhookUrl: string;
+  webhookEnabled: boolean;
+  lastUsedAt: string | null;
+  lastWebhookSuccessAt: string | null;
+  revokedAt: string | null;
+  deliveryCounts: { pending: number; delivered: number; dead: number };
+  lastDeliveryError: string;
+  lastDeliveryErrorAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type IntegrationPayload = {
+  name: string;
+  webhookUrl: string;
+  webhookEnabled: boolean;
+};
+
+export type IntegrationCredentials = {
+  apiKey?: string;
+  webhookSecret?: string;
+};
+
+export type IntegrationMutationResult = {
+  client: IntegrationClient;
+  credentials?: IntegrationCredentials;
+};
+
 @Injectable({ providedIn: 'root' })
 export class AdminService {
   private baseUrl = `${environment.apiUrl}/api/admin`;
@@ -107,5 +141,46 @@ export class AdminService {
       payload,
       { withCredentials: true }
     ).pipe(map((res) => res.tenant));
+  }
+
+  listIntegrations(): Observable<IntegrationClient[]> {
+    return this.http.get<{ clients: IntegrationClient[] }>(`${this.baseUrl}/integrations`, { withCredentials: true })
+      .pipe(map((res) => res.clients || []));
+  }
+
+  createIntegration(payload: IntegrationPayload): Observable<IntegrationMutationResult> {
+    return this.http.post<IntegrationMutationResult>(`${this.baseUrl}/integrations`, payload, { withCredentials: true });
+  }
+
+  updateIntegration(id: string, payload: IntegrationPayload): Observable<IntegrationMutationResult> {
+    return this.http.patch<IntegrationMutationResult>(
+      `${this.baseUrl}/integrations/${encodeURIComponent(id)}`,
+      payload,
+      { withCredentials: true }
+    );
+  }
+
+  rotateIntegrationApiKey(id: string): Observable<IntegrationMutationResult> {
+    return this.http.post<IntegrationMutationResult>(
+      `${this.baseUrl}/integrations/${encodeURIComponent(id)}/rotate-api-key`, {}, { withCredentials: true }
+    );
+  }
+
+  rotateIntegrationWebhookSecret(id: string): Observable<IntegrationMutationResult> {
+    return this.http.post<IntegrationMutationResult>(
+      `${this.baseUrl}/integrations/${encodeURIComponent(id)}/rotate-webhook-secret`, {}, { withCredentials: true }
+    );
+  }
+
+  revokeIntegration(id: string): Observable<IntegrationMutationResult> {
+    return this.http.post<IntegrationMutationResult>(
+      `${this.baseUrl}/integrations/${encodeURIComponent(id)}/revoke`, {}, { withCredentials: true }
+    );
+  }
+
+  retryIntegrationDeliveries(id: string): Observable<number> {
+    return this.http.post<{ retried: number }>(
+      `${this.baseUrl}/integrations/${encodeURIComponent(id)}/retry-deliveries`, {}, { withCredentials: true }
+    ).pipe(map((res) => res.retried || 0));
   }
 }

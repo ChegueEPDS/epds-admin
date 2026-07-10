@@ -1,9 +1,10 @@
 .status-page {
   min-height: 100vh;
   padding: 32px 24px 48px;
+  color: var(--brand-ink);
   background:
-    radial-gradient(circle at top left, rgba(252, 176, 64, 0.18), transparent 28%),
-    linear-gradient(180deg, #fffaf2 0%, #f5f7fb 42%, #eef2f7 100%);
+    radial-gradient(circle at top left, rgba(252, 176, 64, 0.16), transparent 28%),
+    var(--brand-surface);
 }
 
 .status-hero,
@@ -26,19 +27,19 @@
   font-size: 12px;
   text-transform: uppercase;
   letter-spacing: 0.08em;
-  color: #8a4b09;
+  color: var(--brand-accent-ink);
 }
 
 .status-hero h1 {
   margin: 0;
-  font-size: clamp(34px, 4vw, 56px);
-  line-height: 1.02;
+  font: 650 clamp(38px, 5vw, 64px)/0.98 'Newsreader', Georgia, serif;
+  letter-spacing: -0.035em;
 }
 
 .hero-copy {
   max-width: 760px;
   margin: 12px 0 0;
-  color: #5b6474;
+  color: var(--brand-muted);
   font-size: 16px;
 }
 
@@ -46,7 +47,7 @@
   display: grid;
   gap: 10px;
   justify-items: end;
-  color: #5b6474;
+  color: var(--brand-muted);
 }
 
 .pdf-button mat-icon {
@@ -62,10 +63,10 @@
 
 .summary-card,
 .domain-report {
-  border: 1px solid rgba(17, 24, 39, 0.1);
-  border-radius: 8px;
-  background: rgba(255, 255, 255, 0.88);
-  box-shadow: 0 18px 36px rgba(15, 23, 42, 0.06);
+  border: 1px solid var(--brand-border);
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--brand-panel) 88%, transparent);
+  box-shadow: var(--brand-shadow-sm);
   backdrop-filter: blur(8px);
 }
 
@@ -79,7 +80,7 @@
 .detail-grid span,
 .history-head span,
 .incident-row span {
-  color: #5b6474;
+  color: var(--brand-muted);
 }
 
 .summary-card span,
@@ -118,7 +119,7 @@
   align-items: center;
   justify-content: center;
   gap: 10px;
-  color: #5b6474;
+  color: var(--brand-muted);
 }
 
 .domain-report-list {
@@ -130,11 +131,11 @@
   break-inside: avoid;
   page-break-inside: avoid;
   overflow: hidden;
-  color: #111827;
+  color: var(--brand-ink);
 }
 
 .domain-report.mat-expansion-panel {
-  border-radius: 8px;
+  border-radius: 14px;
 }
 
 .domain-report ::ng-deep .mat-expansion-panel-body {
@@ -218,9 +219,9 @@
 .detail-grid div,
 .performance-grid div {
   padding: 12px;
-  border: 1px solid rgba(17, 24, 39, 0.08);
-  border-radius: 8px;
-  background: #f8fafc;
+  border: 1px solid var(--brand-border);
+  border-radius: 10px;
+  background: var(--brand-panel-soft);
 }
 
 .domain-summary-grid strong,

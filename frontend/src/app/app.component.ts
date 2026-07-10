@@ -5,8 +5,10 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatMenuModule } from '@angular/material/menu';
 import { MatToolbarModule } from '@angular/material/toolbar';
+import { MatTooltipModule } from '@angular/material/tooltip';
 import { filter } from 'rxjs';
 import { AuthService } from './services/auth.service';
+import { ThemeService } from './services/theme.service';
 
 @Component({
   selector: 'app-root',
@@ -19,24 +21,30 @@ import { AuthService } from './services/auth.service';
     MatButtonModule,
     MatIconModule,
     MatMenuModule,
-    MatToolbarModule
+    MatToolbarModule,
+    MatTooltipModule
   ],
   templateUrl: './app.component.html',
   styleUrl: './app.component.scss'
 })
 export class AppComponent {
-  isPublicStatusRoute = false;
+  isPublicRoute = false;
 
   constructor(
     public auth: AuthService,
+    public theme: ThemeService,
     private router: Router
   ) {
-    this.isPublicStatusRoute = this.router.url.startsWith('/status/');
+    this.isPublicRoute = this.isPublicPath(this.router.url);
     this.router.events
       .pipe(filter((event) => event instanceof NavigationEnd))
       .subscribe((event) => {
-        this.isPublicStatusRoute = (event as NavigationEnd).urlAfterRedirects.startsWith('/status/');
+        this.isPublicRoute = this.isPublicPath((event as NavigationEnd).urlAfterRedirects);
       });
+  }
+
+  private isPublicPath(url: string): boolean {
+    return url.startsWith('/status/') || url.startsWith('/webhook');
   }
 
   logout(): void {

@@ -1,0 +1,98 @@
+<section class="webhook-lab">
+  <header class="hero">
+    <div>
+      <p class="eyebrow">EPDS INTEGRATION LAB</p>
+      <h1>Webhook receiver</h1>
+      <p class="lead">Catch, inspect and replay the exact requests sent to your integration endpoint.</p>
+    </div>
+    <div class="pulse"><span></span>Listening</div>
+  </header>
+
+  <section class="receiver-card">
+    <div class="receiver-copy">
+      <span class="step">01</span>
+      <div>
+        <h2>Your receiver URL</h2>
+        <p>Paste this HTTPS address into the integration's Webhook URL field.</p>
+      </div>
+    </div>
+    <div class="url-row">
+      <code>{{ receiverUrl }}</code>
+      <button mat-flat-button type="button" (click)="copy(receiverUrl)">Copy URL</button>
+    </div>
+    <div class="receiver-actions">
+      <span>Inbox data expires automatically after 24 hours.</span>
+      <button mat-button type="button" (click)="createInbox()">New inbox</button>
+    </div>
+  </section>
+
+  <div class="lab-grid">
+    <section class="panel composer">
+      <div class="panel-heading">
+        <div><span class="step">02</span><h2>Send a test</h2></div>
+        <span class="tag">POST · JSON</span>
+      </div>
+      <mat-form-field appearance="outline" class="full-field">
+        <mat-label>Request body</mat-label>
+        <textarea matInput rows="18" [(ngModel)]="testBody" spellcheck="false"></textarea>
+      </mat-form-field>
+      <button mat-flat-button class="send-button" type="button" (click)="sendTest()" [disabled]="sending()">
+        <mat-spinner *ngIf="sending()" diameter="18"></mat-spinner>
+        Send to receiver
+      </button>
+    </section>
+
+    <section class="panel inbox">
+      <div class="panel-heading">
+        <div><span class="step">03</span><h2>Incoming requests</h2></div>
+        <div class="heading-actions">
+          <span class="count">{{ receipts().length }}</span>
+          <button mat-button type="button" (click)="load()">Refresh</button>
+          <button mat-button type="button" (click)="clear()" [disabled]="!receipts().length">Clear</button>
+        </div>
+      </div>
+
+      <div class="request-list" *ngIf="receipts().length; else emptyInbox">
+        <button type="button" class="request-row" *ngFor="let receipt of receipts()" (click)="choose(receipt)" [class.selected]="selected()?._id === receipt._id">
+          <span class="method">{{ receipt.method }}</span>
+          <span class="request-main"><strong>{{ receipt.headers['x-epds-event-id'] || 'Manual test' }}</strong><small>{{ receipt.receivedAt | date:'medium' }}</small></span>
+          <span class="bytes">{{ receipt.byteLength }} B</span>
+        </button>
+      </div>
+      <ng-template #emptyInbox>
+        <div class="empty-state">
+          <span class="empty-glyph">◎</span>
+          <h3>Waiting for the first request</h3>
+          <p>Send the sample or trigger an ordered license event.</p>
+        </div>
+      </ng-template>
+    </section>
+  </div>
+
+  <section class="panel inspector" *ngIf="selected() as receipt">
+    <div class="panel-heading inspector-heading">
+      <div><span class="step">04</span><h2>Request inspector</h2></div>
+      <span class="signature" [class.valid]="signatureState(receipt) === 'valid'" [class.invalid]="signatureState(receipt) === 'invalid'">
+        {{ signatureLabel(receipt) }}
+      </span>
+    </div>
+
+    <mat-form-field appearance="outline" class="secret-field">
+      <mat-label>Webhook signing secret (kept only in this page)</mat-label>
+      <input matInput type="password" [(ngModel)]="webhookSecret" (ngModelChange)="onSecretChange()" placeholder="whsec_...">
+    </mat-form-field>
+
+    <div class="inspection-grid">
+      <article>
+        <div class="code-title"><span>Headers</span><button type="button" (click)="copy(prettyHeaders(receipt))">Copy</button></div>
+        <pre>{{ receipt.headers | json }}</pre>
+      </article>
+      <article>
+        <div class="code-title"><span>Body</span><button type="button" (click)="copy(prettyBody(receipt))">Copy</button></div>
+        <pre>{{ prettyBody(receipt) }}</pre>
+      </article>
+    </div>
+  </section>
+
+  <div class="toast" *ngIf="message()">{{ message() }}</div>
+</section>

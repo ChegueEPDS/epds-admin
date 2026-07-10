@@ -18,7 +18,7 @@
   padding: 14px;
   text-align: left;
   border: 1px solid var(--brand-border);
-  border-radius: 8px;
+  border-radius: 14px;
   background: var(--brand-panel);
   cursor: pointer;
 }
@@ -86,7 +86,7 @@
 .domain-list-panel,
 .detail-panel {
   border: 1px solid var(--brand-border);
-  border-radius: 8px;
+  border-radius: 14px;
   background: var(--brand-panel);
 }
 
@@ -156,15 +156,15 @@
 
 .domain-table tbody tr:hover,
 .domain-table tbody tr.selected {
-  background: #f8fafc;
+  background: var(--brand-hover);
 }
 
 .domain-table tr.row-error {
-  background: #fef2f2;
+  background: color-mix(in srgb, var(--brand-error) 9%, transparent);
 }
 
 .domain-table tr.row-warning {
-  background: #fffbeb;
+  background: color-mix(in srgb, var(--brand-warning) 9%, transparent);
 }
 
 .domain-table tr.row-disabled {
@@ -242,7 +242,7 @@
 }
 
 .performance-unknown {
-  color: #4b5563;
+  color: var(--brand-muted);
 }
 
 .metric-subtext {
@@ -258,12 +258,12 @@
   align-items: center;
   min-height: 24px;
   padding: 0 8px;
-  border: 1px solid rgba(17, 24, 39, 0.12);
+  border: 1px solid var(--brand-border);
   border-radius: 999px;
-  background: #f8fafc;
+  background: var(--brand-panel-soft);
   font-size: 10.5px;
   font-weight: 700;
-  color: #374151;
+  color: var(--brand-muted);
 }
 
 .empty-state,
@@ -290,6 +290,15 @@
   padding: 16px;
 }
 
+.detail-loading {
+  display: grid;
+  place-items: center;
+  gap: 12px;
+  min-height: 280px;
+  color: var(--brand-muted);
+  text-align: center;
+}
+
 .detail-head {
   display: flex;
   align-items: start;
@@ -314,8 +323,8 @@
 .diagnostic-grid div {
   padding: 10px;
   border: 1px solid var(--brand-border);
-  border-radius: 8px;
-  background: #f8fafc;
+  border-radius: 10px;
+  background: var(--brand-panel-soft);
 }
 
 .metric-grid span,
@@ -394,8 +403,8 @@
 .aggregate-grid div {
   padding: 10px;
   border: 1px solid var(--brand-border);
-  border-radius: 8px;
-  background: #fffaf2;
+  border-radius: 10px;
+  background: var(--brand-accent-soft);
 }
 
 .aggregate-grid span,

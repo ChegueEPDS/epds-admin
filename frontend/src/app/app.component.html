@@ -1,11 +1,14 @@
 <div class="app-shell">
-  <mat-toolbar class="toolbar" *ngIf="!isPublicStatusRoute">
+  <mat-toolbar class="toolbar" *ngIf="!isPublicRoute">
     <a class="brand" [routerLink]="auth.defaultRouteAfterLogin()" aria-label="EPDS Admin home">
       <img src="/public/logo.svg" alt="EPDS Admin">
     </a>
 
     <nav class="nav" *ngIf="(auth.isLoggedIn$ | async) && auth.canAccessAdminFeatures() && !auth.hasSingleFeatureAccess()">
-      <a mat-button routerLink="/home" routerLinkActive="active-link">HOME</a>
+      <a mat-button routerLink="/home" routerLinkActive="active-link">
+        <mat-icon class="material-symbols-outlined">home</mat-icon>
+        HOME
+      </a>
       <a mat-button routerLink="/mail" routerLinkActive="active-link" *ngIf="auth.canAccessFeature('mail')">
         <mat-icon class="material-symbols-outlined">mail</mat-icon>
         MAIL
@@ -26,6 +29,16 @@
 
     <span class="spacer"></span>
 
+    <button
+      mat-icon-button
+      class="theme-toggle"
+      type="button"
+      [matTooltip]="theme.theme() === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'"
+      [attr.aria-label]="theme.theme() === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'"
+      (click)="theme.toggle()">
+      <mat-icon class="material-symbols-outlined">{{ theme.theme() === 'dark' ? 'light_mode' : 'dark_mode' }}</mat-icon>
+    </button>
+
     <ng-container *ngIf="auth.user$ | async as user">
       <button mat-icon-button *ngIf="user.role === 'SuperAdmin'" [matMenuTriggerFor]="settingsMenu" aria-label="Settings">
         <mat-icon class="material-symbols-outlined">settings</mat-icon>
@@ -39,6 +52,10 @@
           <mat-icon class="material-symbols-outlined">business</mat-icon>
           Tenants
         </a>
+        <a mat-menu-item routerLink="/admin/integrations">
+          <mat-icon class="material-symbols-outlined">api</mat-icon>
+          License integrations
+        </a>
       </mat-menu>
     </ng-container>
 
@@ -47,7 +64,7 @@
       Login
     </button>
 
-    <button mat-button *ngIf="auth.isLoggedIn$ | async" [matMenuTriggerFor]="profileMenu">
+    <button mat-button class="profile-button" *ngIf="auth.isLoggedIn$ | async" [matMenuTriggerFor]="profileMenu">
       <mat-icon class="material-symbols-outlined">account_circle</mat-icon>
       {{ auth.getFullName() || 'Profile' }}
     </button>

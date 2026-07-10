@@ -17,11 +17,15 @@ const mailRoutes = require('./routes/mailRoutes');
 const domainHealthRoutes = require('./routes/domainHealthRoutes');
 const licenseRoutes = require('./routes/licenseRoutes');
 const effortRoutes = require('./routes/effortRoutes');
+const integrationApiRoutes = require('./routes/integrationApiRoutes');
+const webhookTestRoutes = require('./routes/webhookTestRoutes');
 const { startDomainHealthMonitor } = require('./services/domainMonitorService');
 const { startDomainDailyReportScheduler } = require('./services/domainDailyReportService');
 const { startDomainPageSpeedScheduler } = require('./services/domainPageSpeedSchedulerService');
 const { seedSuperAdmin } = require('./services/userSeedService');
 const { normalizeTenantTypes } = require('./services/tenantMigrationService');
+const { startWebhookWorker } = require('./services/webhookWorkerService');
+const { startLicenseExpiryScheduler } = require('./services/licenseExpiryService');
 
 const app = express();
 
@@ -59,8 +63,6 @@ async function readiness(req, res) {
 app.get('/health', readiness);
 app.get('/health/ready', readiness);
 
-app.use(express.json({ limit: '10mb' }));
-app.use(cookieParser());
 app.use(cors({
   origin(origin, cb) {
     const allowed = allowedOrigins();
@@ -69,7 +71,14 @@ app.use(cors({
   },
   credentials: true
 }));
-app.use(rateLimit({ windowMs: 15 * 60 * 1000, limit: 300 }));
+app.use('/api/webhook-test', webhookTestRoutes);
+app.use(express.json({ limit: '10mb' }));
+app.use(cookieParser());
+app.use(rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 300,
+  skip: (req) => String(req.path || '').startsWith('/api/integrations/v1')
+}));
 
 app.use('/api', authRoutes);
 app.use('/api', adminRoutes);
@@ -77,10 +86,20 @@ app.use('/api', mailRoutes);
 app.use('/api', domainHealthRoutes);
 app.use('/api', licenseRoutes);
 app.use('/api', effortRoutes);
+app.use('/api', integrationApiRoutes);
 
 app.use((err, req, res, next) => {
+  if (err?.type === 'entity.too.large') {
+    return res.status(413).json({ error: 'Request body must not exceed 256 KB' });
+  }
+  if (err?.code === 'LIMIT_FILE_SIZE') {
+    return res.status(413).json({ error: 'License file must not exceed 3 MB' });
+  }
+  if (err?.name === 'MulterError') {
+    return res.status(400).json({ error: err.message });
+  }
   console.error('[app] unhandled error:', err);
-  res.status(500).json({ error: 'Internal server error' });
+  return res.status(500).json({ error: 'Internal server error' });
 });
 
 if (require.main === module) {
@@ -92,6 +111,8 @@ if (require.main === module) {
       startDomainHealthMonitor();
       startDomainDailyReportScheduler();
       startDomainPageSpeedScheduler();
+      startWebhookWorker();
+      startLicenseExpiryScheduler();
       app.listen(port, () => console.log(`[app] EPDS Admin API listening on ${port}`));
     })
     .catch((err) => {

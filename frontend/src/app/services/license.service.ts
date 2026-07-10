@@ -2,7 +2,7 @@ import { Injectable } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { environment } from '../../environments/environment';
 
-export type LicenseStatus = 'active' | 'inactive';
+export type LicenseStatus = 'active' | 'inactive' | 'expired' | 'pending' | 'ordered';
 export type ObjectLimitOption = '1000' | '6000' | '11000' | '16000' | '21000' | '26000' | '31000' | 'custom' | 'unlimited';
 export type DatabaseServerType = 'MSSQL' | 'PostgreSQL' | 'Oracle';
 export type DatabaseAuthenticationMethod = 'Native' | 'Kerberos';
@@ -53,6 +53,7 @@ export type InfrastructureGroup = {
 export type LicenseCustomer = {
   id: string;
   customerName: string;
+  description: string;
   status: LicenseStatus;
   objectLimitOption: ObjectLimitOption;
   customObjectLimit: number | null;
@@ -76,6 +77,15 @@ export type LicenseCustomer = {
   vpnApp: string;
   twoFactorApp: string;
   vpnCredentials: VpnCredential[];
+  licenseFile: {
+    fileName: string;
+    blobPath: string;
+    blobUrl: string;
+    contentType: string;
+    size: number;
+    uploadedAt: string | null;
+    uploadedByName: string;
+  } | null;
   notesHtml: string;
   tenantId?: string | null;
   tenantName?: string | null;
@@ -86,6 +96,7 @@ export type LicenseCustomer = {
 
 export type LicensePayload = {
   customerName: string;
+  description: string;
   tenantId?: string | null;
   status: LicenseStatus;
   objectLimitOption: ObjectLimitOption;
@@ -110,6 +121,13 @@ export type LicensePayload = {
   twoFactorApp: string;
   vpnCredentials: VpnCredential[];
   notesHtml: string;
+};
+
+export type LicenseOrderPayload = {
+  objectLimitOption: ObjectLimitOption;
+  customObjectLimit?: number | null;
+  mobileApp: boolean;
+  expiresAt: string;
 };
 
 export type LicenseClientTenant = {
@@ -143,5 +161,26 @@ export class LicenseService {
 
   deleteLicense(id: string) {
     return this.http.delete<void>(`${this.base}/licenses/${id}`);
+  }
+
+  orderLicense(id: string, payload: LicenseOrderPayload) {
+    return this.http.post<{ license: LicenseCustomer }>(`${this.base}/licenses/${id}/order`, payload);
+  }
+
+  activateLicense(id: string) {
+    return this.http.post<{ license: LicenseCustomer }>(`${this.base}/licenses/${id}/activate`, {});
+  }
+
+  uploadLicenseFile(id: string, file: File) {
+    const formData = new FormData();
+    formData.append('file', file);
+    return this.http.post<{ license: LicenseCustomer }>(`${this.base}/licenses/${id}/license-file`, formData);
+  }
+
+  downloadLicenseFile(id: string) {
+    return this.http.get(`${this.base}/licenses/${id}/license-file`, {
+      responseType: 'blob',
+      observe: 'response'
+    });
   }
 }

@@ -1,0 +1,32 @@
+<h2 mat-dialog-title>Order license renewal</h2>
+<mat-dialog-content>
+  <form class="order-form" (ngSubmit)="save()">
+    <mat-form-field appearance="outline">
+      <mat-label>Object count</mat-label>
+      <mat-select name="objectLimitOption" [(ngModel)]="model.objectLimitOption" required>
+        <mat-option *ngFor="let option of objectLimitOptions" [value]="option">{{ objectLimitLabel(option) }}</mat-option>
+      </mat-select>
+    </mat-form-field>
+
+    <mat-form-field appearance="outline" *ngIf="model.objectLimitOption === 'custom'">
+      <mat-label>Custom object count</mat-label>
+      <input matInput type="number" min="1" step="1" name="customObjectLimit" [(ngModel)]="model.customObjectLimit" required>
+    </mat-form-field>
+
+    <mat-checkbox name="mobileApp" [(ngModel)]="model.mobileApp">Mobile app</mat-checkbox>
+
+    <mat-form-field appearance="outline">
+      <mat-label>Expiry date</mat-label>
+      <input matInput [matDatepicker]="expiryPicker" name="expiresAt" [(ngModel)]="expiryDate" required>
+      <mat-datepicker-toggle matIconSuffix [for]="expiryPicker"></mat-datepicker-toggle>
+      <mat-datepicker #expiryPicker></mat-datepicker>
+    </mat-form-field>
+  </form>
+</mat-dialog-content>
+<mat-dialog-actions align="end">
+  <button mat-button type="button" mat-dialog-close>Cancel</button>
+  <button mat-flat-button color="primary" type="button" (click)="save()">
+    <mat-icon class="material-symbols-outlined">order_approve</mat-icon>
+    OK
+  </button>
+</mat-dialog-actions>

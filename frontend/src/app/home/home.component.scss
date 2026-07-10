@@ -1,11 +1,138 @@
 .home-page {
-  padding-top: 32px;
+  padding-top: clamp(34px, 6vw, 78px);
+  padding-bottom: 64px;
+}
+
+.home-hero {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 28px;
+  margin-bottom: 36px;
+}
+
+.eyebrow {
+  margin: 0 0 10px;
+  color: var(--brand-accent-ink);
+  font: 800 11px/1.2 'Manrope', sans-serif;
+  letter-spacing: 0.18em;
+}
+
+.home-hero h1 {
+  max-width: 780px;
+  margin: 0;
+  font: 650 clamp(36px, 5vw, 64px)/0.98 'Newsreader', Georgia, serif;
+  letter-spacing: -0.04em;
+}
+
+.home-hero > div > p:last-child {
+  margin: 14px 0 0;
+  color: var(--brand-muted);
+  font-size: 16px;
+}
+
+.live-status {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 9px;
+  padding: 9px 13px;
+  color: var(--brand-success);
+  border: 1px solid var(--brand-success-border);
+  border-radius: 999px;
+  background: var(--brand-success-soft);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.status-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: currentColor;
+  box-shadow: 0 0 0 5px var(--brand-success-ring);
+  animation: status-pulse-ready 1.9s ease-in-out infinite;
+}
+
+.live-status.checking {
+  color: var(--brand-muted);
+  border-color: var(--brand-border-strong);
+  background: var(--brand-panel-soft);
+}
+
+.live-status.checking .status-dot {
+  box-shadow: 0 0 0 5px color-mix(in srgb, var(--brand-muted) 12%, transparent);
+  animation: status-pulse-checking 1.1s ease-in-out infinite;
+}
+
+.live-status.has-issues {
+  color: var(--brand-error);
+  border-color: color-mix(in srgb, var(--brand-error) 42%, transparent);
+  background: color-mix(in srgb, var(--brand-error) 10%, transparent);
+}
+
+.live-status.has-issues .status-dot {
+  box-shadow: 0 0 0 5px color-mix(in srgb, var(--brand-error) 14%, transparent);
+  animation: status-pulse-issue 1.15s ease-in-out infinite;
+}
+
+.live-status.status-unavailable {
+  color: var(--brand-warning);
+  border-color: color-mix(in srgb, var(--brand-warning) 38%, transparent);
+  background: color-mix(in srgb, var(--brand-warning) 10%, transparent);
+}
+
+.live-status.status-unavailable .status-dot {
+  box-shadow: 0 0 0 5px color-mix(in srgb, var(--brand-warning) 13%, transparent);
+  animation: status-pulse-issue 1.15s ease-in-out infinite;
+}
+
+@keyframes status-pulse-ready {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+    box-shadow: 0 0 0 4px var(--brand-success-ring);
+  }
+  50% {
+    opacity: 0.48;
+    transform: scale(0.78);
+    box-shadow: 0 0 0 7px transparent;
+  }
+}
+
+@keyframes status-pulse-checking {
+  0%, 100% { opacity: 0.35; transform: scale(0.75); }
+  50% { opacity: 1; transform: scale(1); }
+}
+
+@keyframes status-pulse-issue {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+    box-shadow: 0 0 0 4px color-mix(in srgb, currentColor 15%, transparent);
+  }
+  50% {
+    opacity: 0.6;
+    transform: scale(0.82);
+    box-shadow: 0 0 0 9px transparent;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .status-dot,
+  .live-status.checking .status-dot,
+  .live-status.has-issues .status-dot,
+  .live-status.status-unavailable .status-dot {
+    animation: none;
+  }
 }
 
 .feature-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
-  gap: 18px;
+  gap: 16px;
 }
 
 .feature-card,
@@ -16,36 +143,74 @@
 
 .feature-card mat-card,
 .limited-card {
-  min-height: 146px;
-  border-radius: 8px;
-  transition: transform 160ms ease, box-shadow 160ms ease, border-color 160ms ease;
+  min-height: 160px;
+  overflow: hidden;
+  border-radius: 16px;
+  background: var(--brand-panel);
+  box-shadow: var(--brand-shadow-sm);
+  transition: transform 180ms ease, box-shadow 180ms ease, border-color 180ms ease;
   border: 1px solid var(--brand-border);
 }
 
 .feature-card:not(.disabled-card):hover mat-card {
-  transform: translateY(-2px);
-  box-shadow: 0 14px 28px rgba(17, 24, 39, 0.12);
-  border-color: rgba(252, 176, 64, 0.7);
+  transform: translateY(-4px);
+  box-shadow: var(--brand-shadow-lg);
+  border-color: var(--brand-accent-border);
+}
+
+.feature-card.has-issue mat-card {
+  border-color: color-mix(in srgb, var(--brand-warning) 58%, transparent);
+  box-shadow:
+    0 0 0 2px color-mix(in srgb, var(--brand-warning) 10%, transparent),
+    var(--brand-shadow-sm);
+}
+
+.feature-card.has-issue .icon-wrap {
+  color: var(--brand-warning);
+  border-color: color-mix(in srgb, var(--brand-warning) 38%, transparent);
+  background: color-mix(in srgb, var(--brand-warning) 10%, transparent);
+}
+
+.feature-card.has-issue:not(.disabled-card):hover mat-card {
+  border-color: var(--brand-warning);
+}
+
+.feature-card.has-active-issue mat-card {
+  border-color: color-mix(in srgb, var(--brand-error) 62%, transparent);
+  box-shadow:
+    0 0 0 2px color-mix(in srgb, var(--brand-error) 11%, transparent),
+    var(--brand-shadow-sm);
+}
+
+.feature-card.has-active-issue .icon-wrap {
+  color: var(--brand-error);
+  border-color: color-mix(in srgb, var(--brand-error) 42%, transparent);
+  background: color-mix(in srgb, var(--brand-error) 10%, transparent);
+}
+
+.feature-card.has-active-issue:not(.disabled-card):hover mat-card {
+  border-color: var(--brand-error);
 }
 
 mat-card-content {
   display: flex;
   align-items: center;
   gap: 18px;
-  min-height: 106px;
+  min-height: 118px;
+  padding: 22px;
 }
 
 .icon-wrap {
   display: inline-flex;
-  flex: 0 0 58px;
-  width: 58px;
-  height: 58px;
+  flex: 0 0 54px;
+  width: 54px;
+  height: 54px;
   align-items: center;
   justify-content: center;
-  border-radius: 8px;
-  color: #111827;
-  background: #fff3df;
-  border: 1px solid rgba(252, 176, 64, 0.5);
+  border-radius: 14px;
+  color: var(--brand-accent-ink);
+  background: var(--brand-accent-soft);
+  border: 1px solid var(--brand-accent-border);
 }
 
 .icon-wrap mat-icon {
@@ -56,7 +221,7 @@ mat-card-content {
 
 h2 {
   margin: 0;
-  font-size: 22px;
+  font-size: 19px;
   line-height: 1.2;
 }
 
@@ -70,7 +235,18 @@ p {
 }
 
 .muted {
-  background: #eef2f7;
-  border-color: #d1d5db;
-  color: #6b7280;
+  background: var(--brand-panel-soft);
+  border-color: var(--brand-border);
+  color: var(--brand-muted);
+}
+
+@media (max-width: 700px) {
+  .home-hero {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .feature-grid {
+    grid-template-columns: 1fr;
+  }
 }

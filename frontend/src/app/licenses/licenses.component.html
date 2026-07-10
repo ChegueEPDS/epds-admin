@@ -12,15 +12,20 @@
       <span>{{ summary('active') }}</span>
       <strong>Active</strong>
     </button>
-    <button type="button" class="summary-tile status-inactive" [class.active]="statusFilter === 'inactive'" (click)="statusFilter = 'inactive'">
-      <mat-icon class="material-symbols-outlined">pause_circle</mat-icon>
-      <span>{{ summary('inactive') }}</span>
-      <strong>Inactive</strong>
-    </button>
     <button type="button" class="summary-tile status-expired" [class.active]="statusFilter === 'expired'" (click)="statusFilter = 'expired'">
       <mat-icon class="material-symbols-outlined">event_busy</mat-icon>
       <span>{{ summary('expired') }}</span>
       <strong>Expired</strong>
+    </button>
+    <button type="button" class="summary-tile status-pending" [class.active]="statusFilter === 'pending'" (click)="statusFilter = 'pending'">
+      <mat-icon class="material-symbols-outlined">pending_actions</mat-icon>
+      <span>{{ summary('pending') }}</span>
+      <strong>Pending</strong>
+    </button>
+    <button type="button" class="summary-tile status-inactive" [class.active]="statusFilter === 'inactive'" (click)="statusFilter = 'inactive'">
+      <mat-icon class="material-symbols-outlined">pause_circle</mat-icon>
+      <span>{{ summary('inactive') }}</span>
+      <strong>Inactive</strong>
     </button>
     <button type="button" class="summary-tile status-all" [class.active]="statusFilter === 'all'" (click)="statusFilter = 'all'">
       <mat-icon class="material-symbols-outlined">business</mat-icon>
@@ -84,13 +89,13 @@
             (keydown.enter)="openLicenseDialog(license)"
           >
             <td>
-              <span class="status-pill">
+              <span class="status-pill" [ngClass]="statusClass(license)">
                 <mat-icon class="material-symbols-outlined">{{ statusIcon(license) }}</mat-icon>
                 {{ statusLabel(license) }}
               </span>
             </td>
             <td>
-              <strong>{{ license.customerName }}</strong>
+              <strong>{{ customerDisplayName(license) }}</strong>
               <span class="customer-subtext">Created {{ license.createdAt | date:'shortDate' }}</span>
             </td>
             <td>

@@ -24,7 +24,7 @@
 .deep-scan-head span,
 .muted-row,
 .scan-card-head span {
-  color: #6b7280;
+  color: var(--brand-muted);
   font-size: 12px;
 }
 .deep-scan-loading,
@@ -34,7 +34,7 @@
   justify-content: center;
   gap: 10px;
   min-height: 180px;
-  color: #6b7280;
+  color: var(--brand-muted);
 }
 .compact-loading {
   min-height: 44px;
@@ -42,12 +42,12 @@
   padding: 10px 12px;
   border: 1px solid var(--brand-border);
   border-radius: 8px;
-  background: #f8fafc;
+  background: var(--brand-panel-soft);
 }
 .deep-scan-error,
 .scan-error,
 .scan-failed {
-  color: #b91c1c;
+  color: var(--brand-error);
 }
 .empty-state {
   display: flex;
@@ -57,7 +57,7 @@
   min-height: 140px;
   border: 1px dashed var(--brand-border);
   border-radius: 8px;
-  color: #6b7280;
+  color: var(--brand-muted);
 }
 .latest-meta {
   display: flex;
@@ -66,14 +66,14 @@
   padding: 10px 12px;
   border: 1px solid var(--brand-border);
   border-radius: 8px;
-  background: #fff;
+  background: var(--brand-panel);
 }
 .latest-meta span,
 .latest-meta small {
-  color: #6b7280;
+  color: var(--brand-muted);
 }
 .latest-meta strong {
-  color: #111827;
+  color: var(--brand-ink);
 }
 .deep-scan-results {
   display: grid;
@@ -86,7 +86,7 @@
   padding: 14px;
   border: 1px solid var(--brand-border);
   border-radius: 8px;
-  background: #fff;
+  background: var(--brand-panel);
 }
 .scan-card-head {
   display: flex;
@@ -108,13 +108,13 @@
   padding: 8px;
   border: 1px solid var(--brand-border);
   border-radius: 8px;
-  background: #f8fafc;
+  background: var(--brand-panel-soft);
 }
 .score-grid span,
 .metric-list span {
   display: block;
   margin-bottom: 4px;
-  color: #6b7280;
+  color: var(--brand-muted);
   font-size: 11px;
 }
 .score-grid strong,
@@ -159,7 +159,7 @@
   padding: 14px;
   border: 1px solid var(--brand-border);
   border-radius: 8px;
-  background: #fff;
+  background: var(--brand-panel);
 }
 .section-title {
   display: flex;
@@ -171,7 +171,7 @@
   margin: 0;
 }
 .section-title span {
-  color: #6b7280;
+  color: var(--brand-muted);
   font-size: 12px;
 }
 .history-summary {
@@ -183,11 +183,11 @@
   padding: 8px;
   border: 1px solid var(--brand-border);
   border-radius: 8px;
-  background: #f8fafc;
+  background: var(--brand-panel-soft);
 }
 .history-summary span,
 .history-table .history-header span {
-  color: #6b7280;
+  color: var(--brand-muted);
   font-size: 11px;
 }
 .history-summary span,

@@ -42,8 +42,8 @@
   align-items: flex-start;
   padding: 18px;
   border: 1px solid var(--brand-border);
-  border-radius: 8px;
-  background: #f8fafc;
+  border-radius: 14px;
+  background: var(--brand-panel-soft);
 }
 .detail-hero h3 {
   margin: 4px 0;
@@ -55,7 +55,7 @@
   color: var(--brand-muted);
 }
 .detail-eyebrow {
-  color: #92400e;
+  color: var(--brand-accent-ink);
   font-size: 11px;
   font-weight: 800;
   text-transform: uppercase;
@@ -73,16 +73,22 @@
   height: 20px;
 }
 .detail-hero.status-active .detail-status {
-  color: #047857;
+  color: var(--brand-success);
 }
 .detail-hero.status-warning .detail-status {
-  color: #b45309;
+  color: var(--brand-warning);
 }
 .detail-hero.status-expired .detail-status {
-  color: #b91c1c;
+  color: var(--brand-error);
+}
+.detail-hero.status-pending .detail-status {
+  color: var(--brand-warning);
+}
+.detail-hero.status-ordered .detail-status {
+  color: var(--brand-warning);
 }
 .detail-hero.status-inactive .detail-status {
-  color: #4b5563;
+  color: var(--brand-muted);
 }
 .detail-section {
   display: grid;
@@ -90,7 +96,7 @@
 }
 .detail-section h3 {
   margin: 0;
-  color: #111827;
+  color: var(--brand-ink);
   font-size: 15px;
   line-height: 1.2;
 }
@@ -99,14 +105,17 @@
   grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
   gap: 10px;
 }
+.license-detail-grid {
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+}
 .detail-grid div,
 .notes-readonly,
 .notes-empty {
   min-width: 0;
   padding: 12px;
   border: 1px solid var(--brand-border);
-  border-radius: 8px;
-  background: #fff;
+  border-radius: 12px;
+  background: var(--brand-panel);
 }
 .detail-grid span {
   display: block;
@@ -119,9 +128,115 @@
 .detail-grid strong {
   display: block;
   min-width: 0;
-  color: #111827;
+  color: var(--brand-ink);
   font-size: 14px;
   overflow-wrap: anywhere;
+}
+.license-status-card {
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+//  align-items: center;
+  gap: 8px;
+}
+.license-status-card > div {
+  min-width: 0;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+}
+.license-status-card > .mat-mdc-icon-button {
+  width: 30px;
+  height: 30px;
+  padding: 3px;
+  --mdc-icon-button-state-layer-size: 30px;
+  align-self: center;
+}
+.license-status-card mat-icon {
+  width: 22px;
+  height: 22px;
+  margin: 0;
+  font-size: 22px;
+}
+.license-status-card.status-pending {
+  border-color: rgba(180, 83, 9, 0.28) !important;
+  background: #fffbeb !important;
+}
+.license-status-card.status-pending span,
+.license-status-card.status-pending strong,
+.license-status-card.status-pending mat-icon {
+  color: #92400e;
+}
+.license-status-card.status-ordered {
+  border-color: rgba(180, 83, 9, 0.22) !important;
+  background: #fff7ed !important;
+}
+.license-status-card.status-ordered span,
+.license-status-card.status-ordered strong,
+.license-status-card.status-ordered mat-icon {
+  color: #92400e;
+}
+.license-status-card.status-expired {
+  border-color: rgba(185, 28, 28, 0.28) !important;
+  background: #fef2f2 !important;
+}
+.license-status-card.status-expired span,
+.license-status-card.status-expired strong,
+.license-status-card.status-expired mat-icon {
+  color: #991b1b;
+}
+.license-expiry-warning {
+  border-color: rgba(185, 28, 28, 0.28) !important;
+  background: #fef2f2 !important;
+}
+.license-expiry-warning span,
+.license-expiry-warning strong {
+  color: #991b1b;
+}
+.license-file-card {
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+}
+.license-file-text {
+  display: block;
+  min-width: 0;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+}
+.license-file-text strong {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.license-file-card > .mat-mdc-icon-button {
+  flex: 0 0 auto;
+  width: 28px;
+  height: 28px;
+  padding: 2px;
+  --mdc-icon-button-state-layer-size: 28px;
+}
+.license-file-card > .mat-mdc-icon-button mat-icon {
+  width: 22px;
+  height: 22px;
+  margin: 0;
+  font-size: 22px;
+}
+.license-file-card small {
+  grid-column: 1 / -1;
+  min-width: 0;
+  margin-top: -4px;
+  color: var(--brand-muted);
+  font-size: 11px;
+  line-height: 1.25;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .infrastructure-card-grid {
   display: grid;
@@ -134,9 +249,9 @@
   min-width: 0;
   padding: 20px;
   border: 1px solid var(--brand-border);
-  border-radius: 8px;
-  background: #fff;
-  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+  border-radius: 12px;
+  background: var(--brand-panel);
+  box-shadow: var(--brand-shadow-sm);
 }
 .environment-badge {
   position: absolute;
@@ -174,7 +289,7 @@
   padding-right: 90px;
 }
 .infrastructure-lines mat-divider {
-  border-top-color: #e5e7eb;
+  border-top-color: var(--brand-border);
 }
 .infrastructure-line {
   display: grid;
@@ -187,7 +302,7 @@
   width: 24px;
   height: 24px;
   margin-top: -1px;
-  color: #6b7280;
+  color: var(--brand-muted);
   font-size: 24px;
 }
 .infrastructure-lines span {
@@ -201,7 +316,7 @@
 .infrastructure-lines strong {
   display: block;
   min-width: 0;
-  color: #111827;
+  color: var(--brand-ink);
   font-size: 15px;
   line-height: 1.35;
   overflow-wrap: anywhere;
@@ -226,8 +341,8 @@
   display: grid;
   overflow: hidden;
   border: 1px solid var(--brand-border);
-  border-radius: 8px;
-  background: #fff;
+  border-radius: 12px;
+  background: var(--brand-panel);
 }
 .mini-table-head,
 .mini-table-row {
@@ -252,7 +367,7 @@
 }
 .mini-table-head {
   color: var(--brand-muted);
-  background: #f8fafc;
+  background: var(--brand-panel-soft);
   font-size: 11px;
   font-weight: 800;
   text-transform: uppercase;
@@ -297,9 +412,9 @@
   min-width: 0;
   padding: 12px;
   border: 1px solid var(--brand-border);
-  border-radius: 8px;
-  background: #fff;
-  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+  border-radius: 12px;
+  background: var(--brand-panel);
+  box-shadow: var(--brand-shadow-sm);
 }
 .contact-card-head {
   display: flex;
@@ -310,7 +425,7 @@
 }
 .contact-card-head strong {
   min-width: 0;
-  color: #111827;
+  color: var(--brand-ink);
   font-size: 14px;
   line-height: 1.25;
   overflow-wrap: anywhere;
@@ -351,7 +466,7 @@
   gap: 8px;
   align-items: center;
   min-width: 0;
-  color: #374151;
+  color: var(--brand-ink);
   font-size: 13px;
 }
 .contact-line mat-icon {
@@ -384,7 +499,7 @@
 }
 .dialog-section h3 {
   margin: 0;
-  color: #111827;
+  color: var(--brand-ink);
   font-size: 15px;
   line-height: 1.2;
 }
@@ -392,6 +507,19 @@
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px;
+}
+.license-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+.license-file-edit-cell {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-height: 56px;
+  min-width: 0;
+}
+.license-file-edit-cell button {
+  flex: 0 0 auto;
 }
 .group-controls {
   display: grid;
@@ -422,8 +550,8 @@ mat-checkbox {
   gap: 10px;
   padding: 10px;
   border: 1px solid var(--brand-border);
-  border-radius: 8px;
-  background: #fff;
+  border-radius: 12px;
+  background: var(--brand-panel);
 }
 .contact-row {
   grid-template-columns: 1.1fr 1.2fr 1fr 0.8fr auto;
@@ -445,7 +573,7 @@ mat-checkbox {
   align-items: center;
   gap: 10px;
   min-width: 0;
-  color: #374151;
+  color: var(--brand-muted);
   font-size: 12px;
   font-weight: 800;
   line-height: 1.2;
@@ -453,7 +581,7 @@ mat-checkbox {
 }
 .infrastructure-block-title mat-divider {
   min-width: 0;
-  border-top-color: #e5e7eb;
+  border-top-color: var(--brand-border);
 }
 .infrastructure-fields {
   display: grid;
@@ -495,6 +623,7 @@ button mat-icon {
 }
 @media (max-width: 760px) {
   .dialog-grid,
+  .license-detail-grid,
   .group-controls,
   .group-controls.single-control,
   .contact-row,
@@ -509,6 +638,11 @@ button mat-icon {
   .mini-table-head.three-col,
   .mini-table-row.three-col {
     grid-template-columns: 1fr;
+  }
+  .license-file-edit-cell {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 8px;
   }
   .infrastructure-lines {
     padding-right: 0;

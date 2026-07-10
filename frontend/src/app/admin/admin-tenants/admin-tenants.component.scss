@@ -20,7 +20,7 @@ h1 {
 
 p {
   margin: 4px 0 0;
-  color: rgba(19, 19, 19, 0.62);
+  color: var(--brand-muted);
 }
 
 .loading {
@@ -32,8 +32,10 @@ p {
 .admin-table {
   width: 100%;
   overflow: hidden;
-  border: 1px solid rgba(19, 19, 19, 0.08);
-  border-radius: 8px;
+  border: 1px solid var(--brand-border);
+  border-radius: 14px;
+  background: var(--brand-panel);
+  box-shadow: var(--brand-shadow-sm);
 }
 
 button mat-icon {
@@ -48,7 +50,7 @@ button mat-icon {
 .empty-state {
   padding: 36px;
   text-align: center;
-  color: rgba(19, 19, 19, 0.62);
+  color: var(--brand-muted);
 }
 
 @media (max-width: 720px) {

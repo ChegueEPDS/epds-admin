@@ -5,10 +5,11 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatCheckboxModule } from '@angular/material/checkbox';
 import { MatDatepickerModule } from '@angular/material/datepicker';
 import { MatDividerModule } from '@angular/material/divider';
-import { MAT_DIALOG_DATA, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
+import { MAT_DIALOG_DATA, MatDialog, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatIconModule } from '@angular/material/icon';
 import { MatInputModule } from '@angular/material/input';
+import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { MatSelectModule } from '@angular/material/select';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { RichTextEditorComponent } from '../../shared/rich-text-editor/rich-text-editor.component';
@@ -22,9 +23,12 @@ import {
   InfrastructureGroup,
   LicenseClientTenant,
   LicenseCustomer,
+  LicenseService,
+  LicenseOrderPayload,
   LicensePayload,
   ObjectLimitOption
 } from '../../services/license.service';
+import { LicenseOrderDialogComponent } from '../license-order-dialog/license-order-dialog.component';
 
 export type LicenseDialogResult =
   | { action: 'save'; payload: LicensePayload }
@@ -52,6 +56,7 @@ const APPLICATION_SERVER_TYPES: ApplicationServerType[] = ['Linux', 'Windows'];
     MatCheckboxModule,
     MatIconModule,
     MatInputModule,
+    MatSnackBarModule,
     MatSelectModule,
     MatTooltipModule,
     RichTextEditorComponent
@@ -70,11 +75,15 @@ export class LicenseDialogComponent {
   model: LicensePayload;
   expiryDate: Date | null = null;
   isEditing = false;
+  isUploadingLicenseFile = false;
   visibleVpnPasswords = new Set<number>();
 
   constructor(
     private dialogRef: MatDialogRef<LicenseDialogComponent, LicenseDialogResult>,
-    @Inject(MAT_DIALOG_DATA) public data: { license?: LicenseCustomer; canEdit?: boolean; canDelete?: boolean; clientTenants?: LicenseClientTenant[] }
+    private dialog: MatDialog,
+    private licenseService: LicenseService,
+    private snackBar: MatSnackBar,
+    @Inject(MAT_DIALOG_DATA) public data: { license?: LicenseCustomer; canEdit?: boolean; canDelete?: boolean; clientTenants?: LicenseClientTenant[]; currentUserTenantType?: string | null }
   ) {
     this.model = this.buildModel(data.license);
     this.expiryDate = this.parseDateInput(this.model.expiresAt);
@@ -85,6 +94,7 @@ export class LicenseDialogComponent {
   private buildModel(license?: LicenseCustomer): LicensePayload {
     return {
       customerName: license?.customerName || '',
+      description: license?.description || '',
       tenantId: license?.tenantId || this.data.clientTenants?.[0]?.id || null,
       status: license?.status || 'active',
       objectLimitOption: license?.objectLimitOption || '1000',
@@ -160,21 +170,27 @@ export class LicenseDialogComponent {
 
   statusText(): string {
     if (this.model.status === 'inactive') return 'Inactive';
-    if (this.isExpired()) return 'Expired';
+    if (this.model.status === 'expired' || (this.model.status === 'active' && this.isExpired())) return 'Expired';
+    if (this.model.status === 'pending') return 'Pending';
+    if (this.model.status === 'ordered') return 'Ordered';
     if (this.expiresSoon()) return 'Expires soon';
     return 'Active';
   }
 
   statusIcon(): string {
     if (this.model.status === 'inactive') return 'pause_circle';
-    if (this.isExpired()) return 'event_busy';
+    if (this.model.status === 'expired' || (this.model.status === 'active' && this.isExpired())) return 'event_busy';
+    if (this.model.status === 'ordered') return 'order_approve';
+    if (this.model.status === 'pending') return 'pending_actions';
     if (this.expiresSoon()) return 'warning';
     return 'check_circle';
   }
 
   statusClass(): string {
     if (this.model.status === 'inactive') return 'status-inactive';
-    if (this.isExpired()) return 'status-expired';
+    if (this.model.status === 'ordered') return 'status-ordered';
+    if (this.model.status === 'pending') return 'status-pending';
+    if (this.model.status === 'expired' || (this.model.status === 'active' && this.isExpired())) return 'status-expired';
     if (this.expiresSoon()) return 'status-warning';
     return 'status-active';
   }
@@ -204,6 +220,124 @@ export class LicenseDialogComponent {
 
   clientTenantLabel(tenant: LicenseClientTenant): string {
     return tenant.displayName || tenant.name;
+  }
+
+  showVpnLogins(): boolean {
+    return this.data.currentUserTenantType !== 'client';
+  }
+
+  canManageLicenseFile(): boolean {
+    return Boolean(this.data.license?.id && this.data.canEdit);
+  }
+
+  canOrderLicense(): boolean {
+    return Boolean(this.data.license?.id && this.data.canEdit && (
+      (this.model.status === 'pending' && !this.data.license?.licenseFile) ||
+      this.model.status === 'expired' ||
+      (this.model.status === 'active' && this.isExpired())
+    ));
+  }
+
+  canActivateLicense(): boolean {
+    return Boolean(this.data.license?.id && this.data.canEdit && this.model.status === 'pending' && this.data.license?.licenseFile);
+  }
+
+  showLicenseUploadButton(): boolean {
+    return Boolean(this.canManageLicenseFile() && this.model.status === 'ordered');
+  }
+
+  syncLicense(license: LicenseCustomer): void {
+    if (this.data.license) Object.assign(this.data.license, license);
+    this.data.license = license;
+    this.model = this.buildModel(license);
+    this.expiryDate = this.parseDateInput(this.model.expiresAt);
+  }
+
+  licenseFileName(): string {
+    return this.data.license?.licenseFile?.fileName || '';
+  }
+
+  licenseFileUpdatedText(): string {
+    const file = this.data.license?.licenseFile;
+    if (!file?.uploadedAt) return '';
+    const uploadedAt = new Date(file.uploadedAt).toLocaleString();
+    const uploadedBy = String(file.uploadedByName || '').trim();
+    return uploadedBy ? `Updated: ${uploadedAt} - ${uploadedBy}` : `Updated: ${uploadedAt}`;
+  }
+
+  async uploadLicenseFile(input: HTMLInputElement): Promise<void> {
+    const file = input.files?.[0] || null;
+    input.value = '';
+    if (!file || !this.data.license?.id || !this.data.canEdit) return;
+    const extension = `.${file.name.split('.').pop()?.toLowerCase() || ''}`;
+    if (!['.zip', '.txt', '.docx'].includes(extension) || file.size > 3 * 1024 * 1024) {
+      this.snackBar.open('Only ZIP, TXT or DOCX files up to 3 MB are allowed', 'Close', { duration: 3500 });
+      return;
+    }
+    this.isUploadingLicenseFile = true;
+    try {
+      const response = await this.licenseService.uploadLicenseFile(this.data.license.id, file).toPromise();
+      if (response?.license) {
+        this.syncLicense(response.license);
+      }
+      this.snackBar.open('License file uploaded', 'Close', { duration: 2500 });
+    } catch (err: any) {
+      this.snackBar.open(err?.error?.error || 'Could not upload license file', 'Close', { duration: 3500 });
+    } finally {
+      this.isUploadingLicenseFile = false;
+    }
+  }
+
+  async openOrderLicenseDialog(): Promise<void> {
+    if (!this.data.license?.id || !this.data.canEdit) return;
+    const payload = await this.dialog.open(LicenseOrderDialogComponent, {
+      data: { license: this.data.license },
+      width: '680px',
+      maxWidth: 'calc(100vw - 24px)'
+    }).afterClosed().toPromise() as LicenseOrderPayload | undefined;
+    if (!payload) return;
+
+    try {
+      const response = await this.licenseService.orderLicense(this.data.license.id, payload).toPromise();
+      if (response?.license) this.syncLicense(response.license);
+      this.snackBar.open('License ordered', 'Close', { duration: 2500 });
+    } catch (err: any) {
+      this.snackBar.open(err?.error?.error || 'Could not order license', 'Close', { duration: 3500 });
+    }
+  }
+
+  async activateLicense(): Promise<void> {
+    if (!this.data.license?.id || !this.data.canEdit) return;
+    try {
+      const response = await this.licenseService.activateLicense(this.data.license.id).toPromise();
+      if (response?.license) this.syncLicense(response.license);
+      this.snackBar.open('License activated', 'Close', { duration: 2500 });
+    } catch (err: any) {
+      this.snackBar.open(err?.error?.error || 'Could not activate license', 'Close', { duration: 3500 });
+    }
+  }
+
+  async downloadLicenseFile(): Promise<void> {
+    if (!this.data.license?.id || !this.data.canEdit || !this.data.license.licenseFile) return;
+    try {
+      const response = await this.licenseService.downloadLicenseFile(this.data.license.id).toPromise();
+      const blob = response?.body;
+      if (!blob) throw new Error('Empty file response');
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = this.data.license.licenseFile.fileName || 'license-file';
+      link.click();
+      URL.revokeObjectURL(url);
+    } catch (err: any) {
+      this.snackBar.open(err?.error?.error || 'Could not download license file', 'Close', { duration: 3500 });
+    }
+  }
+
+  customerDisplayName(): string {
+    const customerName = String(this.model.customerName || '').trim();
+    const description = String(this.model.description || '').trim();
+    return description ? `${customerName} - ${description}` : customerName;
   }
 
   phoneText(value: string | null | undefined): string {
@@ -338,6 +472,7 @@ export class LicenseDialogComponent {
 
   save(): void {
     const customerName = this.model.customerName.trim();
+    const description = String(this.model.description || '').trim();
     const selectedTenant = this.selectedClientTenant();
     const resolvedCustomerName = selectedTenant ? this.clientTenantLabel(selectedTenant) : customerName;
     const customObjectLimit = Number(this.model.customObjectLimit);
@@ -384,6 +519,7 @@ export class LicenseDialogComponent {
       payload: {
         ...this.model,
         customerName: resolvedCustomerName,
+        description,
         tenantId: this.model.tenantId || null,
         status: this.model.status,
         objectLimitOption: this.model.objectLimitOption,
@@ -516,7 +652,9 @@ export class LicenseDialogComponent {
     this.model.vpnCredentials = this.model.vpnCredentials.filter((_, currentIndex) => currentIndex !== index);
   }
 
-  private isExpired(): boolean {
+  isExpired(): boolean {
+    if (this.model.status === 'expired') return true;
+    if (this.model.status !== 'active') return false;
     if (!this.expiryDate) return false;
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -524,6 +662,7 @@ export class LicenseDialogComponent {
   }
 
   private expiresSoon(): boolean {
+    if (this.model.status !== 'active') return false;
     if (!this.expiryDate || this.isExpired()) return false;
     return this.expiryDate.getTime() <= Date.now() + 30 * 24 * 60 * 60 * 1000;
   }

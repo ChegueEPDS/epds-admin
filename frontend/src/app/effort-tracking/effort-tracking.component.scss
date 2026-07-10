@@ -1,8 +1,8 @@
 .effort-page {
-  min-height: calc(100vh - 56px);
+  min-height: calc(100vh - 64px);
   padding: 28px 34px;
-  color: #111827;
-  background: #fff8f5;
+  color: var(--brand-ink);
+  background: transparent;
 }
 
 .page-header,
@@ -27,7 +27,7 @@
 .detail-header p,
 .comment {
   margin: 6px 0 0;
-  color: #64748b;
+  color: var(--brand-muted);
 }
 
 .project-form,
@@ -37,9 +37,9 @@
   gap: 14px;
   margin: 20px 0;
   padding: 18px;
-  border: 1px solid #e5e7eb;
-  border-radius: 8px;
-  background: #ffffff;
+  border: 1px solid var(--brand-border);
+  border-radius: 14px;
+  background: var(--brand-panel);
 }
 
 .wide-field,
@@ -52,7 +52,7 @@
   display: grid;
   min-height: 150px;
   place-items: center;
-  color: #64748b;
+  color: var(--brand-muted);
 }
 
 .effort-layout {
@@ -74,12 +74,12 @@
   width: 100%;
   padding: 44px 16px 16px;
   text-align: left;
-  border: 1px solid #e5e7eb;
-  border-radius: 8px;
-  background: #ffffff;
+  border: 1px solid var(--brand-border);
+  border-radius: 14px;
+  background: var(--brand-panel);
   color: inherit;
   cursor: pointer;
-  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.08);
+  box-shadow: var(--brand-shadow-sm);
 }
 
 .project-card.selected {
@@ -105,7 +105,7 @@
 
 .time-row {
   grid-template-columns: 1fr auto;
-  color: #64748b;
+  color: var(--brand-muted);
   font-size: 13px;
 }
 
@@ -119,10 +119,10 @@
 .summary-grid,
 .task-card {
   padding: 18px;
-  border: 1px solid #e5e7eb;
-  border-radius: 8px;
-  background: #ffffff;
-  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.08);
+  border: 1px solid var(--brand-border);
+  border-radius: 14px;
+  background: var(--brand-panel);
+  box-shadow: var(--brand-shadow-sm);
 }
 
 .detail-actions {
@@ -138,7 +138,7 @@
 .summary-grid span,
 .task-times span {
   display: block;
-  color: #6b7280;
+  color: var(--brand-muted);
   font-size: 12px;
   font-weight: 700;
   text-transform: uppercase;
@@ -158,7 +158,7 @@
 .task-note {
   display: -webkit-box;
   overflow: hidden;
-  color: #334155;
+  color: var(--brand-ink);
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 6;
   line-clamp: 6;
@@ -206,8 +206,8 @@
 :host ::ng-deep .rich-content blockquote {
   margin: 10px 0 0;
   padding-left: 12px;
-  border-left: 3px solid #e5e7eb;
-  color: #4b5563;
+  border-left: 3px solid var(--brand-border-strong);
+  color: var(--brand-muted);
 }
 
 :host ::ng-deep .rich-content table {
@@ -218,7 +218,7 @@
 :host ::ng-deep .rich-content td,
 :host ::ng-deep .rich-content th {
   padding: 6px 8px;
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--brand-border);
 }
 
 .task-grid {
@@ -329,7 +329,7 @@
 }
 
 .task-card small {
-  color: #64748b;
+  color: var(--brand-muted);
 }
 
 .status-pill {

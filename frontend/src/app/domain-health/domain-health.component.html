@@ -148,6 +148,12 @@
     </section>
 
     <aside class="detail-panel" *ngIf="selectedDomain; else noSelection">
+      <div class="detail-loading" *ngIf="isLoadingChecks && !overview && !checks.length; else detailContent">
+        <mat-progress-spinner diameter="34" mode="indeterminate"></mat-progress-spinner>
+        <span>Loading domain details...</span>
+      </div>
+
+      <ng-template #detailContent>
       <div class="detail-head">
         <div>
           <h2>{{ selectedDomain.name }}</h2>
@@ -378,6 +384,7 @@
           </div>
         </div>
       </div>
+      </ng-template>
     </aside>
 
     <ng-template #noSelection>

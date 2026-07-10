@@ -1,6 +1,6 @@
 <div class="license-dialog-header">
   <div>
-    <h2 mat-dialog-title>{{ data.license ? model.customerName : 'Add customer license' }}</h2>
+    <h2 mat-dialog-title>{{ data.license ? customerDisplayName() : 'Add customer license' }}</h2>
     <p>{{ isEditing ? 'Editing license data' : 'Customer license sheet' }}</p>
   </div>
   <div class="dialog-header-actions">
@@ -23,7 +23,7 @@
       <section class="detail-hero" [ngClass]="statusClass()">
         <div>
           <span class="detail-eyebrow">EPDS license</span>
-          <h3>{{ model.customerName }}</h3>
+          <h3>{{ customerDisplayName() }}</h3>
           <p>{{ statusText() }} · {{ objectLimitText() }} · expires {{ expiryDate | date:'mediumDate' }}</p>
         </div>
         <span class="detail-status">
@@ -34,22 +34,47 @@
 
       <section class="detail-section">
         <h3>License</h3>
-        <div class="detail-grid">
-          <div>
-            <span>Status</span>
-            <strong>{{ statusText() }}</strong>
+        <div class="detail-grid license-detail-grid">
+          <div class="license-status-card" [ngClass]="statusClass()">
+            <div>
+              <span>Status</span>
+              <strong>{{ statusText() }}</strong>
+            </div>
+            <button mat-icon-button type="button" *ngIf="canOrderLicense()" matTooltip="Order approve" (click)="openOrderLicenseDialog()">
+              <mat-icon class="material-symbols-outlined">order_approve</mat-icon>
+            </button>
+            <button mat-icon-button type="button" *ngIf="canActivateLicense()" matTooltip="License activated" (click)="activateLicense()">
+              <mat-icon class="material-symbols-outlined">play_arrow</mat-icon>
+            </button>
           </div>
           <div>
             <span>Object count</span>
             <strong>{{ objectLimitText() }}</strong>
           </div>
-          <div>
+          <div [class.license-expiry-warning]="model.status === 'expired' || (model.status === 'active' && isExpired())">
             <span>Expiry date</span>
             <strong>{{ expiryDate | date:'mediumDate' }}</strong>
           </div>
           <div>
             <span>Mobile app</span>
             <strong>{{ model.mobileApp ? 'Yes' : 'No' }}</strong>
+          </div>
+          <div class="license-file-card" *ngIf="canManageLicenseFile()">
+            <div class="license-file-text">
+              <span>License file</span>
+              <strong [matTooltip]="licenseFileName()" [matTooltipDisabled]="!licenseFileName()">{{ licenseFileName() || 'No file uploaded' }}</strong>
+              <!--small *ngIf="licenseFileUpdatedText()">{{ licenseFileUpdatedText() }}</small-->
+            </div>
+            <input #readonlyLicenseFileInput type="file" accept=".zip,.txt,.docx" hidden (change)="uploadLicenseFile(readonlyLicenseFileInput)">
+            <button
+              mat-icon-button
+              type="button"
+              [matTooltip]="showLicenseUploadButton() ? 'Upload license file' : 'Download license file'"
+              (click)="showLicenseUploadButton() ? readonlyLicenseFileInput.click() : downloadLicenseFile()"
+              [disabled]="isUploadingLicenseFile || (!showLicenseUploadButton() && !data.license?.licenseFile)"
+            >
+              <mat-icon class="material-symbols-outlined">{{ showLicenseUploadButton() ? 'upload_file' : 'download' }}</mat-icon>
+            </button>
           </div>
         </div>
       </section>
@@ -177,24 +202,26 @@
             <strong>{{ emptyText(model.twoFactorApp) }}</strong>
           </div>
         </div>
-        <div class="mini-table" *ngIf="model.vpnCredentials.length; else noVpnCredentials">
-          <div class="mini-table-head two-col">
-            <span>VPN login name</span>
-            <span>Password</span>
+        <ng-container *ngIf="showVpnLogins()">
+          <div class="mini-table" *ngIf="model.vpnCredentials.length; else noVpnCredentials">
+            <div class="mini-table-head two-col">
+              <span>VPN login name</span>
+              <span>Password</span>
+            </div>
+            <div class="mini-table-row two-col" *ngFor="let credential of model.vpnCredentials; let i = index">
+              <strong>{{ emptyText(credential.username) }}</strong>
+              <span class="password-cell">
+                <span>{{ isVpnPasswordVisible(i) ? emptyText(credential.password) : maskedPassword(credential.password) }}</span>
+                <button mat-icon-button type="button" [matTooltip]="isVpnPasswordVisible(i) ? 'Hide password' : 'Show password'" (click)="toggleVpnPassword(i)">
+                  <mat-icon class="material-symbols-outlined">{{ isVpnPasswordVisible(i) ? 'visibility_off' : 'visibility' }}</mat-icon>
+                </button>
+              </span>
+            </div>
           </div>
-          <div class="mini-table-row two-col" *ngFor="let credential of model.vpnCredentials; let i = index">
-            <strong>{{ emptyText(credential.username) }}</strong>
-            <span class="password-cell">
-              <span>{{ isVpnPasswordVisible(i) ? emptyText(credential.password) : maskedPassword(credential.password) }}</span>
-              <button mat-icon-button type="button" [matTooltip]="isVpnPasswordVisible(i) ? 'Hide password' : 'Show password'" (click)="toggleVpnPassword(i)">
-                <mat-icon class="material-symbols-outlined">{{ isVpnPasswordVisible(i) ? 'visibility_off' : 'visibility' }}</mat-icon>
-              </button>
-            </span>
-          </div>
-        </div>
-        <ng-template #noVpnCredentials>
-          <div class="notes-empty">No VPN logins.</div>
-        </ng-template>
+          <ng-template #noVpnCredentials>
+            <div class="notes-empty">No VPN logins.</div>
+          </ng-template>
+        </ng-container>
       </section>
 
       <section class="detail-section">
@@ -209,7 +236,7 @@
     <ng-template #editSheet>
     <section class="dialog-section">
       <h3>License</h3>
-      <div class="dialog-grid">
+      <div class="dialog-grid license-grid">
         <mat-form-field appearance="outline" *ngIf="data.clientTenants?.length; else customerTextField">
           <mat-label>Customer</mat-label>
           <mat-select name="tenantId" [(ngModel)]="model.tenantId" required>
@@ -224,10 +251,18 @@
         </ng-template>
 
         <mat-form-field appearance="outline">
+          <mat-label>Description</mat-label>
+          <input matInput name="description" maxlength="32" [(ngModel)]="model.description">
+        </mat-form-field>
+
+        <mat-form-field appearance="outline">
           <mat-label>Status</mat-label>
           <mat-select name="status" [(ngModel)]="model.status" required>
             <mat-option value="active">Active</mat-option>
             <mat-option value="inactive">Inactive</mat-option>
+            <mat-option value="expired">Expired</mat-option>
+            <mat-option value="pending">Pending</mat-option>
+            <mat-option value="ordered">Ordered</mat-option>
           </mat-select>
         </mat-form-field>
 
@@ -250,7 +285,20 @@
           <mat-datepicker #expiresAtPicker></mat-datepicker>
         </mat-form-field>
 
-        <mat-checkbox name="mobileApp" [(ngModel)]="model.mobileApp">Mobile app</mat-checkbox>
+        <div class="license-file-edit-cell">
+          <mat-checkbox name="mobileApp" [(ngModel)]="model.mobileApp">Mobile app</mat-checkbox>
+          <input #licenseFileInput type="file" accept=".zip,.txt,.docx" hidden (change)="uploadLicenseFile(licenseFileInput)">
+          <button
+            mat-stroked-button
+            type="button"
+            *ngIf="canManageLicenseFile()"
+            (click)="licenseFileInput.click()"
+            [disabled]="isUploadingLicenseFile"
+          >
+            <mat-icon class="material-symbols-outlined">{{ isUploadingLicenseFile ? 'hourglass_top' : 'upload_file' }}</mat-icon>
+            {{ isUploadingLicenseFile ? 'Uploading...' : 'Upload license file' }}
+          </button>
+        </div>
       </div>
     </section>
 
@@ -458,6 +506,7 @@
         </mat-form-field>
       </div>
 
+      <ng-container *ngIf="showVpnLogins()">
       <div class="section-head">
         <h3>VPN logins</h3>
         <button mat-stroked-button type="button" (click)="addVpnCredential()">
@@ -486,6 +535,7 @@
       <ng-template #emptyVpnEdit>
         <div class="notes-empty">No VPN logins added.</div>
       </ng-template>
+      </ng-container>
     </section>
 
     <section class="dialog-section">

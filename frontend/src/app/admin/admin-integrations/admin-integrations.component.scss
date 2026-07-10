@@ -1,0 +1,27 @@
+.integrations-page { max-width: 1480px; margin: 0 auto; padding: 32px 24px 56px; }
+.header-actions { display: flex; align-items: center; gap: 10px; }
+.page-header { display: flex; align-items: flex-end; justify-content: space-between; gap: 24px; }
+.eyebrow { color: var(--brand-accent-ink); font-size: 12px; font-weight: 800; letter-spacing: .14em; }
+h1 { margin: 6px 0 5px; font: 650 clamp(32px, 4vw, 48px)/1 'Newsreader', Georgia, serif; letter-spacing: -.035em; }
+.page-header p { max-width: 720px; margin: 0; color: var(--brand-muted); }
+.page-header button mat-icon { margin-right: 7px; }
+.contract-strip { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px; margin: 28px 0 20px; overflow: hidden; border: 1px solid var(--brand-border); border-radius: 14px; background: var(--brand-border); }
+.contract-strip div { display: grid; gap: 6px; padding: 15px 18px; background: var(--brand-accent-soft); }
+.contract-strip strong { font-size: 12px; text-transform: uppercase; letter-spacing: .08em; }
+code { font-size: 12px; overflow-wrap: anywhere; color: var(--brand-accent-ink); }
+.table-shell { overflow-x: auto; border: 1px solid var(--brand-border); border-radius: 14px; background: var(--brand-panel); box-shadow: var(--brand-shadow-sm); }
+table { width: 100%; min-width: 1120px; }
+td { vertical-align: top; padding-top: 17px; padding-bottom: 17px; }
+td small { display: block; max-width: 260px; margin-top: 5px; overflow: hidden; color: var(--brand-muted); font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+.dot { display: inline-block; width: 8px; height: 8px; margin-right: 7px; border-radius: 50%; background: #9ca3af; }
+.dot.on { background: #059669; box-shadow: 0 0 0 4px rgba(5, 150, 105, .12); }
+.delivery { display: block; font-size: 12px; line-height: 1.7; }
+.delivery.delivered { color: #047857; }.delivery.pending { color: #92400e; }.delivery.dead { color: #b91c1c; font-weight: 700; }
+.status { display: inline-flex; padding: 4px 9px; border-radius: 99px; color: #065f46; background: #d1fae5; font-size: 11px; font-weight: 800; text-transform: uppercase; }
+.status.revoked { color: #6b7280; background: #e5e7eb; }
+.actions { width: 88px; white-space: nowrap; }.actions mat-spinner { display: inline-block; margin: 8px; }
+.loading { display: flex; justify-content: center; padding: 70px; }
+.empty { padding: 72px 24px; text-align: center; border: 1px dashed var(--brand-accent-border); border-radius: 14px; background: var(--brand-accent-soft); }
+.empty mat-icon { width: 48px; height: 48px; color: var(--brand-accent-ink); font-size: 48px; }.empty h2 { margin: 12px 0 4px; }.empty p { margin: 0; color: var(--brand-muted); }
+:host ::ng-deep .danger { color: #b91c1c; }
+@media (max-width: 820px) { .integrations-page { padding: 24px 12px; }.page-header { align-items: stretch; flex-direction: column; }.header-actions { justify-content: flex-end; }.contract-strip { grid-template-columns: 1fr; } }

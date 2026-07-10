@@ -245,4 +245,8 @@ export class AuthService {
     const user = this.currentUser;
     return `${user?.firstName || ''} ${user?.lastName || ''}`.trim() || user?.email || '';
   }
+
+  getLastName(): string {
+    return this.currentUser?.lastName || '';
+  }
 }

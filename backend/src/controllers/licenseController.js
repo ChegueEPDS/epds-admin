@@ -1,5 +1,9 @@
 const LicenseCustomer = require('../models/licenseCustomer');
 const Tenant = require('../models/tenant');
+const azureBlob = require('../services/azureBlobService');
+const { replaceLicenseFile } = require('../services/licenseFileService');
+const { publishOrderedEvent, transitionStatus } = require('../services/licenseIntegrationService');
+const { expireLicenses, todayUtcStart } = require('../services/licenseExpiryService');
 
 function licenseScopeQuery(scope) {
   if (canManageAllLicenses(scope)) return {};
@@ -17,6 +21,33 @@ function tenantLabel(tenant) {
 
 function normalizeCustomerName(input) {
   return String(input || '').trim().replace(/\s+/g, ' ');
+}
+
+function safePathSegment(input, fallback = 'file') {
+  return String(input || fallback)
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-zA-Z0-9._ -]+/g, '')
+    .trim()
+    .replace(/\s+/g, ' ')
+    .replace(/[/.\\]+$/g, '')
+    .slice(0, 120) || fallback;
+}
+
+function cleanFileName(input) {
+  return safePathSegment(input, 'license-file').replace(/[\\/]/g, '_');
+}
+
+function contentDispositionAttachment(fileName) {
+  const ascii = cleanFileName(fileName).replace(/"/g, '');
+  const encoded = encodeURIComponent(fileName).replace(/['()]/g, escape).replace(/\*/g, '%2A');
+  return `attachment; filename="${ascii}"; filename*=UTF-8''${encoded}`;
+}
+
+function userDisplayName(user) {
+  return [user?.firstName, user?.lastName].filter(Boolean).join(' ').trim()
+    || String(user?.email || '').trim()
+    || 'Unknown user';
 }
 
 function normalizeDateOnly(input) {
@@ -48,6 +79,12 @@ function normalizeObjectLimit(input, customInput) {
   }
 
   return { objectLimitOption: option, customObjectLimit };
+}
+
+function applyExpiredStatus(license) {
+  if (license.status === 'active' && license.expiresAt && new Date(license.expiresAt) < todayUtcStart()) {
+    transitionStatus(license, 'expired');
+  }
 }
 
 function normalizeOptionalEnum(input, options, label) {
@@ -213,7 +250,8 @@ function buildInfrastructureGroups(license, databaseAddresses, applicationAddres
   ));
 }
 
-function presentLicense(license) {
+function presentLicense(license, options = {}) {
+  const includeVpnCredentials = options.includeVpnCredentials !== false;
   const tenant = license.tenantId && typeof license.tenantId === 'object' ? license.tenantId : null;
   const objectLimit = license.objectLimitOption === 'custom'
     ? license.customObjectLimit
@@ -250,10 +288,20 @@ function presentLicense(license) {
     });
   }
   const infrastructureGroups = buildInfrastructureGroups(license, databaseAddresses, applicationAddresses);
+  const licenseFile = license.licenseFile?.blobPath ? {
+    fileName: license.licenseFile.fileName || 'license-file',
+    blobPath: license.licenseFile.blobPath || '',
+    blobUrl: license.licenseFile.blobUrl || '',
+    contentType: license.licenseFile.contentType || '',
+    size: license.licenseFile.size || 0,
+    uploadedAt: license.licenseFile.uploadedAt || null,
+    uploadedByName: license.licenseFile.uploadedByName || ''
+  } : null;
 
   return {
     id: String(license._id),
     customerName: license.customerName,
+    description: license.description || '',
     status: license.status,
     objectLimitOption: license.objectLimitOption,
     customObjectLimit: license.customObjectLimit || null,
@@ -281,10 +329,11 @@ function presentLicense(license) {
     })),
     vpnApp: license.vpnApp || '',
     twoFactorApp: license.twoFactorApp || '',
-    vpnCredentials: (license.vpnCredentials || []).map((credential) => ({
+    vpnCredentials: includeVpnCredentials ? (license.vpnCredentials || []).map((credential) => ({
       username: credential.username || '',
       password: credential.password || ''
-    })),
+    })) : [],
+    licenseFile,
     notesHtml: license.notesHtml || '',
     tenantId: tenant?._id ? String(tenant._id) : (license.tenantId ? String(license.tenantId) : null),
     tenantName: tenant?.name || null,
@@ -312,12 +361,20 @@ function applyLicensePayload(license, body) {
     license.normalizedCustomerName = customerName.toLowerCase();
   }
 
+  if (Object.prototype.hasOwnProperty.call(body, 'description')) {
+    const description = String(body.description || '').trim();
+    if (description.length > 32) {
+      throw httpError('Description can be at most 32 characters');
+    }
+    license.description = description;
+  }
+
   if (Object.prototype.hasOwnProperty.call(body, 'status')) {
     const status = String(body.status || '').trim().toLowerCase();
-    if (!['active', 'inactive'].includes(status)) {
+    if (!['active', 'inactive', 'expired', 'pending', 'ordered'].includes(status)) {
       throw httpError('Valid license status is required');
     }
-    license.status = status;
+    transitionStatus(license, status);
   }
 
   if (Object.prototype.hasOwnProperty.call(body, 'objectLimitOption')) {
@@ -443,6 +500,8 @@ function applyLicensePayload(license, body) {
 
 exports.listLicenses = async (req, res, next) => {
   try {
+    const includeVpnCredentials = req.scope?.tenantType !== 'client';
+    await expireLicenses();
     const licenses = await LicenseCustomer.find(licenseScopeQuery(req.scope))
       .sort({ customerName: 1 })
       .populate('tenantId', 'name displayName type')
@@ -451,7 +510,7 @@ exports.listLicenses = async (req, res, next) => {
       ? await Tenant.find({ type: 'client' }).sort({ displayName: 1, name: 1 }).select('name displayName type').lean()
       : [];
     return res.json({
-      licenses: licenses.map(presentLicense),
+      licenses: licenses.map((license) => presentLicense(license, { includeVpnCredentials })),
       objectLimitOptions: LicenseCustomer.objectLimitOptions,
       clientTenants: clientTenants.map((tenant) => ({
         id: String(tenant._id),
@@ -467,24 +526,32 @@ exports.listLicenses = async (req, res, next) => {
 
 exports.createLicense = async (req, res, next) => {
   try {
+    const includeVpnCredentials = req.scope?.tenantType !== 'client';
+    const payload = { ...(req.body || {}) };
+    if (!includeVpnCredentials) delete payload.vpnCredentials;
     const clientTenant = canManageAllLicenses(req.scope) ? await clientTenantFromPayload(req.body || {}) : null;
     const license = new LicenseCustomer({
       tenantId: clientTenant?._id || req.scope?.tenantId,
       createdBy: req.userId
     });
+    const previousStatus = license.status;
     for (const field of ['customerName', 'status', 'objectLimitOption', 'expiresAt']) {
       if (!Object.prototype.hasOwnProperty.call(req.body || {}, field)) {
         throw httpError('Customer name, status, object limit and expiry date are required');
       }
     }
-    applyLicensePayload(license, req.body || {});
+    applyLicensePayload(license, payload);
     if (clientTenant) {
       license.customerName = tenantLabel(clientTenant);
       license.normalizedCustomerName = license.customerName.toLowerCase();
     }
+    applyExpiredStatus(license);
     await license.save();
     await license.populate('tenantId', 'name displayName type');
-    return res.status(201).json({ license: presentLicense(license) });
+    await publishOrderedEvent(license, previousStatus, {
+      type: 'user', id: String(req.userId), name: userDisplayName(req.user)
+    });
+    return res.status(201).json({ license: presentLicense(license, { includeVpnCredentials }) });
   } catch (err) {
     if (err.code === 11000) return res.status(409).json({ error: 'Customer already has a license record' });
     if (err.statusCode) return res.status(err.statusCode).json({ error: err.message });
@@ -494,8 +561,13 @@ exports.createLicense = async (req, res, next) => {
 
 exports.updateLicense = async (req, res, next) => {
   try {
+    const includeVpnCredentials = req.scope?.tenantType !== 'client';
+    const payload = { ...(req.body || {}) };
+    if (!includeVpnCredentials) delete payload.vpnCredentials;
     const license = await LicenseCustomer.findOne({ _id: req.params.id, ...licenseScopeQuery(req.scope) });
     if (!license) return res.status(404).json({ error: 'License not found' });
+    applyExpiredStatus(license);
+    const previousStatus = license.status;
     const isGlobalManager = canManageAllLicenses(req.scope);
     const clientTenant = isGlobalManager && Object.prototype.hasOwnProperty.call(req.body || {}, 'tenantId')
       ? await clientTenantFromPayload(req.body || {})
@@ -503,16 +575,20 @@ exports.updateLicense = async (req, res, next) => {
         ? await Tenant.findOne({ _id: license.tenantId, type: 'client' })
         : null;
 
-    applyLicensePayload(license, req.body || {});
+    applyLicensePayload(license, payload);
     if (clientTenant) {
       license.tenantId = clientTenant._id;
       license.customerName = tenantLabel(clientTenant);
       license.normalizedCustomerName = license.customerName.toLowerCase();
     }
+    applyExpiredStatus(license);
     license.updatedBy = req.userId;
     await license.save();
     await license.populate('tenantId', 'name displayName type');
-    return res.json({ license: presentLicense(license) });
+    await publishOrderedEvent(license, previousStatus, {
+      type: 'user', id: String(req.userId), name: userDisplayName(req.user)
+    });
+    return res.json({ license: presentLicense(license, { includeVpnCredentials }) });
   } catch (err) {
     if (err.code === 11000) return res.status(409).json({ error: 'Customer already has a license record' });
     if (err.statusCode) return res.status(err.statusCode).json({ error: err.message });
@@ -524,8 +600,111 @@ exports.deleteLicense = async (req, res, next) => {
   try {
     const license = await LicenseCustomer.findOne({ _id: req.params.id, ...licenseScopeQuery(req.scope) });
     if (!license) return res.status(404).json({ error: 'License not found' });
+    const blobPath = license.licenseFile?.blobPath || '';
     await license.deleteOne();
+    if (blobPath) {
+      try { await azureBlob.deleteFile(blobPath); } catch (err) {
+        console.warn('[license] deleted license blob cleanup failed:', err?.message || err);
+      }
+    }
     return res.status(204).send();
+  } catch (err) {
+    return next(err);
+  }
+};
+
+exports.uploadLicenseFile = async (req, res, next) => {
+  try {
+    const license = await LicenseCustomer.findOne({ _id: req.params.id, ...licenseScopeQuery(req.scope) });
+    if (!license) return res.status(404).json({ error: 'License not found' });
+    if (!req.file) return res.status(400).json({ error: 'No file provided' });
+
+    await replaceLicenseFile(license, req.file, { userId: req.userId, name: userDisplayName(req.user) });
+    await license.populate('tenantId', 'name displayName type');
+    return res.json({ license: presentLicense(license, { includeVpnCredentials: req.scope?.tenantType !== 'client' }) });
+  } catch (err) {
+    if (err.statusCode) return res.status(err.statusCode).json({ error: err.message });
+    return next(err);
+  }
+};
+
+exports.orderLicense = async (req, res, next) => {
+  try {
+    const includeVpnCredentials = req.scope?.tenantType !== 'client';
+    const license = await LicenseCustomer.findOne({ _id: req.params.id, ...licenseScopeQuery(req.scope) });
+    if (!license) return res.status(404).json({ error: 'License not found' });
+    applyExpiredStatus(license);
+    const previousStatus = license.status;
+
+    const objectLimit = normalizeObjectLimit(req.body?.objectLimitOption, req.body?.customObjectLimit);
+    const expiresAt = normalizeDateOnly(req.body?.expiresAt);
+    if (!expiresAt) throw httpError('Valid expiry date is required');
+
+    const previousBlobPath = license.licenseFile?.blobPath || '';
+
+    license.objectLimitOption = objectLimit.objectLimitOption;
+    license.customObjectLimit = objectLimit.customObjectLimit;
+    license.mobileApp = req.body?.mobileApp === true;
+    license.expiresAt = expiresAt;
+    transitionStatus(license, 'ordered');
+    license.licenseFile = {
+      fileName: '',
+      blobPath: '',
+      blobUrl: '',
+      contentType: '',
+      size: 0,
+      uploadedAt: undefined,
+      uploadedBy: undefined,
+      uploadedByName: ''
+    };
+    license.updatedBy = req.userId;
+    await license.save();
+    if (previousBlobPath) {
+      try { await azureBlob.deleteFile(previousBlobPath); } catch (err) {
+        console.warn('[license] ordered license blob cleanup failed:', err?.message || err);
+      }
+    }
+    await license.populate('tenantId', 'name displayName type');
+    await publishOrderedEvent(license, previousStatus, {
+      type: 'user', id: String(req.userId), name: userDisplayName(req.user)
+    });
+    return res.json({ license: presentLicense(license, { includeVpnCredentials }) });
+  } catch (err) {
+    if (err.statusCode) return res.status(err.statusCode).json({ error: err.message });
+    return next(err);
+  }
+};
+
+exports.activateLicense = async (req, res, next) => {
+  try {
+    const includeVpnCredentials = req.scope?.tenantType !== 'client';
+    const license = await LicenseCustomer.findOne({ _id: req.params.id, ...licenseScopeQuery(req.scope) });
+    if (!license) return res.status(404).json({ error: 'License not found' });
+    if (!license.licenseFile?.blobPath) return res.status(400).json({ error: 'License file is required before activation' });
+
+    transitionStatus(license, 'active');
+    license.updatedBy = req.userId;
+    await license.save();
+    await license.populate('tenantId', 'name displayName type');
+    return res.json({ license: presentLicense(license, { includeVpnCredentials }) });
+  } catch (err) {
+    if (err.statusCode) return res.status(err.statusCode).json({ error: err.message });
+    return next(err);
+  }
+};
+
+exports.downloadLicenseFile = async (req, res, next) => {
+  try {
+    const license = await LicenseCustomer.findOne({ _id: req.params.id, ...licenseScopeQuery(req.scope) }).lean();
+    if (!license) return res.status(404).json({ error: 'License not found' });
+    if (!license.licenseFile?.blobPath) return res.status(404).json({ error: 'License file not found' });
+
+    const buffer = await azureBlob.downloadToBuffer(license.licenseFile.blobPath);
+    const fileName = license.licenseFile.fileName || 'license-file';
+    res.setHeader('Content-Type', license.licenseFile.contentType || 'application/octet-stream');
+    res.setHeader('Content-Length', buffer.length);
+    res.setHeader('Content-Disposition', contentDispositionAttachment(fileName));
+    return res.send(buffer);
   } catch (err) {
     return next(err);
   }

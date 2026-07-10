@@ -79,6 +79,7 @@ export class DomainHealthComponent implements OnInit, OnDestroy {
   activeChartPoint: ChartPoint | null = null;
   private refreshTimer?: ReturnType<typeof setInterval>;
   private lastSeenMonitorCompletion = '';
+  private checksRequestId = 0;
   readonly chart = {
     width: 720,
     height: 500,
@@ -225,25 +226,32 @@ export class DomainHealthComponent implements OnInit, OnDestroy {
 
   async selectDomain(domain: DomainMonitor): Promise<void> {
     this.selectedDomain = domain;
+    this.checks = [];
+    this.overview = null;
+    this.activeChartPoint = null;
     this.showDetails = false;
     await this.loadChecks();
   }
 
   async loadChecks(options: { silent?: boolean } = {}): Promise<void> {
     if (!this.selectedDomain) return;
+    const requestId = ++this.checksRequestId;
+    const domainId = this.selectedDomain.id;
+    const range = this.selectedRange;
     if (!options.silent) this.isLoadingChecks = true;
     try {
-      const response = await firstValueFrom(this.service.getChecks(this.selectedDomain.id, this.selectedRange));
+      const response = await firstValueFrom(this.service.getChecks(domainId, range));
+      if (requestId !== this.checksRequestId || this.selectedDomain?.id !== domainId || this.selectedRange !== range) return;
       this.selectedDomain = response.domain;
       this.checks = response.checks;
       this.overview = response.overview;
       this.activeChartPoint = null;
     } catch (error: any) {
-      if (!options.silent) {
+      if (requestId === this.checksRequestId && !options.silent) {
         this.snackBar.open(error?.error?.error || 'Failed to load timeline.', 'Close', { duration: 4500 });
       }
     } finally {
-      if (!options.silent) this.isLoadingChecks = false;
+      if (requestId === this.checksRequestId && !options.silent) this.isLoadingChecks = false;
     }
   }
 
