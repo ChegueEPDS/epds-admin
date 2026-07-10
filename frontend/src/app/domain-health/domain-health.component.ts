@@ -188,6 +188,10 @@ export class DomainHealthComponent implements OnInit, OnDestroy {
     const tenants = this.auth.isSuperAdmin() ? await firstValueFrom(this.admin.listTenants()) : [];
     const payload = await firstValueFrom(
       this.dialog.open(DomainDialogComponent, {
+        width: '860px',
+        maxWidth: 'calc(100vw - 32px)',
+        maxHeight: 'calc(100dvh - 32px)',
+        autoFocus: false,
         data: { domain, tenants, canEditOwner: this.auth.isSuperAdmin() }
       }).afterClosed()
     );

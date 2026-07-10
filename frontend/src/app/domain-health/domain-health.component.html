@@ -90,20 +90,20 @@
               [class.row-disabled]="!domain.enabled"
               (click)="selectDomain(domain)"
             >
-              <td>
+              <td data-label="Status">
                 <span class="status-pill" [ngClass]="'status-' + domain.displayStatus">
                   <mat-icon class="material-symbols-outlined">{{ statusIcon(domain.displayStatus) }}</mat-icon>
                   {{ statusLabel(domain.displayStatus) }}
                 </span>
               </td>
-              <td>
+              <td class="domain-name-cell" data-label="Domain">
                 <strong>{{ domain.name }}</strong>
                 <span class="domain-url">{{ domain.baseUrl }}</span>
               </td>
-              <td *ngIf="auth.isSuperAdmin()">
+              <td *ngIf="auth.isSuperAdmin()" data-label="Owner">
                 <span class="owner-pill">{{ ownerText(domain) }}</span>
               </td>
-              <td>
+              <td data-label="Performance">
                 <span class="status-pill" [ngClass]="'performance-' + performanceStatus(domain)">
                   <mat-icon class="material-symbols-outlined">{{ performanceIcon(performanceStatus(domain)) }}</mat-icon>
                   {{ performanceLabel(performanceStatus(domain)) }}
@@ -112,16 +112,16 @@
                   {{ responseText(domain) }} · P95 {{ msText(domain.performance?.p95ResponseMs) }}
                 </span>
               </td>
-              <td>
+              <td data-label="TLS">
                 <span>{{ tlsText(domain) }}</span>
                 <span class="metric-subtext">redirects {{ redirectText(domain) }}</span>
               </td>
-              <td>{{ domain.lastCheckedAt ? (domain.lastCheckedAt | date:'M/d/yy, HH:mm') : '-' }}</td>
-              <td>
+              <td data-label="Checked">{{ domain.lastCheckedAt ? (domain.lastCheckedAt | date:'M/d/yy, HH:mm') : '-' }}</td>
+              <td data-label="Issue">
                 <span>{{ issueText(domain) }}</span>
                 <span class="metric-subtext">24h uptime {{ uptimeText(domain) }}</span>
               </td>
-              <td class="actions-col">
+              <td class="actions-col" data-label="Actions">
                 <a mat-icon-button [href]="domain.baseUrl" target="_blank" rel="noopener" matTooltip="Open website" (click)="$event.stopPropagation()">
                   <mat-icon class="material-symbols-outlined">open_in_new</mat-icon>
                 </a>

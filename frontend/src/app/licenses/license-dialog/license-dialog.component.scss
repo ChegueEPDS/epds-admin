@@ -1,3 +1,11 @@
+:host,
+:host form {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+}
+
 .license-dialog-header {
   display: flex;
   align-items: flex-start;
@@ -31,6 +39,8 @@
   display: grid;
   box-sizing: border-box;
   width: 100%;
+  min-width: 0;
+  overflow-x: hidden;
   max-height: calc(92vh - 112px);
   gap: 18px;
   padding: 18px 22px 22px !important;
@@ -622,8 +632,31 @@ button mat-icon {
   margin-right: 6px;
 }
 @media (max-width: 760px) {
+  .license-dialog-header {
+    align-items: stretch;
+    flex-direction: column;
+    padding: 16px 16px 10px;
+  }
+
+  .dialog-header-actions {
+    justify-content: flex-start;
+  }
+
+  .license-dialog-content {
+    gap: 14px;
+    padding: 14px 16px 18px !important;
+  }
+
+  .detail-hero {
+    flex-direction: column;
+    padding: 14px;
+  }
+
   .dialog-grid,
+  .detail-grid,
   .license-detail-grid,
+  .infrastructure-card-grid,
+  .contact-card-grid,
   .group-controls,
   .group-controls.single-control,
   .contact-row,
@@ -638,6 +671,18 @@ button mat-icon {
   .mini-table-head.three-col,
   .mini-table-row.three-col {
     grid-template-columns: 1fr;
+  }
+
+  .detail-status {
+    min-width: 0;
+  }
+
+  .infrastructure-card,
+  .contact-card,
+  .repeater-row,
+  .mini-table {
+    min-width: 0;
+    max-width: 100%;
   }
   .license-file-edit-cell {
     align-items: flex-start;

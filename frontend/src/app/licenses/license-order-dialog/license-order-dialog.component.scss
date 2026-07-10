@@ -5,6 +5,13 @@
   min-width: min(620px, calc(100vw - 64px));
 }
 
+:host {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+}
+
 mat-checkbox {
   display: flex;
   align-items: center;

@@ -66,11 +66,11 @@
             <mat-icon class="material-symbols-outlined">more_vert</mat-icon>
           </button>
           <mat-menu #actionsMenu="matMenu">
-            <button mat-menu-item (click)="openEdit(client)" [disabled]="client.status === 'revoked'"><mat-icon>edit</mat-icon>Edit</button>
-            <button mat-menu-item (click)="rotateApiKey(client)" [disabled]="client.status === 'revoked'"><mat-icon>key</mat-icon>Rotate API key</button>
-            <button mat-menu-item (click)="rotateWebhookSecret(client)" [disabled]="client.status === 'revoked'"><mat-icon>sync_lock</mat-icon>Rotate webhook secret</button>
-            <button mat-menu-item (click)="retry(client)" [disabled]="client.status === 'revoked' || !client.deliveryCounts.dead"><mat-icon>replay</mat-icon>Retry failed webhooks</button>
-            <button mat-menu-item class="danger" (click)="revoke(client)" [disabled]="client.status === 'revoked'"><mat-icon>block</mat-icon>Revoke</button>
+            <button mat-menu-item (click)="openEdit(client)" [disabled]="client.status === 'revoked'"><mat-icon class="material-symbols-outlined">edit</mat-icon>Edit</button>
+            <button mat-menu-item (click)="rotateApiKey(client)" [disabled]="client.status === 'revoked'"><mat-icon class="material-symbols-outlined">key</mat-icon>Rotate API key</button>
+            <button mat-menu-item (click)="rotateWebhookSecret(client)" [disabled]="client.status === 'revoked'"><mat-icon class="material-symbols-outlined">sync_lock</mat-icon>Rotate webhook secret</button>
+            <button mat-menu-item (click)="retry(client)" [disabled]="client.status === 'revoked' || !client.deliveryCounts.dead"><mat-icon class="material-symbols-outlined">replay</mat-icon>Retry failed webhooks</button>
+            <button mat-menu-item class="danger" (click)="revoke(client)" [disabled]="client.status === 'revoked'"><mat-icon class="material-symbols-outlined">block</mat-icon>Revoke</button>
           </mat-menu>
         </td>
       </ng-container>

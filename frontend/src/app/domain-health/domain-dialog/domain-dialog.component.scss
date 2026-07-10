@@ -1,8 +1,19 @@
+:host,
+form {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+}
+
 .domain-dialog-content {
   display: grid;
-  min-width: min(620px, calc(100vw - 48px));
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
   gap: 12px;
   padding-top: 8px;
+  overflow-x: hidden;
 }
 
 .health-policy-section {
@@ -20,8 +31,13 @@
 
 .policy-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 12px;
+}
+
+mat-form-field {
+  width: 100%;
+  min-width: 0;
 }
 
 button mat-icon {
@@ -29,6 +45,10 @@ button mat-icon {
 }
 
 @media (max-width: 640px) {
+  .domain-dialog-content {
+    padding-inline: 16px;
+  }
+
   .policy-grid {
     grid-template-columns: 1fr;
   }

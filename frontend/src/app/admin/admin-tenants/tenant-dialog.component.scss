@@ -38,3 +38,18 @@ mat-form-field {
   font-size: 12px;
   font-weight: 700;
 }
+
+@media (max-width: 560px) {
+  mat-dialog-content {
+    min-width: 0;
+  }
+
+  .feature-row {
+    grid-template-columns: minmax(100px, 1fr) repeat(3, 42px);
+    gap: 4px;
+  }
+
+  .feature-row > :not(:first-child) {
+    justify-self: center;
+  }
+}

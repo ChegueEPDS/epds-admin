@@ -212,6 +212,65 @@ mat-card,
   border-bottom-color: var(--brand-border);
 }
 
+.mobile-navigation-menu.mat-mdc-menu-panel {
+  min-width: min(320px, calc(100vw - 24px));
+  max-width: calc(100vw - 24px);
+  border-radius: 14px;
+}
+
+.mobile-navigation-menu .mobile-menu-user {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px 10px;
+  color: var(--brand-ink);
+}
+
+.mobile-navigation-menu .mobile-menu-user > mat-icon {
+  flex: 0 0 auto;
+  color: var(--brand-accent-ink);
+}
+
+.mobile-navigation-menu .mobile-menu-user span,
+.mobile-navigation-menu .mobile-menu-user strong,
+.mobile-navigation-menu .mobile-menu-user small {
+  display: block;
+  min-width: 0;
+}
+
+.mobile-navigation-menu .mobile-menu-user strong,
+.mobile-navigation-menu .mobile-menu-user small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mobile-navigation-menu .mobile-menu-user small {
+  margin-top: 2px;
+  color: var(--brand-muted);
+  font-size: 11px;
+}
+
+.mobile-navigation-menu .mobile-menu-divider {
+  height: 1px;
+  margin: 6px 12px;
+  background: var(--brand-border);
+}
+
+.mobile-navigation-menu .mobile-menu-label {
+  padding: 6px 16px 4px;
+  color: var(--brand-muted);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+}
+
+.mobile-navigation-menu .active-menu-item {
+  color: var(--brand-accent-ink);
+  background: var(--brand-accent-soft);
+}
+
 button,
 a,
 input,
@@ -241,5 +300,51 @@ select {
   .page {
     width: min(100% - 24px, 1440px);
     padding-top: 24px;
+  }
+
+  .cdk-overlay-pane.mat-mdc-dialog-panel {
+    width: calc(100vw - 16px) !important;
+    max-width: calc(100vw - 16px) !important;
+    max-height: calc(100dvh - 16px) !important;
+  }
+
+  .mat-mdc-dialog-surface {
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+    overflow-x: hidden;
+    border-radius: 14px !important;
+  }
+
+  .mat-mdc-dialog-title {
+    padding-inline: 16px !important;
+  }
+
+  .mat-mdc-dialog-content {
+    box-sizing: border-box;
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+    max-height: calc(100dvh - 148px) !important;
+    padding-inline: 16px !important;
+    overflow-x: hidden !important;
+  }
+
+  .mat-mdc-dialog-content > *,
+  .mat-mdc-dialog-content form,
+  .mat-mdc-dialog-content .mat-mdc-form-field {
+    box-sizing: border-box;
+    min-width: 0 !important;
+    max-width: 100% !important;
+  }
+
+  .mat-mdc-dialog-content .mat-mdc-form-field {
+    width: 100%;
+  }
+
+  .mat-mdc-dialog-actions {
+    min-width: 0;
+    padding-inline: 12px !important;
+    flex-wrap: wrap;
   }
 }

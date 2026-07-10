@@ -19,6 +19,10 @@ mat-form-field {
 }
 
 @media (max-width: 560px) {
+  mat-dialog-content {
+    min-width: 0;
+  }
+
   .name-grid {
     grid-template-columns: 1fr;
   }

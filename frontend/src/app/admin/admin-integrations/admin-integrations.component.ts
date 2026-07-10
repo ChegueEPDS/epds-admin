@@ -89,11 +89,15 @@ export class IntegrationDialogComponent {
       <p>Secrets are shown once and cannot be retrieved later.</p>
       <div class="secret" *ngIf="data.apiKey">
         <span>API key</span><code>{{ data.apiKey }}</code>
-        <button mat-icon-button type="button" matTooltip="Copy API key" (click)="copy(data.apiKey!)"><mat-icon>content_copy</mat-icon></button>
+        <button mat-icon-button type="button" matTooltip="Copy API key" (click)="copy(data.apiKey!)">
+          <mat-icon class="material-symbols-outlined">content_copy</mat-icon>
+        </button>
       </div>
       <div class="secret" *ngIf="data.webhookSecret">
         <span>Webhook signing secret</span><code>{{ data.webhookSecret }}</code>
-        <button mat-icon-button type="button" matTooltip="Copy webhook secret" (click)="copy(data.webhookSecret!)"><mat-icon>content_copy</mat-icon></button>
+        <button mat-icon-button type="button" matTooltip="Copy webhook secret" (click)="copy(data.webhookSecret!)">
+          <mat-icon class="material-symbols-outlined">content_copy</mat-icon>
+        </button>
       </div>
     </mat-dialog-content>
     <mat-dialog-actions align="end"><button mat-flat-button color="primary" mat-dialog-close>Stored securely</button></mat-dialog-actions>
