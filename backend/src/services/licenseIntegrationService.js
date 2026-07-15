@@ -16,6 +16,7 @@ function integrationLicensePayload(license) {
     objectLimit: objectLimit === 'unlimited' || Number.isFinite(objectLimit) ? objectLimit : null,
     expiresAt: license.expiresAt,
     mobileApp: Boolean(license.mobileApp),
+    mobileAppVersion: license.mobileAppVersion || '',
     tenantId: tenant?._id ? String(tenant._id) : (license.tenantId ? String(license.tenantId) : null),
     tenantName: tenant?.name || null,
     tenantDisplayName: tenant?.displayName || tenant?.name || null,
@@ -24,6 +25,12 @@ function integrationLicensePayload(license) {
       contentType: license.licenseFile.contentType,
       size: license.licenseFile.size,
       uploadedAt: license.licenseFile.uploadedAt || null
+    } : null,
+    mobileAppFile: license.mobileAppFile?.blobPath ? {
+      fileName: license.mobileAppFile.fileName,
+      contentType: license.mobileAppFile.contentType,
+      size: license.mobileAppFile.size,
+      uploadedAt: license.mobileAppFile.uploadedAt || null
     } : null,
     updatedAt: license.updatedAt
   };

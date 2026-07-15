@@ -15,7 +15,13 @@ import { WebhookTestComponent } from './webhook-test/webhook-test.component';
 export const routes: Routes = [
   { path: 'login', component: LoginComponent },
   { path: 'status/:owner', component: PublicStatusComponent },
-  { path: 'webhook', component: WebhookTestComponent },
+  {
+    path: 'webhook/docs',
+    loadComponent: () => import('./webhook-docs/webhook-docs.component').then((m) => m.WebhookDocsComponent),
+    canActivate: [AuthGuard],
+    data: { featureKey: 'webhookTester' }
+  },
+  { path: 'webhook', component: WebhookTestComponent, canActivate: [AuthGuard], data: { featureKey: 'webhookTester' } },
   { path: 'home', component: HomeComponent, canActivate: [AuthGuard] },
   { path: 'mail', component: MailboxComponent, canActivate: [AuthGuard], data: { featureKey: 'mail' } },
   { path: 'domain-health', component: DomainHealthComponent, canActivate: [AuthGuard], data: { featureKey: 'domainHealth' } },

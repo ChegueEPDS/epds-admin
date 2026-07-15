@@ -72,6 +72,11 @@ button mat-icon {
   background: var(--brand-accent-soft) !important;
 }
 
+.disabled-current-link {
+  cursor: default;
+  pointer-events: auto;
+}
+
 .spacer {
   flex: 1 1 auto;
 }

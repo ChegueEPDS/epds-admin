@@ -1,6 +1,7 @@
 const express = require('express');
 const rateLimit = require('express-rate-limit');
 const controller = require('../controllers/webhookTestController');
+const { requireAuth, requireTenantFeature } = require('../middlewares/authMiddleware');
 
 const router = express.Router();
 const receiveLimiter = rateLimit({
@@ -17,7 +18,7 @@ const readLimiter = rateLimit({
 });
 
 router.post('/inboxes/:token', receiveLimiter, express.raw({ type: '*/*', limit: '256kb' }), controller.receive);
-router.get('/inboxes/:token/requests', readLimiter, controller.list);
-router.delete('/inboxes/:token/requests', readLimiter, controller.clear);
+router.get('/inboxes/:token/requests', requireAuth, requireTenantFeature('webhookTester'), readLimiter, controller.list);
+router.delete('/inboxes/:token/requests', requireAuth, requireTenantFeature('webhookTester'), readLimiter, controller.clear);
 
 module.exports = router;

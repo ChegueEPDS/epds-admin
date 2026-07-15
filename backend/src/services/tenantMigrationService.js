@@ -24,12 +24,13 @@ const seededDomains = [
   { domain: 'robex.ro', tenantName: 'robex', owner: 'Robex' }
 ];
 
-function defaultTenantFeatures() {
+function defaultTenantFeatures(type = 'company') {
   return {
     mail: { enabled: false, edit: false, delete: false },
-    domainHealth: { enabled: true, edit: false, delete: false },
+    domainHealth: { enabled: type !== 'client', edit: false, delete: false },
     licenses: { enabled: false, edit: false, delete: false },
-    effortTracking: { enabled: false, edit: false, delete: false }
+    effortTracking: { enabled: false, edit: false, delete: false },
+    webhookTester: { enabled: false, edit: false, delete: false }
   };
 }
 
@@ -41,6 +42,43 @@ function normalizedBaseUrl(domain) {
   return `https://${String(domain || '').trim().toLowerCase()}`;
 }
 
+function enforceTenantFeaturePolicy(tenant) {
+  const feature = (key) => tenant.features?.[key] || {};
+  let changed = false;
+  const setFeature = (key, next) => {
+    const current = feature(key);
+    if (
+      Boolean(current.enabled) === Boolean(next.enabled) &&
+      Boolean(current.edit) === Boolean(next.edit) &&
+      Boolean(current.delete) === Boolean(next.delete)
+    ) return;
+    tenant.set(`features.${key}`, next);
+    changed = true;
+  };
+  if (tenant.type === 'client') {
+    setFeature('mail', { enabled: false, edit: false, delete: false });
+    setFeature('domainHealth', {
+      enabled: Boolean(feature('domainHealth').enabled),
+      edit: Boolean(feature('domainHealth').enabled && feature('domainHealth').edit),
+      delete: false
+    });
+    setFeature('licenses', {
+      enabled: Boolean(feature('licenses').enabled),
+      edit: Boolean(feature('licenses').enabled && feature('licenses').edit),
+      delete: Boolean(feature('licenses').enabled && feature('licenses').delete)
+    });
+    setFeature('effortTracking', { enabled: false, edit: false, delete: false });
+    setFeature('webhookTester', { enabled: false, edit: false, delete: false });
+    return changed;
+  }
+  setFeature('webhookTester', {
+    enabled: Boolean(feature('webhookTester').enabled),
+    edit: false,
+    delete: false
+  });
+  return changed;
+}
+
 async function seedKnownTenants() {
   for (const seed of seededTenants) {
     const tenant = await Tenant.findOne({ name: seed.name });
@@ -49,7 +87,7 @@ async function seedKnownTenants() {
         name: seed.name,
         displayName: seed.displayName,
         type: 'company',
-        features: defaultTenantFeatures(),
+        features: defaultTenantFeatures('company'),
         seats: { max: 0, used: 0 },
         seatsManaged: 'manual'
       });
@@ -108,13 +146,13 @@ async function normalizeTenantTypes() {
       tenant.displayName = tenant.name;
       changed = true;
     }
-    for (const key of ['mail', 'domainHealth', 'licenses', 'effortTracking']) {
+    for (const key of ['mail', 'domainHealth', 'licenses', 'effortTracking', 'webhookTester']) {
       const value = tenant.features?.[key];
       if (typeof value === 'boolean') {
         tenant.set(`features.${key}`, { enabled: value, edit: value, delete: value });
         changed = true;
       } else if (!value || typeof value.enabled !== 'boolean') {
-        const enabled = key === 'domainHealth';
+        const enabled = key === 'domainHealth' && tenant.type !== 'client';
         tenant.set(`features.${key}`, { enabled, edit: false, delete: false });
         changed = true;
       } else {
@@ -140,6 +178,7 @@ async function normalizeTenantTypes() {
       tenant.set('features.licenses', { enabled: false, edit: false, delete: false });
       changed = true;
     }
+    if (enforceTenantFeaturePolicy(tenant)) changed = true;
     if (changed) await tenant.save();
   }
 

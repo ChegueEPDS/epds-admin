@@ -1,7 +1,7 @@
 const LicenseCustomer = require('../models/licenseCustomer');
 const Tenant = require('../models/tenant');
 const azureBlob = require('../services/azureBlobService');
-const { replaceLicenseFile } = require('../services/licenseFileService');
+const { normalizeMobileAppVersion, replaceLicenseFile, replaceMobileAppFile } = require('../services/licenseFileService');
 const { publishOrderedEvent, transitionStatus } = require('../services/licenseIntegrationService');
 const { expireLicenses, todayUtcStart } = require('../services/licenseExpiryService');
 
@@ -297,6 +297,15 @@ function presentLicense(license, options = {}) {
     uploadedAt: license.licenseFile.uploadedAt || null,
     uploadedByName: license.licenseFile.uploadedByName || ''
   } : null;
+  const mobileAppFile = license.mobileAppFile?.blobPath ? {
+    fileName: license.mobileAppFile.fileName || 'mobile-app.apk',
+    blobPath: license.mobileAppFile.blobPath || '',
+    blobUrl: license.mobileAppFile.blobUrl || '',
+    contentType: license.mobileAppFile.contentType || '',
+    size: license.mobileAppFile.size || 0,
+    uploadedAt: license.mobileAppFile.uploadedAt || null,
+    uploadedByName: license.mobileAppFile.uploadedByName || ''
+  } : null;
 
   return {
     id: String(license._id),
@@ -317,6 +326,8 @@ function presentLicense(license, options = {}) {
     infrastructureGroups,
     accessAddresses,
     mobileApp: Boolean(license.mobileApp),
+    mobileAppVersion: license.mobileAppVersion || '',
+    mobileAppFile,
     licensePrice: license.licensePrice || 0,
     licenseCurrency: license.licenseCurrency || 'HUF',
     supportPrice: license.supportPrice || 0,
@@ -461,6 +472,10 @@ function applyLicensePayload(license, body) {
     license.mobileApp = body.mobileApp === true;
   }
 
+  if (Object.prototype.hasOwnProperty.call(body, 'mobileAppVersion')) {
+    license.mobileAppVersion = normalizeMobileAppVersion(body.mobileAppVersion);
+  }
+
   if (Object.prototype.hasOwnProperty.call(body, 'licensePrice')) {
     license.licensePrice = normalizeOptionalPrice(body.licensePrice, 'License price');
   }
@@ -600,15 +615,30 @@ exports.deleteLicense = async (req, res, next) => {
   try {
     const license = await LicenseCustomer.findOne({ _id: req.params.id, ...licenseScopeQuery(req.scope) });
     if (!license) return res.status(404).json({ error: 'License not found' });
-    const blobPath = license.licenseFile?.blobPath || '';
+    const blobPaths = [license.licenseFile?.blobPath, license.mobileAppFile?.blobPath].filter(Boolean);
     await license.deleteOne();
-    if (blobPath) {
+    for (const blobPath of blobPaths) {
       try { await azureBlob.deleteFile(blobPath); } catch (err) {
-        console.warn('[license] deleted license blob cleanup failed:', err?.message || err);
+        console.warn('[license] deleted blob cleanup failed:', err?.message || err);
       }
     }
     return res.status(204).send();
   } catch (err) {
+    return next(err);
+  }
+};
+
+exports.uploadMobileAppFile = async (req, res, next) => {
+  try {
+    const license = await LicenseCustomer.findOne({ _id: req.params.id, ...licenseScopeQuery(req.scope) });
+    if (!license) return res.status(404).json({ error: 'License not found' });
+    if (!req.file) return res.status(400).json({ error: 'No file provided' });
+
+    await replaceMobileAppFile(license, req.file, { userId: req.userId, name: userDisplayName(req.user) }, req.body?.version);
+    await license.populate('tenantId', 'name displayName type');
+    return res.json({ license: presentLicense(license, { includeVpnCredentials: req.scope?.tenantType !== 'client' }) });
+  } catch (err) {
+    if (err.statusCode) return res.status(err.statusCode).json({ error: err.message });
     return next(err);
   }
 };
@@ -645,6 +675,9 @@ exports.orderLicense = async (req, res, next) => {
     license.objectLimitOption = objectLimit.objectLimitOption;
     license.customObjectLimit = objectLimit.customObjectLimit;
     license.mobileApp = req.body?.mobileApp === true;
+    if (Object.prototype.hasOwnProperty.call(req.body || {}, 'mobileAppVersion')) {
+      license.mobileAppVersion = normalizeMobileAppVersion(req.body.mobileAppVersion);
+    }
     license.expiresAt = expiresAt;
     transitionStatus(license, 'ordered');
     license.licenseFile = {
@@ -695,6 +728,9 @@ exports.activateLicense = async (req, res, next) => {
 
 exports.downloadLicenseFile = async (req, res, next) => {
   try {
+    if (req.scope?.tenantType === 'client') {
+      return res.status(403).json({ error: 'Client tenants cannot download license files' });
+    }
     const license = await LicenseCustomer.findOne({ _id: req.params.id, ...licenseScopeQuery(req.scope) }).lean();
     if (!license) return res.status(404).json({ error: 'License not found' });
     if (!license.licenseFile?.blobPath) return res.status(404).json({ error: 'License file not found' });
@@ -702,6 +738,23 @@ exports.downloadLicenseFile = async (req, res, next) => {
     const buffer = await azureBlob.downloadToBuffer(license.licenseFile.blobPath);
     const fileName = license.licenseFile.fileName || 'license-file';
     res.setHeader('Content-Type', license.licenseFile.contentType || 'application/octet-stream');
+    res.setHeader('Content-Length', buffer.length);
+    res.setHeader('Content-Disposition', contentDispositionAttachment(fileName));
+    return res.send(buffer);
+  } catch (err) {
+    return next(err);
+  }
+};
+
+exports.downloadMobileAppFile = async (req, res, next) => {
+  try {
+    const license = await LicenseCustomer.findOne({ _id: req.params.id, ...licenseScopeQuery(req.scope) }).lean();
+    if (!license) return res.status(404).json({ error: 'License not found' });
+    if (!license.mobileAppFile?.blobPath) return res.status(404).json({ error: 'Mobile app file not found' });
+
+    const buffer = await azureBlob.downloadToBuffer(license.mobileAppFile.blobPath);
+    const fileName = license.mobileAppFile.fileName || 'mobile-app.apk';
+    res.setHeader('Content-Type', license.mobileAppFile.contentType || 'application/vnd.android.package-archive');
     res.setHeader('Content-Length', buffer.length);
     res.setHeader('Content-Disposition', contentDispositionAttachment(fileName));
     return res.send(buffer);

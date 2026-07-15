@@ -10,7 +10,7 @@ const {
   generateApiKey,
   signWebhook
 } = require('../src/services/integrationSecurityService');
-const { validateLicenseFile } = require('../src/services/licenseFileService');
+const { validateLicenseFile, validateMobileAppFile } = require('../src/services/licenseFileService');
 const { integrationLicensePayload, transitionStatus } = require('../src/services/licenseIntegrationService');
 const { retryDelayMs } = require('../src/services/webhookWorkerService');
 const { parseJson, safeHeaders, tokenHash } = require('../src/controllers/webhookTestController');
@@ -45,6 +45,22 @@ test('license files enforce supported content and size', () => {
   );
 });
 
+test('mobile app files enforce APK content and 100 MB size', () => {
+  assert.equal(validateMobileAppFile({ originalname: 'mobile.apk', buffer: Buffer.from('504b0304', 'hex') }).extension, '.apk');
+  assert.throws(
+    () => validateMobileAppFile({ originalname: 'mobile.zip', buffer: Buffer.from('504b0304', 'hex') }),
+    /Only APK/
+  );
+  assert.throws(
+    () => validateMobileAppFile({ originalname: 'mobile.apk', buffer: Buffer.from('not-an-apk') }),
+    /Invalid APK/
+  );
+  assert.throws(
+    () => validateMobileAppFile({ originalname: 'mobile.apk', buffer: Buffer.alloc(100 * 1024 * 1024 + 1) }),
+    /100 MB/
+  );
+});
+
 test('ordered transitions increment a durable status version once', () => {
   const license = { status: 'active', statusVersion: 2 };
   assert.equal(transitionStatus(license, 'ordered'), 'active');
@@ -64,6 +80,7 @@ test('license webhook payload exposes customer and license order details', () =>
     customObjectLimit: 42,
     expiresAt: new Date('2027-12-31T00:00:00.000Z'),
     mobileApp: true,
+    mobileAppVersion: '1.4.0',
     tenantId: '64f000000000000000000002',
     updatedAt: new Date('2026-07-10T10:00:00.000Z')
   });
@@ -74,6 +91,7 @@ test('license webhook payload exposes customer and license order details', () =>
   assert.equal(Object.prototype.hasOwnProperty.call(payload, 'customObjectLimit'), false);
   assert.equal(payload.expiresAt.toISOString(), '2027-12-31T00:00:00.000Z');
   assert.equal(payload.mobileApp, true);
+  assert.equal(payload.mobileAppVersion, '1.4.0');
 });
 
 test('license webhook payload exposes unlimited object limits plainly', () => {

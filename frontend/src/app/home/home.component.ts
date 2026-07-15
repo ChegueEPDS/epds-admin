@@ -14,6 +14,7 @@ type FeatureCard = {
   route: string;
   description: string;
   featureKey: TenantFeatureKey;
+  opensInNewTab?: boolean;
 };
 
 @Component({
@@ -58,6 +59,14 @@ export class HomeComponent implements OnInit, OnDestroy {
       route: '/effort-tracking',
       description: 'Project tasks, timers and net/gross effort totals.',
       featureKey: 'effortTracking'
+    },
+    {
+      title: 'Webhook Tester',
+      icon: 'webhook',
+      route: '/webhook',
+      description: 'Inspect received webhook payloads and verify signatures.',
+      featureKey: 'webhookTester',
+      opensInNewTab: true
     }
   ];
 

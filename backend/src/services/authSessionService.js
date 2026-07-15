@@ -94,7 +94,8 @@ async function buildUserContext(user, session = null) {
     mail: featureAccess(tenant?.features?.mail),
     domainHealth: featureAccess(tenant?.features?.domainHealth),
     licenses: featureAccess(tenant?.features?.licenses),
-    effortTracking: featureAccess(tenant?.features?.effortTracking)
+    effortTracking: featureAccess(tenant?.features?.effortTracking),
+    webhookTester: featureAccess(tenant?.features?.webhookTester)
   };
 
   return {

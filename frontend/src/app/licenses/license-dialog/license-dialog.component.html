@@ -55,11 +55,29 @@
             <span>Expiry date</span>
             <strong>{{ expiryDate | date:'mediumDate' }}</strong>
           </div>
-          <div>
-            <span>Mobile app</span>
-            <strong>{{ model.mobileApp ? 'Yes' : 'No' }}</strong>
+          <div class="license-file-card">
+            <div class="license-file-text">
+              <span>Mobile app</span>
+              <strong>{{ model.mobileApp ? 'Yes' : 'No' }}</strong>
+              <small *ngIf="model.mobileApp">Version: {{ mobileAppVersionText() }}</small>
+              <small *ngIf="model.mobileApp && mobileAppFileName()" [matTooltip]="mobileAppFileName()">
+                APK: {{ mobileAppFileName() }}
+              </small>
+              <small *ngIf="model.mobileApp && !mobileAppFileName()">No APK uploaded</small>
+            </div>
+            <input #readonlyMobileAppFileInput type="file" accept=".apk" hidden (change)="uploadMobileAppFile(readonlyMobileAppFileInput)">
+            <button
+              mat-icon-button
+              type="button"
+              *ngIf="model.mobileApp && (canDownloadMobileAppFile() || canUploadMobileAppFile())"
+              [matTooltip]="canDownloadMobileAppFile() ? 'Download mobile app' : 'Upload mobile app'"
+              (click)="canDownloadMobileAppFile() ? downloadMobileAppFile() : readonlyMobileAppFileInput.click()"
+              [disabled]="isUploadingMobileAppFile"
+            >
+              <mat-icon class="material-symbols-outlined">{{ canDownloadMobileAppFile() ? 'download' : 'android' }}</mat-icon>
+            </button>
           </div>
-          <div class="license-file-card" *ngIf="canManageLicenseFile()">
+          <div class="license-file-card" *ngIf="canManageLicenseFile() || canDownloadLicenseFile()">
             <div class="license-file-text">
               <span>License file</span>
               <strong [matTooltip]="licenseFileName()" [matTooltipDisabled]="!licenseFileName()">{{ licenseFileName() || 'No file uploaded' }}</strong>
@@ -71,7 +89,7 @@
               type="button"
               [matTooltip]="showLicenseUploadButton() ? 'Upload license file' : 'Download license file'"
               (click)="showLicenseUploadButton() ? readonlyLicenseFileInput.click() : downloadLicenseFile()"
-              [disabled]="isUploadingLicenseFile || (!showLicenseUploadButton() && !data.license?.licenseFile)"
+              [disabled]="isUploadingLicenseFile || (!showLicenseUploadButton() && !canDownloadLicenseFile())"
             >
               <mat-icon class="material-symbols-outlined">{{ showLicenseUploadButton() ? 'upload_file' : 'download' }}</mat-icon>
             </button>
@@ -287,6 +305,10 @@
 
         <div class="license-file-edit-cell">
           <mat-checkbox name="mobileApp" [(ngModel)]="model.mobileApp">Mobile app</mat-checkbox>
+          <mat-form-field appearance="outline" class="mobile-version-field">
+            <mat-label>Mobile app version</mat-label>
+            <input matInput name="mobileAppVersion" maxlength="64" [(ngModel)]="model.mobileAppVersion" [disabled]="!model.mobileApp">
+          </mat-form-field>
           <input #licenseFileInput type="file" accept=".zip,.txt,.docx" hidden (change)="uploadLicenseFile(licenseFileInput)">
           <button
             mat-stroked-button
@@ -297,6 +319,17 @@
           >
             <mat-icon class="material-symbols-outlined">{{ isUploadingLicenseFile ? 'hourglass_top' : 'upload_file' }}</mat-icon>
             {{ isUploadingLicenseFile ? 'Uploading...' : 'Upload license file' }}
+          </button>
+          <input #mobileAppFileInput type="file" accept=".apk" hidden (change)="uploadMobileAppFile(mobileAppFileInput)">
+          <button
+            mat-stroked-button
+            type="button"
+            *ngIf="canManageLicenseFile()"
+            (click)="mobileAppFileInput.click()"
+            [disabled]="isUploadingMobileAppFile || !model.mobileApp"
+          >
+            <mat-icon class="material-symbols-outlined">{{ isUploadingMobileAppFile ? 'hourglass_top' : 'android' }}</mat-icon>
+            {{ isUploadingMobileAppFile ? 'Uploading...' : 'Upload APK' }}
           </button>
         </div>
       </div>

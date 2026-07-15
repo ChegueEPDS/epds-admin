@@ -70,6 +70,7 @@ const LicenseCustomerSchema = new mongoose.Schema(
       environment: { type: String, enum: ADDRESS_ENVIRONMENTS, default: 'prod' }
     }],
     mobileApp: { type: Boolean, default: false },
+    mobileAppVersion: { type: String, trim: true, maxlength: 64, default: '' },
     licensePrice: { type: Number, min: 0, default: 0 },
     licenseCurrency: { type: String, enum: CURRENCIES, default: 'HUF' },
     supportPrice: { type: Number, min: 0, default: 0 },
@@ -87,6 +88,18 @@ const LicenseCustomerSchema = new mongoose.Schema(
       password: { type: String, default: '' }
     }],
     licenseFile: {
+      fileName: { type: String, trim: true, default: '' },
+      blobPath: { type: String, trim: true, default: '' },
+      blobUrl: { type: String, trim: true, default: '' },
+      contentType: { type: String, trim: true, default: '' },
+      size: { type: Number, min: 0, default: 0 },
+      uploadedAt: { type: Date },
+      uploadedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+      uploadedByName: { type: String, trim: true, default: '' },
+      integrationClientId: { type: mongoose.Schema.Types.ObjectId, ref: 'IntegrationClient' },
+      idempotencyKeyHash: { type: String, select: false }
+    },
+    mobileAppFile: {
       fileName: { type: String, trim: true, default: '' },
       blobPath: { type: String, trim: true, default: '' },
       blobUrl: { type: String, trim: true, default: '' },

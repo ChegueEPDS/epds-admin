@@ -29,22 +29,43 @@ import { ThemeService } from './services/theme.service';
 })
 export class AppComponent {
   isPublicRoute = false;
+  currentUrl = '';
 
   constructor(
     public auth: AuthService,
     public theme: ThemeService,
     private router: Router
   ) {
-    this.isPublicRoute = this.isPublicPath(this.router.url);
+    this.currentUrl = this.router.url;
+    this.isPublicRoute = this.isPublicPath(this.currentUrl);
     this.router.events
       .pipe(filter((event) => event instanceof NavigationEnd))
       .subscribe((event) => {
-        this.isPublicRoute = this.isPublicPath((event as NavigationEnd).urlAfterRedirects);
+        this.currentUrl = (event as NavigationEnd).urlAfterRedirects;
+        this.isPublicRoute = this.isPublicPath(this.currentUrl);
       });
   }
 
+  get isWebhookSectionActive(): boolean {
+    return this.currentPath.startsWith('/webhook');
+  }
+
+  get isWebhookTesterRoute(): boolean {
+    return this.currentPath === '/webhook';
+  }
+
   private isPublicPath(url: string): boolean {
-    return url.startsWith('/status/') || url.startsWith('/webhook');
+    return url.startsWith('/status/');
+  }
+
+  private get currentPath(): string {
+    return this.currentUrl.split(/[?#]/)[0] || '/';
+  }
+
+  preventCurrentWebhookClick(event: MouseEvent): void {
+    if (!this.isWebhookTesterRoute) return;
+    event.preventDefault();
+    event.stopPropagation();
   }
 
   logout(): void {

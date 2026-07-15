@@ -35,7 +35,8 @@ export class AdminTenantsComponent implements OnInit {
     { key: 'mail', label: 'Mail' },
     { key: 'domainHealth', label: 'Domain Health' },
     { key: 'licenses', label: 'Licenses' },
-    { key: 'effortTracking', label: 'Effort Tracking' }
+    { key: 'effortTracking', label: 'Effort Tracking' },
+    { key: 'webhookTester', label: 'Webhook Tester' }
   ];
 
   constructor(

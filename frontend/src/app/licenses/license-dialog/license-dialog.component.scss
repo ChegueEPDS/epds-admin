@@ -142,6 +142,13 @@
   font-size: 14px;
   overflow-wrap: anywhere;
 }
+.detail-grid small {
+  display: block;
+  margin-top: 4px;
+  color: var(--brand-muted);
+  font-size: 11px;
+  line-height: 1.25;
+}
 .license-status-card {
   display: grid !important;
   grid-template-columns: minmax(0, 1fr) auto auto;
@@ -530,6 +537,10 @@
 }
 .license-file-edit-cell button {
   flex: 0 0 auto;
+}
+.license-file-edit-cell .mobile-version-field {
+  flex: 1 1 180px;
+  min-width: 180px;
 }
 .group-controls {
   display: grid;

@@ -32,6 +32,16 @@ mat-form-field {
   min-height: 38px;
 }
 
+.disabled-row {
+  opacity: .52;
+}
+
+.permission-na {
+  justify-self: center;
+  color: var(--brand-muted);
+  font-weight: 700;
+}
+
 .header-row {
   min-height: auto;
   color: var(--brand-muted);

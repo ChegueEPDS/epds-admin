@@ -16,6 +16,12 @@ type TenantDialogData = {
   tenant?: AdminTenant;
 };
 
+type TenantFeatureOption = {
+  key: TenantFeatureKey;
+  label: string;
+  permissions?: boolean;
+};
+
 @Component({
   selector: 'app-tenant-dialog',
   standalone: true,
@@ -47,13 +53,15 @@ export class TenantDialogComponent {
     mail: { enabled: false, edit: false, delete: false },
     domainHealth: { enabled: true, edit: false, delete: false },
     licenses: { enabled: false, edit: false, delete: false },
-    effortTracking: { enabled: false, edit: false, delete: false }
+    effortTracking: { enabled: false, edit: false, delete: false },
+    webhookTester: { enabled: false, edit: false, delete: false }
   };
-  featureOptions: { key: TenantFeatureKey; label: string }[] = [
+  featureOptions: TenantFeatureOption[] = [
     { key: 'mail', label: 'Mail' },
     { key: 'domainHealth', label: 'Domain Health' },
     { key: 'licenses', label: 'Licenses' },
-    { key: 'effortTracking', label: 'Effort Tracking' }
+    { key: 'effortTracking', label: 'Effort Tracking' },
+    { key: 'webhookTester', label: 'Webhook Tester', permissions: false }
   ];
 
   constructor(
@@ -67,6 +75,7 @@ export class TenantDialogComponent {
       this.displayName = data.tenant.displayName || data.tenant.name || '';
       this.type = data.tenant.type || 'company';
       this.features = { ...this.features, ...(data.tenant.features || {}) };
+      this.applyFeaturePolicy();
     }
   }
 
@@ -82,9 +91,46 @@ export class TenantDialogComponent {
     return this.isEditMode ? 'Save' : 'Create';
   }
 
+  onTypeChange(): void {
+    if (this.type === 'client') {
+      this.features.domainHealth.enabled = false;
+      this.features.domainHealth.edit = false;
+      this.features.domainHealth.delete = false;
+      this.features.licenses.enabled = false;
+      this.features.licenses.edit = false;
+      this.features.licenses.delete = false;
+    }
+    this.applyFeaturePolicy();
+  }
+
+  onFeatureEnabledChange(feature: TenantFeatureOption): void {
+    if (!this.features[feature.key].enabled || !this.hasPermissionControls(feature)) {
+      this.features[feature.key].edit = false;
+      this.features[feature.key].delete = false;
+    }
+    this.applyFeaturePolicy();
+  }
+
+  isFeatureDisabled(feature: TenantFeatureOption): boolean {
+    return this.type === 'client' && feature.key !== 'licenses' && feature.key !== 'domainHealth';
+  }
+
+  hasPermissionControls(feature: TenantFeatureOption): boolean {
+    return feature.permissions !== false;
+  }
+
+  isEditDisabled(feature: TenantFeatureOption): boolean {
+    return this.isFeatureDisabled(feature) || !this.features[feature.key].enabled || !this.hasPermissionControls(feature);
+  }
+
+  isDeleteDisabled(feature: TenantFeatureOption): boolean {
+    return this.isEditDisabled(feature) || (this.type === 'client' && feature.key === 'domainHealth');
+  }
+
   save(): void {
     if (this.saving()) return;
     this.saving.set(true);
+    this.applyFeaturePolicy();
     const payload = { name: this.name, displayName: this.displayName, type: this.type, features: this.features };
     const request = this.data.tenant
       ? this.admin.updateTenant(this.data.tenant.id, payload)
@@ -95,6 +141,31 @@ export class TenantDialogComponent {
       error: (error) => {
         this.saving.set(false);
         this.snackBar.open(error?.error?.error || 'Tenant could not be saved.', 'Close', { duration: 4500 });
+      }
+    });
+  }
+
+  private applyFeaturePolicy(): void {
+    this.featureOptions.forEach((feature) => {
+      const access = this.features[feature.key];
+      if (this.isFeatureDisabled(feature)) {
+        access.enabled = false;
+        access.edit = false;
+        access.delete = false;
+        return;
+      }
+      if (!this.hasPermissionControls(feature)) {
+        access.edit = false;
+        access.delete = false;
+        return;
+      }
+      if (!access.enabled) {
+        access.edit = false;
+        access.delete = false;
+        return;
+      }
+      if (this.type === 'client' && feature.key === 'domainHealth') {
+        access.delete = false;
       }
     });
   }

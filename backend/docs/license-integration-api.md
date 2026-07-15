@@ -35,6 +35,18 @@ Supported file extensions are `.zip`, `.txt` and `.docx`; maximum size is 3 MB. 
 
 `Idempotency-Key` is required, must be 16-200 characters, and is retained for 24 hours. Repeating the exact request returns the original response. Reusing the key for different content returns `409`.
 
+## Upload a mobile app APK
+
+```bash
+curl -X POST "https://admin.example.com/api/integrations/v1/licenses/<license-id>/mobile-app-file" \
+  -H "Authorization: Bearer $EPDS_API_KEY" \
+  -H "Idempotency-Key: $(uuidgen)" \
+  -F "version=1.4.0" \
+  -F "file=@epds-mobile.apk"
+```
+
+Supported file extension is `.apk`; maximum size is 100 MB. APK ZIP signatures are checked. Upload is allowed only when the license has `mobileApp: true`. Upload replaces the current APK and deletes the previous blob from the customer's blob folder after the new file is saved.
+
 ## Webhooks
 
 Webhooks send the same event envelope returned by the events endpoint:
@@ -54,13 +66,21 @@ Webhooks send the same event envelope returned by the events endpoint:
       "status": "ordered",
       "objectLimit": 6000,
       "expiresAt": "2027-12-31T00:00:00.000Z",
-      "mobileApp": true
+      "mobileApp": true,
+      "mobileAppVersion": "1.4.0",
+      "licenseFile": null,
+      "mobileAppFile": {
+        "fileName": "epds-mobile.apk",
+        "contentType": "application/vnd.android.package-archive",
+        "size": 52428800,
+        "uploadedAt": "2026-07-10T10:05:00.000Z"
+      }
     }
   }
 }
 ```
 
-`objectLimit` is a number for fixed and custom limits, or `"unlimited"` when the license has no object limit. `mobileApp` is `true` when the customer has mobile enabled, otherwise `false`.
+`objectLimit` is a number for fixed and custom limits, or `"unlimited"` when the license has no object limit. `mobileApp` is `true` when the customer has mobile enabled, otherwise `false`. File metadata never includes blob paths or signed download URLs.
 
 Headers:
 
@@ -83,7 +103,7 @@ Test inboxes expire after 24 hours. Request bodies are limited to 256 KB, sensit
 - `403`: required API scope is absent.
 - `404`: license not found.
 - `409`: idempotency conflict or request still processing; honor `Retry-After` when present.
-- `413`: file is larger than 3 MB.
+- `413`: file is larger than the endpoint limit: 3 MB for license files, 100 MB for APK files.
 - `415`: unsupported extension or invalid file content.
 - `429`: rate limit exceeded. The current limit is 120 requests per API key per minute.
 

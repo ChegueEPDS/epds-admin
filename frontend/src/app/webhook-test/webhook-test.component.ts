@@ -4,8 +4,10 @@ import { Component, DestroyRef, OnInit, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
 import { MatFormFieldModule } from '@angular/material/form-field';
+import { MatIconModule } from '@angular/material/icon';
 import { MatInputModule } from '@angular/material/input';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
+import { RouterLink } from '@angular/router';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { timer } from 'rxjs';
 import { environment } from '../../environments/environment';
@@ -31,8 +33,10 @@ type SignatureState = 'valid' | 'invalid' | 'missing' | 'unchecked';
     FormsModule,
     MatButtonModule,
     MatFormFieldModule,
+    MatIconModule,
     MatInputModule,
-    MatProgressSpinnerModule
+    MatProgressSpinnerModule,
+    RouterLink
   ],
   templateUrl: './webhook-test.component.html',
   styleUrl: './webhook-test.component.scss'
@@ -64,7 +68,15 @@ export class WebhookTestComponent implements OnInit {
         status: 'ordered',
         objectLimit: 6000,
         expiresAt: '2027-12-31T00:00:00.000Z',
-        mobileApp: true
+        mobileApp: true,
+        mobileAppVersion: '1.4.0',
+        licenseFile: null,
+        mobileAppFile: {
+          fileName: 'epds-mobile.apk',
+          contentType: 'application/vnd.android.package-archive',
+          size: 52428800,
+          uploadedAt: new Date().toISOString()
+        }
       }
     }
   }, null, 2);

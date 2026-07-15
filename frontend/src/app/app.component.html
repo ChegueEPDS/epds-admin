@@ -25,6 +25,19 @@
         <mat-icon class="material-symbols-outlined">timer</mat-icon>
         EFFORT TRACKING
       </a>
+      <a
+        mat-button
+        routerLink="/webhook"
+        target="_blank"
+        rel="noopener"
+        *ngIf="auth.canAccessFeature('webhookTester')"
+        [class.active-link]="isWebhookSectionActive"
+        [class.disabled-current-link]="isWebhookTesterRoute"
+        [attr.aria-disabled]="isWebhookTesterRoute"
+        (click)="preventCurrentWebhookClick($event)">
+        <mat-icon class="material-symbols-outlined">webhook</mat-icon>
+        WEBHOOK TESTER
+      </a>
     </nav>
 
     <span class="spacer"></span>
@@ -68,6 +81,19 @@
         <a mat-menu-item routerLink="/effort-tracking" routerLinkActive="active-menu-item" *ngIf="auth.canAccessFeature('effortTracking')">
           <mat-icon class="material-symbols-outlined">timer</mat-icon>
           Effort Tracking
+        </a>
+        <a
+          mat-menu-item
+          routerLink="/webhook"
+          target="_blank"
+          rel="noopener"
+          *ngIf="auth.canAccessFeature('webhookTester')"
+          [class.active-menu-item]="isWebhookSectionActive"
+          [class.disabled-current-link]="isWebhookTesterRoute"
+          [attr.aria-disabled]="isWebhookTesterRoute"
+          (click)="preventCurrentWebhookClick($event)">
+          <mat-icon class="material-symbols-outlined">webhook</mat-icon>
+          Webhook Tester
         </a>
 
         <ng-container *ngIf="mobileUser.role === 'SuperAdmin'">

@@ -93,7 +93,7 @@ app.use((err, req, res, next) => {
     return res.status(413).json({ error: 'Request body must not exceed 256 KB' });
   }
   if (err?.code === 'LIMIT_FILE_SIZE') {
-    return res.status(413).json({ error: 'License file must not exceed 3 MB' });
+    return res.status(413).json({ error: 'Uploaded file exceeds the allowed size limit' });
   }
   if (err?.name === 'MulterError') {
     return res.status(400).json({ error: err.message });

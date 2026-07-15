@@ -41,33 +41,49 @@ function normalizeTenantFeatures(input = {}) {
     mail: normalizeFeature(input.mail),
     domainHealth: normalizeFeature(input.domainHealth),
     licenses: normalizeFeature(input.licenses),
-    effortTracking: normalizeFeature(input.effortTracking)
+    effortTracking: normalizeFeature(input.effortTracking),
+    webhookTester: normalizeFeature(input.webhookTester)
   };
 }
 
 function applyTenantFeaturePolicy(name, type, features) {
   const normalizedName = String(name || '').trim().toLowerCase();
+  const normalized = {
+    ...features,
+    webhookTester: { enabled: Boolean(features.webhookTester?.enabled), edit: false, delete: false }
+  };
+  if (type === 'client') {
+    return {
+      mail: { enabled: false, edit: false, delete: false },
+      domainHealth: {
+        enabled: Boolean(normalized.domainHealth?.enabled),
+        edit: Boolean(normalized.domainHealth?.enabled && normalized.domainHealth?.edit),
+        delete: false
+      },
+      licenses: normalized.licenses || { enabled: false, edit: false, delete: false },
+      effortTracking: { enabled: false, edit: false, delete: false },
+      webhookTester: { enabled: false, edit: false, delete: false }
+    };
+  }
   if (INTERNAL_LICENSE_TENANTS.includes(normalizedName)) {
     return {
-      ...features,
+      ...normalized,
       licenses: { enabled: true, edit: true, delete: true }
     };
   }
-  if (type !== 'client') {
-    return {
-      ...features,
-      licenses: { enabled: false, edit: false, delete: false }
-    };
-  }
-  return features;
+  return {
+    ...normalized,
+    licenses: { enabled: false, edit: false, delete: false }
+  };
 }
 
-function defaultTenantFeatures() {
+function defaultTenantFeatures(type = 'company') {
   return {
     mail: { enabled: false, edit: false, delete: false },
-    domainHealth: { enabled: true, edit: false, delete: false },
+    domainHealth: { enabled: type !== 'client', edit: false, delete: false },
     licenses: { enabled: false, edit: false, delete: false },
-    effortTracking: { enabled: false, edit: false, delete: false }
+    effortTracking: { enabled: false, edit: false, delete: false },
+    webhookTester: { enabled: false, edit: false, delete: false }
   };
 }
 
@@ -260,7 +276,7 @@ exports.createTenant = async (req, res) => {
     const features = applyTenantFeaturePolicy(
       name,
       type,
-      req.body?.features ? normalizeTenantFeatures(req.body.features) : defaultTenantFeatures()
+      req.body?.features ? normalizeTenantFeatures(req.body.features) : defaultTenantFeatures(type)
     );
     if (!name) return res.status(400).json({ error: 'Tenant name is required' });
     if (!type) return res.status(400).json({ error: 'Valid tenant type is required' });

@@ -6,7 +6,7 @@
       <p>Global license access for internal automation. Keys and webhook secrets are only shown once.</p>
     </div>
     <div class="header-actions">
-      <a mat-button routerLink="/webhook">Webhook tester</a>
+      <a mat-button routerLink="/webhook" target="_blank" rel="noopener">Webhook tester</a>
       <button mat-flat-button color="primary" type="button" (click)="openCreate()">
         <mat-icon class="material-symbols-outlined">add</mat-icon>
         New integration
@@ -17,6 +17,7 @@
   <div class="contract-strip">
     <div><strong>Polling</strong><code>GET /api/integrations/v1/events</code></div>
     <div><strong>Upload</strong><code>POST /api/integrations/v1/licenses/:id/license-file</code></div>
+    <div><strong>Mobile APK</strong><code>POST /api/integrations/v1/licenses/:id/mobile-app-file</code></div>
     <div><strong>Webhook event</strong><code>license.ordered</code></div>
   </div>
 

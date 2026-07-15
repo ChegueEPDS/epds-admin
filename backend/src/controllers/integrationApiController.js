@@ -3,7 +3,7 @@ const mongoose = require('mongoose');
 const IntegrationRequest = require('../models/integrationRequest');
 const LicenseCustomer = require('../models/licenseCustomer');
 const LicenseEvent = require('../models/licenseEvent');
-const { replaceLicenseFile } = require('../services/licenseFileService');
+const { replaceLicenseFile, replaceMobileAppFile } = require('../services/licenseFileService');
 const { integrationLicensePayload, presentEvent } = require('../services/licenseIntegrationService');
 const { sha256 } = require('../services/integrationSecurityService');
 const { expireLicenses } = require('../services/licenseExpiryService');
@@ -110,6 +110,22 @@ exports.listEvents = async (req, res, next) => {
 };
 
 exports.uploadLicenseFile = async (req, res, next) => {
+  return uploadIntegrationFile(req, res, next, {
+    fileType: 'license-file',
+    metadataPath: 'licenseFile',
+    replaceFile: (license, file, actor) => replaceLicenseFile(license, file, actor)
+  });
+};
+
+exports.uploadMobileAppFile = async (req, res, next) => {
+  return uploadIntegrationFile(req, res, next, {
+    fileType: 'mobile-app-file',
+    metadataPath: 'mobileAppFile',
+    replaceFile: (license, file, actor) => replaceMobileAppFile(license, file, actor, req.body?.version)
+  });
+};
+
+async function uploadIntegrationFile(req, res, next, options) {
   const idempotencyKey = String(req.get('idempotency-key') || '').trim();
   let requestRecord;
   try {
@@ -119,8 +135,10 @@ exports.uploadLicenseFile = async (req, res, next) => {
     if (!req.file) return res.status(400).json({ error: 'No file provided' });
     const keyHash = sha256(idempotencyKey);
     const fingerprint = crypto.createHash('sha256')
+      .update(options.fileType)
       .update(String(req.params.id))
       .update(req.file.originalname || '')
+      .update(String(req.body?.version || ''))
       .update(req.file.buffer)
       .digest('hex');
 
@@ -139,11 +157,14 @@ exports.uploadLicenseFile = async (req, res, next) => {
       }
       if (existing.status === 'completed') return res.status(existing.responseStatus).json(existing.responseBody);
 
-      const completedLicense = await LicenseCustomer.findOne({
+      const completedQuery = {
         _id: req.params.id,
-        'licenseFile.integrationClientId': req.integrationClientId,
-        'licenseFile.idempotencyKeyHash': keyHash
-      }).select('+licenseFile.idempotencyKeyHash').populate('tenantId', 'name displayName type');
+        [`${options.metadataPath}.integrationClientId`]: req.integrationClientId,
+        [`${options.metadataPath}.idempotencyKeyHash`]: keyHash
+      };
+      const completedLicense = await LicenseCustomer.findOne(completedQuery)
+        .select(`+${options.metadataPath}.idempotencyKeyHash`)
+        .populate('tenantId', 'name displayName type');
       if (completedLicense) {
         const responseBody = { data: integrationLicensePayload(completedLicense) };
         existing.status = 'completed';
@@ -161,7 +182,7 @@ exports.uploadLicenseFile = async (req, res, next) => {
       await requestRecord.deleteOne();
       return res.status(404).json({ error: 'License not found' });
     }
-    await replaceLicenseFile(license, req.file, {
+    await options.replaceFile(license, req.file, {
       name: req.integrationClient.name,
       integrationClientId: req.integrationClientId,
       idempotencyKeyHash: keyHash
@@ -180,4 +201,4 @@ exports.uploadLicenseFile = async (req, res, next) => {
     if (error.statusCode) return res.status(error.statusCode).json({ error: error.message });
     return next(error);
   }
-};
+}

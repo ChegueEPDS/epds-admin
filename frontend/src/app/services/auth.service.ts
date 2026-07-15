@@ -7,7 +7,7 @@ import { environment } from '../../environments/environment';
 import { MsalService } from '@azure/msal-angular';
 import { loginRequest } from './msal.config';
 
-export type TenantFeatureKey = 'mail' | 'domainHealth' | 'licenses' | 'effortTracking';
+export type TenantFeatureKey = 'mail' | 'domainHealth' | 'licenses' | 'effortTracking' | 'webhookTester';
 
 export type TenantFeatureAccess = {
   enabled: boolean;
@@ -48,10 +48,11 @@ const FEATURE_ROUTES: Record<TenantFeatureKey, string> = {
   mail: '/mail',
   domainHealth: '/domain-health',
   licenses: '/licenses',
-  effortTracking: '/effort-tracking'
+  effortTracking: '/effort-tracking',
+  webhookTester: '/webhook'
 };
 
-const FEATURE_ORDER: TenantFeatureKey[] = ['mail', 'domainHealth', 'licenses', 'effortTracking'];
+const FEATURE_ORDER: TenantFeatureKey[] = ['mail', 'domainHealth', 'licenses', 'effortTracking', 'webhookTester'];
 
 @Injectable({ providedIn: 'root' })
 export class AuthService {

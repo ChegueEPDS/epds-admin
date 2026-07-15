@@ -1,0 +1,136 @@
+<section class="docs-page">
+  <header class="docs-hero">
+    <div>
+      <p class="eyebrow">EPDS LICENSE INTEGRATION API V1</p>
+      <h1>Developer integration guide</h1>
+      <p class="lead">Everything needed to receive ordered license events, verify webhook signatures and upload generated license or mobile app files.</p>
+    </div>
+    <a mat-flat-button routerLink="/webhook" target="_blank" rel="noopener">
+      <mat-icon class="material-symbols-outlined">webhook</mat-icon>
+      Open tester
+    </a>
+  </header>
+
+  <section class="quick-grid">
+    <article>
+      <span class="step">01</span>
+      <h2>Create API credentials</h2>
+      <p>SuperAdmin creates an integration in Settings > License integrations. API keys and webhook secrets are shown once.</p>
+    </article>
+    <article>
+      <span class="step">02</span>
+      <h2>Receive ordered event</h2>
+      <p>Webhook or polling returns a <code>license.ordered</code> event containing the license ID and customer license details.</p>
+    </article>
+    <article>
+      <span class="step">03</span>
+      <h2>Upload file</h2>
+      <p>Use the license ID with the matching upload endpoint. License files move ordered licenses to pending; APK uploads replace the current mobile app file.</p>
+    </article>
+  </section>
+
+  <div class="content-grid">
+    <main class="main-column">
+      <section class="panel">
+        <div class="section-heading">
+          <span class="label">Base URL</span>
+          <code>{{ apiUrl }}{{ basePath }}</code>
+        </div>
+        <p>Send the API key in <code>Authorization: Bearer &lt;api-key&gt;</code> or <code>X-API-Key: &lt;api-key&gt;</code>. All API responses are JSON except multipart uploads.</p>
+      </section>
+
+      <section class="panel">
+        <div class="section-heading">
+          <span class="label">Endpoints</span>
+          <p>Use webhook delivery for push automation, or event polling when a receiver is not available.</p>
+        </div>
+        <div class="endpoint-list">
+          <article *ngFor="let endpoint of endpoints">
+            <span class="method" [class.post]="endpoint.method === 'POST'">{{ endpoint.method }}</span>
+            <div>
+              <h3>{{ endpoint.title }}</h3>
+              <code>{{ basePath }}{{ endpoint.path }}</code>
+              <p>{{ endpoint.description }}</p>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="section-heading">
+          <span class="label">Webhook payload</span>
+          <p>The webhook sends the same event envelope as the events endpoint.</p>
+        </div>
+        <pre>{{ webhookPayload }}</pre>
+        <p class="note"><code>objectLimit</code> is a number for fixed/custom limits or <code>"unlimited"</code>. File metadata excludes blob paths and signed URLs.</p>
+      </section>
+
+      <section class="panel">
+        <div class="section-heading">
+          <span class="label">Upload example</span>
+          <p><code>Idempotency-Key</code> is required and must be unique per upload attempt.</p>
+        </div>
+        <pre>{{ uploadExample }}</pre>
+        <div class="rule-list">
+          <span>.zip, .txt, .docx only</span>
+          <span>Maximum 3 MB</span>
+          <span>ZIP/DOCX signatures and TXT UTF-8 are checked</span>
+        </div>
+        <pre>{{ mobileUploadExample }}</pre>
+        <div class="rule-list">
+          <span>.apk only</span>
+          <span>Maximum 100 MB</span>
+          <span>Allowed only when <code>mobileApp</code> is true</span>
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="section-heading">
+          <span class="label">Polling example</span>
+          <p>Poll when the integration cannot expose a public HTTPS webhook endpoint.</p>
+        </div>
+        <pre>{{ pollEventsExample }}</pre>
+      </section>
+    </main>
+
+    <aside class="side-column">
+      <section class="panel compact">
+        <h2>Webhook headers</h2>
+        <dl>
+          <dt>X-EPDS-Event-Id</dt>
+          <dd>Globally unique event ID.</dd>
+          <dt>X-EPDS-Timestamp</dt>
+          <dd>Unix timestamp in seconds.</dd>
+          <dt>X-EPDS-Signature</dt>
+          <dd><code>v1=&lt;hex HMAC-SHA256&gt;</code></dd>
+        </dl>
+      </section>
+
+      <section class="panel compact">
+        <h2>Signature verification</h2>
+        <pre>{{ signatureBase }}</pre>
+        <p>Reject timestamps older than five minutes and compare signatures using a constant-time function.</p>
+      </section>
+
+      <section class="panel compact">
+        <h2>Operational responses</h2>
+        <div class="status-list">
+          <span><strong>400</strong> Invalid input or idempotency key</span>
+          <span><strong>401</strong> Missing or invalid API key</span>
+          <span><strong>403</strong> Missing API scope</span>
+          <span><strong>404</strong> License not found</span>
+          <span><strong>409</strong> Idempotency conflict</span>
+          <span><strong>413</strong> File too large</span>
+          <span><strong>415</strong> Unsupported file content</span>
+          <span><strong>429</strong> Rate limit exceeded</span>
+        </div>
+      </section>
+
+      <section class="panel compact accent">
+        <h2>Webhook tester</h2>
+        <p>The tester creates a receiver URL, displays the latest 100 requests and verifies <code>X-EPDS-Signature</code> with the one-time webhook secret.</p>
+        <a mat-button routerLink="/webhook" target="_blank" rel="noopener">Open receiver</a>
+      </section>
+    </aside>
+  </div>
+</section>

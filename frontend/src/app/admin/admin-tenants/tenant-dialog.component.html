@@ -14,7 +14,7 @@
 
     <mat-form-field appearance="outline">
       <mat-label>Type</mat-label>
-      <mat-select name="type" [(ngModel)]="type" required>
+      <mat-select name="type" [(ngModel)]="type" (ngModelChange)="onTypeChange()" required>
         <mat-option *ngFor="let typeOption of types" [value]="typeOption.value">
           {{ typeOption.label }}
         </mat-option>
@@ -29,11 +29,28 @@
         <span>Edit</span>
         <span>Delete</span>
       </div>
-      <div class="feature-row" *ngFor="let feature of featureOptions">
+      <div class="feature-row" *ngFor="let feature of featureOptions" [class.disabled-row]="isFeatureDisabled(feature)">
         <span>{{ feature.label }}</span>
-        <mat-slide-toggle [(ngModel)]="features[feature.key].enabled" [name]="feature.key + 'Enabled'" aria-label="Feature enabled"></mat-slide-toggle>
-        <mat-checkbox [(ngModel)]="features[feature.key].edit" [name]="feature.key + 'Edit'" [disabled]="!features[feature.key].enabled" aria-label="Edit permission"></mat-checkbox>
-        <mat-checkbox [(ngModel)]="features[feature.key].delete" [name]="feature.key + 'Delete'" [disabled]="!features[feature.key].enabled" aria-label="Delete permission"></mat-checkbox>
+        <mat-slide-toggle
+          [(ngModel)]="features[feature.key].enabled"
+          (ngModelChange)="onFeatureEnabledChange(feature)"
+          [name]="feature.key + 'Enabled'"
+          [disabled]="isFeatureDisabled(feature)"
+          aria-label="Feature enabled"></mat-slide-toggle>
+        <mat-checkbox
+          *ngIf="hasPermissionControls(feature); else noPermissionControls"
+          [(ngModel)]="features[feature.key].edit"
+          [name]="feature.key + 'Edit'"
+          [disabled]="isEditDisabled(feature)"
+          aria-label="Edit permission"></mat-checkbox>
+        <mat-checkbox
+          *ngIf="hasPermissionControls(feature); else noDeleteControl"
+          [(ngModel)]="features[feature.key].delete"
+          [name]="feature.key + 'Delete'"
+          [disabled]="isDeleteDisabled(feature)"
+          aria-label="Delete permission"></mat-checkbox>
+        <ng-template #noPermissionControls><span class="permission-na">-</span></ng-template>
+        <ng-template #noDeleteControl><span class="permission-na">-</span></ng-template>
       </div>
     </section>
   </mat-dialog-content>

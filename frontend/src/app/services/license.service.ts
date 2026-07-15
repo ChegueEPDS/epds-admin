@@ -50,6 +50,16 @@ export type InfrastructureGroup = {
   applicationAddress: string;
 };
 
+export type LicenseFileMetadata = {
+  fileName: string;
+  blobPath: string;
+  blobUrl: string;
+  contentType: string;
+  size: number;
+  uploadedAt: string | null;
+  uploadedByName: string;
+};
+
 export type LicenseCustomer = {
   id: string;
   customerName: string;
@@ -69,6 +79,8 @@ export type LicenseCustomer = {
   infrastructureGroups: InfrastructureGroup[];
   accessAddresses: TypedAddress[];
   mobileApp: boolean;
+  mobileAppVersion: string;
+  mobileAppFile: LicenseFileMetadata | null;
   licensePrice: number;
   licenseCurrency: CurrencyCode;
   supportPrice: number;
@@ -77,15 +89,7 @@ export type LicenseCustomer = {
   vpnApp: string;
   twoFactorApp: string;
   vpnCredentials: VpnCredential[];
-  licenseFile: {
-    fileName: string;
-    blobPath: string;
-    blobUrl: string;
-    contentType: string;
-    size: number;
-    uploadedAt: string | null;
-    uploadedByName: string;
-  } | null;
+  licenseFile: LicenseFileMetadata | null;
   notesHtml: string;
   tenantId?: string | null;
   tenantName?: string | null;
@@ -112,6 +116,7 @@ export type LicensePayload = {
   infrastructureGroups: InfrastructureGroup[];
   accessAddresses: TypedAddress[];
   mobileApp: boolean;
+  mobileAppVersion: string;
   licensePrice: number;
   licenseCurrency: CurrencyCode;
   supportPrice: number;
@@ -127,6 +132,7 @@ export type LicenseOrderPayload = {
   objectLimitOption: ObjectLimitOption;
   customObjectLimit?: number | null;
   mobileApp: boolean;
+  mobileAppVersion?: string;
   expiresAt: string;
 };
 
@@ -179,6 +185,20 @@ export class LicenseService {
 
   downloadLicenseFile(id: string) {
     return this.http.get(`${this.base}/licenses/${id}/license-file`, {
+      responseType: 'blob',
+      observe: 'response'
+    });
+  }
+
+  uploadMobileAppFile(id: string, file: File, version: string) {
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('version', version);
+    return this.http.post<{ license: LicenseCustomer }>(`${this.base}/licenses/${id}/mobile-app-file`, formData);
+  }
+
+  downloadMobileAppFile(id: string) {
+    return this.http.get(`${this.base}/licenses/${id}/mobile-app-file`, {
       responseType: 'blob',
       observe: 'response'
     });

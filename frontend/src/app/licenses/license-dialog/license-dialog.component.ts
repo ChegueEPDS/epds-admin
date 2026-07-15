@@ -76,6 +76,7 @@ export class LicenseDialogComponent {
   expiryDate: Date | null = null;
   isEditing = false;
   isUploadingLicenseFile = false;
+  isUploadingMobileAppFile = false;
   visibleVpnPasswords = new Set<number>();
 
   constructor(
@@ -130,6 +131,7 @@ export class LicenseDialogComponent {
         environment: 'prod' as AddressEnvironment
       })).slice(0, 1),
       mobileApp: license?.mobileApp || false,
+      mobileAppVersion: license?.mobileAppVersion || '',
       licensePrice: license?.licensePrice || 0,
       licenseCurrency: license?.licenseCurrency || 'HUF',
       supportPrice: license?.supportPrice || 0,
@@ -246,6 +248,18 @@ export class LicenseDialogComponent {
     return Boolean(this.canManageLicenseFile() && this.model.status === 'ordered');
   }
 
+  canDownloadLicenseFile(): boolean {
+    return Boolean(this.data.license?.id && this.data.canEdit && this.data.license?.licenseFile && this.data.currentUserTenantType !== 'client');
+  }
+
+  canUploadMobileAppFile(): boolean {
+    return Boolean(this.data.license?.id && this.data.canEdit && this.model.mobileApp);
+  }
+
+  canDownloadMobileAppFile(): boolean {
+    return Boolean(this.data.license?.id && this.data.license?.mobileAppFile);
+  }
+
   syncLicense(license: LicenseCustomer): void {
     if (this.data.license) Object.assign(this.data.license, license);
     this.data.license = license;
@@ -259,6 +273,22 @@ export class LicenseDialogComponent {
 
   licenseFileUpdatedText(): string {
     const file = this.data.license?.licenseFile;
+    if (!file?.uploadedAt) return '';
+    const uploadedAt = new Date(file.uploadedAt).toLocaleString();
+    const uploadedBy = String(file.uploadedByName || '').trim();
+    return uploadedBy ? `Updated: ${uploadedAt} - ${uploadedBy}` : `Updated: ${uploadedAt}`;
+  }
+
+  mobileAppFileName(): string {
+    return this.data.license?.mobileAppFile?.fileName || '';
+  }
+
+  mobileAppVersionText(): string {
+    return String(this.model.mobileAppVersion || '').trim() || '-';
+  }
+
+  mobileAppFileUpdatedText(): string {
+    const file = this.data.license?.mobileAppFile;
     if (!file?.uploadedAt) return '';
     const uploadedAt = new Date(file.uploadedAt).toLocaleString();
     const uploadedBy = String(file.uploadedByName || '').trim();
@@ -285,6 +315,37 @@ export class LicenseDialogComponent {
       this.snackBar.open(err?.error?.error || 'Could not upload license file', 'Close', { duration: 3500 });
     } finally {
       this.isUploadingLicenseFile = false;
+    }
+  }
+
+  async uploadMobileAppFile(input: HTMLInputElement): Promise<void> {
+    const file = input.files?.[0] || null;
+    input.value = '';
+    if (!file || !this.data.license?.id || !this.data.canEdit) return;
+    if (!this.model.mobileApp) {
+      this.snackBar.open('Mobile app must be enabled before uploading APK', 'Close', { duration: 3500 });
+      return;
+    }
+    const extension = `.${file.name.split('.').pop()?.toLowerCase() || ''}`;
+    if (extension !== '.apk' || file.size > 100 * 1024 * 1024) {
+      this.snackBar.open('Only APK files up to 100 MB are allowed', 'Close', { duration: 3500 });
+      return;
+    }
+    this.isUploadingMobileAppFile = true;
+    try {
+      const response = await this.licenseService.uploadMobileAppFile(
+        this.data.license.id,
+        file,
+        String(this.model.mobileAppVersion || '').trim()
+      ).toPromise();
+      if (response?.license) {
+        this.syncLicense(response.license);
+      }
+      this.snackBar.open('Mobile app uploaded', 'Close', { duration: 2500 });
+    } catch (err: any) {
+      this.snackBar.open(err?.error?.error || 'Could not upload mobile app', 'Close', { duration: 3500 });
+    } finally {
+      this.isUploadingMobileAppFile = false;
     }
   }
 
@@ -318,19 +379,40 @@ export class LicenseDialogComponent {
   }
 
   async downloadLicenseFile(): Promise<void> {
-    if (!this.data.license?.id || !this.data.canEdit || !this.data.license.licenseFile) return;
+    const license = this.data.license;
+    const licenseFile = license?.licenseFile;
+    if (!license?.id || !licenseFile || !this.canDownloadLicenseFile()) return;
     try {
-      const response = await this.licenseService.downloadLicenseFile(this.data.license.id).toPromise();
+      const response = await this.licenseService.downloadLicenseFile(license.id).toPromise();
       const blob = response?.body;
       if (!blob) throw new Error('Empty file response');
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
-      link.download = this.data.license.licenseFile.fileName || 'license-file';
+      link.download = licenseFile.fileName || 'license-file';
       link.click();
       URL.revokeObjectURL(url);
     } catch (err: any) {
       this.snackBar.open(err?.error?.error || 'Could not download license file', 'Close', { duration: 3500 });
+    }
+  }
+
+  async downloadMobileAppFile(): Promise<void> {
+    const license = this.data.license;
+    const mobileAppFile = license?.mobileAppFile;
+    if (!license?.id || !mobileAppFile) return;
+    try {
+      const response = await this.licenseService.downloadMobileAppFile(license.id).toPromise();
+      const blob = response?.body;
+      if (!blob) throw new Error('Empty file response');
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = mobileAppFile.fileName || 'mobile-app.apk';
+      link.click();
+      URL.revokeObjectURL(url);
+    } catch (err: any) {
+      this.snackBar.open(err?.error?.error || 'Could not download mobile app', 'Close', { duration: 3500 });
     }
   }
 
@@ -548,6 +630,7 @@ export class LicenseDialogComponent {
           ? [{ address: String(this.model.accessAddresses[0]?.address || '').trim(), environment: 'prod' }]
           : [],
         mobileApp: this.model.mobileApp === true,
+        mobileAppVersion: String(this.model.mobileAppVersion || '').trim(),
         licensePrice,
         licenseCurrency: this.model.licenseCurrency || 'HUF',
         supportPrice,
