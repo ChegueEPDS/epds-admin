@@ -13,7 +13,8 @@ type FeatureCard = {
   icon: string;
   route: string;
   description: string;
-  featureKey: TenantFeatureKey;
+  featureKey?: TenantFeatureKey;
+  superAdminOnly?: boolean;
   opensInNewTab?: boolean;
 };
 
@@ -54,6 +55,13 @@ export class HomeComponent implements OnInit, OnDestroy {
       featureKey: 'licenses'
     },
     {
+      title: 'Work Board',
+      icon: 'view_list',
+      route: '/work-board',
+      description: 'Works, sub-works, deadlines and billing milestones.',
+      featureKey: 'workBoard'
+    },
+    {
       title: 'Effort Tracking',
       icon: 'timer',
       route: '/effort-tracking',
@@ -67,6 +75,13 @@ export class HomeComponent implements OnInit, OnDestroy {
       description: 'Inspect received webhook payloads and verify signatures.',
       featureKey: 'webhookTester',
       opensInNewTab: true
+    },
+    {
+      title: 'FIT Editor',
+      icon: 'directions_bike',
+      route: '/admin/fit-editor',
+      description: 'Analyze and edit running and cycling FIT activity files.',
+      superAdminOnly: true
     }
   ];
 
@@ -86,7 +101,9 @@ export class HomeComponent implements OnInit, OnDestroy {
   }
 
   get visibleCards(): FeatureCard[] {
-    return this.cards.filter((card) => this.auth.canAccessFeature(card.featureKey));
+    return this.cards.filter((card) =>
+      card.superAdminOnly ? this.auth.isSuperAdmin() : Boolean(card.featureKey && this.auth.canAccessFeature(card.featureKey))
+    );
   }
 
   get hasActiveIssues(): boolean {
@@ -104,11 +121,13 @@ export class HomeComponent implements OnInit, OnDestroy {
     return 'Systems ready';
   }
 
-  hasCardWarning(featureKey: TenantFeatureKey): boolean {
+  hasCardWarning(featureKey?: TenantFeatureKey): boolean {
+    if (!featureKey) return false;
     return this.issueFeatureKeys.has(featureKey) || this.unavailableFeatureKeys.has(featureKey);
   }
 
-  hasCardActiveIssue(featureKey: TenantFeatureKey): boolean {
+  hasCardActiveIssue(featureKey?: TenantFeatureKey): boolean {
+    if (!featureKey) return false;
     return this.issueFeatureKeys.has(featureKey);
   }
 

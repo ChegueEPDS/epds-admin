@@ -1,6 +1,6 @@
 const path = require('path');
 const { TextDecoder } = require('util');
-const azureBlob = require('./azureBlobService');
+const fileStorage = require('./fileStorageService');
 const { transitionStatus } = require('./licenseIntegrationService');
 
 const MAX_LICENSE_FILE_SIZE = 3 * 1024 * 1024;
@@ -100,7 +100,7 @@ function buildFileMetadata(blobPath, fileName, file, actor) {
   return {
     fileName,
     blobPath,
-    blobUrl: azureBlob.getBlobUrl(blobPath),
+    blobUrl: fileStorage.getBlobUrl(blobPath),
     contentType: file.mimetype || 'application/octet-stream',
     size: file.buffer.length,
     uploadedAt: new Date(),
@@ -118,19 +118,19 @@ async function replaceLicenseFile(license, file, actor) {
   const contentType = file.mimetype || 'application/octet-stream';
   const previousBlobPath = license.licenseFile?.blobPath || '';
 
-  await azureBlob.uploadBuffer(blobPath, file.buffer, contentType);
+  await fileStorage.uploadBuffer(blobPath, file.buffer, contentType);
   try {
     license.licenseFile = buildFileMetadata(blobPath, fileName, file, actor);
     if (license.status === 'ordered') transitionStatus(license, 'pending');
     if (actor.userId) license.updatedBy = actor.userId;
     await license.save();
   } catch (error) {
-    try { await azureBlob.deleteFile(blobPath); } catch {}
+    try { await fileStorage.deleteFile(blobPath); } catch {}
     throw error;
   }
 
   if (previousBlobPath) {
-    try { await azureBlob.deleteFile(previousBlobPath); } catch (error) {
+    try { await fileStorage.deleteFile(previousBlobPath); } catch (error) {
       console.warn('[license-file] previous blob delete failed:', error?.message || error);
     }
   }
@@ -150,19 +150,19 @@ async function replaceMobileAppFile(license, file, actor, version) {
   const contentType = file.mimetype || 'application/vnd.android.package-archive';
   const previousBlobPath = license.mobileAppFile?.blobPath || '';
 
-  await azureBlob.uploadBuffer(blobPath, file.buffer, contentType);
+  await fileStorage.uploadBuffer(blobPath, file.buffer, contentType);
   try {
     license.mobileAppFile = buildFileMetadata(blobPath, fileName, { buffer: file.buffer, mimetype: contentType }, actor);
     if (version !== undefined) license.mobileAppVersion = normalizeMobileAppVersion(version);
     if (actor.userId) license.updatedBy = actor.userId;
     await license.save();
   } catch (error) {
-    try { await azureBlob.deleteFile(blobPath); } catch {}
+    try { await fileStorage.deleteFile(blobPath); } catch {}
     throw error;
   }
 
   if (previousBlobPath) {
-    try { await azureBlob.deleteFile(previousBlobPath); } catch (error) {
+    try { await fileStorage.deleteFile(previousBlobPath); } catch (error) {
       console.warn('[mobile-app-file] previous blob delete failed:', error?.message || error);
     }
   }

@@ -1,5 +1,6 @@
 import { CommonModule } from '@angular/common';
 import { Component, OnDestroy, OnInit } from '@angular/core';
+import { RouterLink } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { firstValueFrom } from 'rxjs';
 import { MatButtonModule } from '@angular/material/button';
@@ -7,21 +8,25 @@ import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatIconModule } from '@angular/material/icon';
 import { MatInputModule } from '@angular/material/input';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
+import { MatSelectModule } from '@angular/material/select';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { EffortProject, EffortService, EffortTask } from '../services/effort.service';
 import { RichTextEditorComponent } from '../shared/rich-text-editor/rich-text-editor.component';
 import { AuthService } from '../services/auth.service';
+import { WorkBoardService, WorkOption } from '../services/work-board.service';
 
 type ProjectForm = {
   name: string;
   customer: string;
   comment: string;
+  workItemId: string;
 };
 
 type TaskForm = {
   name: string;
   note: string;
+  subWorkItemId: string;
 };
 
 type TaskAction = 'start' | 'stop' | 'close';
@@ -31,12 +36,14 @@ type TaskAction = 'start' | 'stop' | 'close';
   standalone: true,
   imports: [
     CommonModule,
+    RouterLink,
     FormsModule,
     MatButtonModule,
     MatFormFieldModule,
     MatIconModule,
     MatInputModule,
     MatProgressSpinnerModule,
+    MatSelectModule,
     MatSnackBarModule,
     MatTooltipModule,
     RichTextEditorComponent
@@ -46,6 +53,7 @@ type TaskAction = 'start' | 'stop' | 'close';
 })
 export class EffortTrackingComponent implements OnInit, OnDestroy {
   projects: EffortProject[] = [];
+  workOptions: WorkOption[] = [];
   selectedProject: EffortProject | null = null;
   loading = true;
   saving = false;
@@ -64,15 +72,22 @@ export class EffortTrackingComponent implements OnInit, OnDestroy {
   constructor(
     private effortService: EffortService,
     private snackBar: MatSnackBar,
-    public auth: AuthService
+    public auth: AuthService,
+    private workBoard: WorkBoardService
   ) {}
 
   ngOnInit(): void {
     this.loadProjects();
+    this.loadWorkOptions();
     this.tickId = setInterval(() => {
       this.now = Date.now();
       this.updateDocumentTitle();
     }, 1000);
+  }
+
+  async loadWorkOptions(): Promise<void> {
+    try { this.workOptions = await firstValueFrom(this.workBoard.listActiveOptions()); }
+    catch { this.workOptions = []; }
   }
 
   ngOnDestroy(): void {
@@ -122,6 +137,7 @@ export class EffortTrackingComponent implements OnInit, OnDestroy {
       name: this.selectedProject.name,
       customer: this.selectedProject.customer || '',
       comment: this.selectedProject.comment || ''
+      ,workItemId: this.selectedProject.workItemId || ''
     };
     this.editingProject = true;
     this.showProjectForm = true;
@@ -138,6 +154,7 @@ export class EffortTrackingComponent implements OnInit, OnDestroy {
       name: this.projectForm.name.trim(),
       customer: this.projectForm.customer.trim(),
       comment: this.projectForm.comment.trim()
+      ,workItemId: this.projectForm.workItemId || null
     };
     if (!payload.name) {
       this.snackBar.open('Project name is required.', 'OK', { duration: 3000 });
@@ -170,6 +187,7 @@ export class EffortTrackingComponent implements OnInit, OnDestroy {
     this.taskForm = {
       name: task.name,
       note: task.note || ''
+      ,subWorkItemId: task.subWorkItemId || ''
     };
     this.editingTaskId = task.id;
     this.showTaskForm = true;
@@ -186,6 +204,7 @@ export class EffortTrackingComponent implements OnInit, OnDestroy {
     const payload = {
       name: this.taskForm.name.trim(),
       note: this.taskForm.note.trim()
+      ,subWorkItemId: this.taskForm.subWorkItemId || null
     };
     if (!payload.name) {
       this.snackBar.open('Task name is required.', 'OK', { duration: 3000 });
@@ -437,10 +456,26 @@ export class EffortTrackingComponent implements OnInit, OnDestroy {
   }
 
   private emptyProjectForm(): ProjectForm {
-    return { name: '', customer: '', comment: '' };
+    return { name: '', customer: '', comment: '', workItemId: '' };
   }
 
   private emptyTaskForm(): TaskForm {
-    return { name: '', note: '' };
+    return { name: '', note: '', subWorkItemId: '' };
+  }
+
+  selectedWorkOption(): WorkOption | null {
+    return this.workOptions.find((work) => work.id === this.projectForm.workItemId) || null;
+  }
+
+  projectWorkChanged(): void {
+    const work = this.selectedWorkOption();
+    if (!work || this.editingProject) return;
+    this.projectForm.name = work.name;
+    this.projectForm.customer = work.customer || '';
+  }
+
+  availableSubWorks(): WorkOption['subWorks'] {
+    const workId = this.selectedProject?.workItemId || '';
+    return this.workOptions.find((work) => work.id === workId)?.subWorks || [];
   }
 }

@@ -42,6 +42,7 @@ function normalizeTenantFeatures(input = {}) {
     domainHealth: normalizeFeature(input.domainHealth),
     licenses: normalizeFeature(input.licenses),
     effortTracking: normalizeFeature(input.effortTracking),
+    workBoard: normalizeFeature(input.workBoard),
     webhookTester: normalizeFeature(input.webhookTester)
   };
 }
@@ -62,6 +63,7 @@ function applyTenantFeaturePolicy(name, type, features) {
       },
       licenses: normalized.licenses || { enabled: false, edit: false, delete: false },
       effortTracking: { enabled: false, edit: false, delete: false },
+      workBoard: { enabled: false, edit: false, delete: false },
       webhookTester: { enabled: false, edit: false, delete: false }
     };
   }
@@ -83,6 +85,7 @@ function defaultTenantFeatures(type = 'company') {
     domainHealth: { enabled: type !== 'client', edit: false, delete: false },
     licenses: { enabled: false, edit: false, delete: false },
     effortTracking: { enabled: false, edit: false, delete: false },
+    workBoard: { enabled: false, edit: false, delete: false },
     webhookTester: { enabled: false, edit: false, delete: false }
   };
 }

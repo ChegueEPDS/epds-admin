@@ -17,8 +17,10 @@ const mailRoutes = require('./routes/mailRoutes');
 const domainHealthRoutes = require('./routes/domainHealthRoutes');
 const licenseRoutes = require('./routes/licenseRoutes');
 const effortRoutes = require('./routes/effortRoutes');
+const workBoardRoutes = require('./routes/workBoardRoutes');
 const integrationApiRoutes = require('./routes/integrationApiRoutes');
 const webhookTestRoutes = require('./routes/webhookTestRoutes');
+const fitFileRoutes = require('./routes/fitFileRoutes');
 const { startDomainHealthMonitor } = require('./services/domainMonitorService');
 const { startDomainDailyReportScheduler } = require('./services/domainDailyReportService');
 const { startDomainPageSpeedScheduler } = require('./services/domainPageSpeedSchedulerService');
@@ -86,7 +88,9 @@ app.use('/api', mailRoutes);
 app.use('/api', domainHealthRoutes);
 app.use('/api', licenseRoutes);
 app.use('/api', effortRoutes);
+app.use('/api', workBoardRoutes);
 app.use('/api', integrationApiRoutes);
+app.use('/api', fitFileRoutes);
 
 app.use((err, req, res, next) => {
   if (err?.type === 'entity.too.large') {

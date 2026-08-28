@@ -25,6 +25,7 @@ const TenantSchema = new mongoose.Schema(
       domainHealth: { type: FeatureAccessSchema, default: () => ({}) },
       licenses: { type: FeatureAccessSchema, default: () => ({}) },
       effortTracking: { type: FeatureAccessSchema, default: () => ({}) },
+      workBoard: { type: FeatureAccessSchema, default: () => ({}) },
       webhookTester: { type: FeatureAccessSchema, default: () => ({}) }
     },
     professionRbacEnabled: { type: Boolean, default: false, index: true }

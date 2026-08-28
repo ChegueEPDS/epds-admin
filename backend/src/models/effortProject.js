@@ -6,6 +6,12 @@ const EffortProjectSchema = new mongoose.Schema(
     normalizedName: { type: String, required: true, trim: true, lowercase: true },
     customer: { type: String, trim: true, default: '' },
     comment: { type: String, trim: true, default: '' },
+    workItemId: { type: mongoose.Schema.Types.ObjectId, ref: 'WorkItem', index: true },
+    workItemSnapshot: {
+      workNumber: { type: String, trim: true, default: '' },
+      name: { type: String, trim: true, default: '' },
+      customer: { type: String, trim: true, default: '' }
+    },
     status: { type: String, enum: ['open', 'closed'], default: 'open', index: true },
     closedAt: { type: Date },
     closedNetMs: { type: Number, min: 0, default: 0 },

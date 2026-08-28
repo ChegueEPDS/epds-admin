@@ -16,6 +16,11 @@ const EffortTaskSchema = new mongoose.Schema(
     tenantId: { type: mongoose.Schema.Types.ObjectId, ref: 'Tenant', index: true },
     name: { type: String, required: true, trim: true },
     note: { type: String, trim: true, default: '' },
+    subWorkItemId: { type: mongoose.Schema.Types.ObjectId, ref: 'SubWorkItem', index: true },
+    subWorkItemSnapshot: {
+      subWorkNumber: { type: String, trim: true, default: '' },
+      name: { type: String, trim: true, default: '' }
+    },
     status: { type: String, enum: ['open', 'closed'], default: 'open', index: true },
     sessions: [EffortSessionSchema],
     activeTimer: {

@@ -1,0 +1,78 @@
+services:
+  mongodb:
+    image: mongo:8.0
+    restart: unless-stopped
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_ROOT_USERNAME:-root}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD:?MONGO_ROOT_PASSWORD is required}
+      MONGO_INITDB_DATABASE: epds_admin
+    volumes:
+      - mongodb-data:/data/db
+      - mongodb-config:/data/configdb
+    networks:
+      - epds-internal
+    healthcheck:
+      test: ["CMD-SHELL", "mongosh --quiet --username '$${MONGO_INITDB_ROOT_USERNAME}' --password '$${MONGO_INITDB_ROOT_PASSWORD}' --authenticationDatabase admin --eval 'db.adminCommand({ ping: 1 }).ok' | grep 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+
+  backend:
+    build:
+      context: ./backend
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: 4301
+      MONGODB_URI: mongodb://${MONGO_ROOT_USERNAME:-root}:${MONGO_ROOT_PASSWORD}@mongodb:27017/epds_admin?authSource=admin
+      FILE_STORAGE_ROOT: /app/storage
+      LOG_DIR: /app/logs
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
+      JWT_AUDIENCE: ${JWT_AUDIENCE:-epds-admin-api}
+      JWT_ISSUER: ${JWT_ISSUER:-epds-admin-backend}
+      AUTH_COOKIE_DOMAIN: ${AUTH_COOKIE_DOMAIN:-}
+      AUTH_COOKIE_SECURE: ${AUTH_COOKIE_SECURE:-true}
+      AUTH_COOKIE_SAMESITE: ${AUTH_COOKIE_SAMESITE:-lax}
+      AUTH_REQUIRE_CSRF: ${AUTH_REQUIRE_CSRF:-true}
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:?CORS_ALLOWED_ORIGINS is required}
+      AZURE_TENANT_ID: ${AZURE_TENANT_ID:?AZURE_TENANT_ID is required}
+      AZURE_CLIENT_ID: ${AZURE_CLIENT_ID:?AZURE_CLIENT_ID is required}
+      AZURE_CLIENT_SECRET: ${AZURE_CLIENT_SECRET:?AZURE_CLIENT_SECRET is required}
+      MICROSOFT_TOKEN_ISSUERS: ${MICROSOFT_TOKEN_ISSUERS:-}
+      EPDS_ADMIN_ALLOWED_EMAIL_DOMAINS: ${EPDS_ADMIN_ALLOWED_EMAIL_DOMAINS:-epds.hu,robex.hu}
+      MAIL_SENDER_UPN: ${MAIL_SENDER_UPN:-}
+      INTEGRATION_SECRET_ENCRYPTION_KEY: ${INTEGRATION_SECRET_ENCRYPTION_KEY:?INTEGRATION_SECRET_ENCRYPTION_KEY is required}
+      PAGESPEED_API_KEY: ${PAGESPEED_API_KEY:-}
+    volumes:
+      - type: bind
+        source: ${FILE_STORAGE_HOST_PATH:-./data/files}
+        target: /app/storage
+      - backend-logs:/app/logs
+    ports:
+      - "${BACKEND_HOST_PORT:-4301}:4301"
+    networks:
+      - epds-internal
+    depends_on:
+      mongodb:
+        condition: service_healthy
+
+  frontend:
+    build:
+      context: ./frontend
+    restart: unless-stopped
+    ports:
+      - "${FRONTEND_HOST_PORT:-4300}:80"
+    networks:
+      - epds-internal
+    depends_on:
+      backend:
+        condition: service_healthy
+
+networks:
+  epds-internal:
+
+volumes:
+  mongodb-data:
+  mongodb-config:
+  backend-logs:

@@ -30,6 +30,8 @@
   color: var(--brand-muted);
 }
 
+.work-reference,.sub-work-reference{display:inline-flex;align-items:center;gap:5px;margin-top:8px;color:#0f766e;text-decoration:none;font-size:13px;font-weight:700}.work-reference:hover{text-decoration:underline}.work-reference mat-icon,.sub-work-reference mat-icon{width:17px;height:17px;margin:0;font-size:17px}.sub-work-reference{color:var(--brand-muted);font-size:12px}.task-title h4+.sub-work-reference{margin-top:7px}
+
 .project-form,
 .task-form {
   display: grid;

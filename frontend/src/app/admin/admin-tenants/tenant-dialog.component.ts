@@ -54,6 +54,7 @@ export class TenantDialogComponent {
     domainHealth: { enabled: true, edit: false, delete: false },
     licenses: { enabled: false, edit: false, delete: false },
     effortTracking: { enabled: false, edit: false, delete: false },
+    workBoard: { enabled: false, edit: false, delete: false },
     webhookTester: { enabled: false, edit: false, delete: false }
   };
   featureOptions: TenantFeatureOption[] = [
@@ -61,6 +62,7 @@ export class TenantDialogComponent {
     { key: 'domainHealth', label: 'Domain Health' },
     { key: 'licenses', label: 'Licenses' },
     { key: 'effortTracking', label: 'Effort Tracking' },
+    { key: 'workBoard', label: 'Work Board' },
     { key: 'webhookTester', label: 'Webhook Tester', permissions: false }
   ];
 

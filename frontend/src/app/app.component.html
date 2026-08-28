@@ -25,6 +25,14 @@
         <mat-icon class="material-symbols-outlined">timer</mat-icon>
         EFFORT TRACKING
       </a>
+      <a mat-button routerLink="/work-board" routerLinkActive="active-link" *ngIf="auth.canAccessFeature('workBoard')">
+        <mat-icon class="material-symbols-outlined">view_list</mat-icon>
+        WORK BOARD
+      </a>
+      <a mat-button routerLink="/admin/fit-editor" routerLinkActive="active-link" *ngIf="auth.isSuperAdmin()">
+        <mat-icon class="material-symbols-outlined">exercise</mat-icon>
+        FIT EDITOR
+      </a>
       <a
         mat-button
         routerLink="/webhook"
@@ -82,6 +90,10 @@
           <mat-icon class="material-symbols-outlined">timer</mat-icon>
           Effort Tracking
         </a>
+        <a mat-menu-item routerLink="/work-board" routerLinkActive="active-menu-item" *ngIf="auth.canAccessFeature('workBoard')">
+          <mat-icon class="material-symbols-outlined">view_list</mat-icon>
+          Work Board
+        </a>
         <a
           mat-menu-item
           routerLink="/webhook"
@@ -110,6 +122,10 @@
           <a mat-menu-item routerLink="/admin/integrations" routerLinkActive="active-menu-item">
             <mat-icon class="material-symbols-outlined">api</mat-icon>
             License integrations
+          </a>
+          <a mat-menu-item routerLink="/admin/fit-editor" routerLinkActive="active-menu-item">
+            <mat-icon class="material-symbols-outlined">exercise</mat-icon>
+            FIT fájl szerkesztő
           </a>
         </ng-container>
       </ng-container>
@@ -155,6 +171,10 @@
         <a mat-menu-item routerLink="/admin/integrations">
           <mat-icon class="material-symbols-outlined">api</mat-icon>
           License integrations
+        </a>
+        <a mat-menu-item routerLink="/admin/fit-editor">
+          <mat-icon class="material-symbols-outlined">exercise</mat-icon>
+          FIT fájl szerkesztő
         </a>
       </mat-menu>
     </ng-container>

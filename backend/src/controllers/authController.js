@@ -107,6 +107,7 @@ async function ensureCompanyTenantForEmail(user, email) {
         domainHealth: { enabled: true, edit: false, delete: false },
         licenses: { enabled: false, edit: false, delete: false },
         effortTracking: { enabled: false, edit: false, delete: false },
+        workBoard: { enabled: false, edit: false, delete: false },
         webhookTester: { enabled: false, edit: false, delete: false }
       },
       ownerUserId: user._id,

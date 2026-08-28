@@ -10,6 +10,8 @@ export type EffortTask = {
   projectId: string;
   name: string;
   note: string;
+  subWorkItemId: string | null;
+  subWorkItem: { id: string | null; subWorkNumber: string; name: string } | null;
   status: EffortStatus;
   netMs: number;
   grossMs: number;
@@ -31,6 +33,8 @@ export type EffortProject = {
   name: string;
   customer: string;
   comment: string;
+  workItemId: string | null;
+  workItem: { id: string | null; workNumber: string; name: string; customer: string } | null;
   status: EffortStatus;
   netMs: number;
   grossMs: number;
@@ -49,11 +53,13 @@ export type EffortProjectPayload = {
   name: string;
   customer?: string;
   comment?: string;
+  workItemId?: string | null;
 };
 
 export type EffortTaskPayload = {
   name: string;
   note?: string;
+  subWorkItemId?: string | null;
 };
 
 @Injectable({ providedIn: 'root' })

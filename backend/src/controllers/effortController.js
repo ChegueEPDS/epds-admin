@@ -1,5 +1,9 @@
 const EffortProject = require('../models/effortProject');
 const EffortTask = require('../models/effortTask');
+const { WorkItem } = require('../models/workItem');
+const SubWorkItem = require('../models/subWorkItem');
+
+const TERMINAL_WORK_STATUSES = ['completed_billable', 'invoiced', 'paid', 'closed', 'cancelled'];
 
 function scopeQuery(scope) {
   return scope?.tenantId ? { tenantId: scope.tenantId } : { tenantId: null };
@@ -68,6 +72,12 @@ function presentTask(task, now = new Date(), userId = null) {
     projectId: String(task.projectId),
     name: task.name,
     note: task.note || '',
+    subWorkItemId: task.subWorkItemId ? String(task.subWorkItemId) : null,
+    subWorkItem: task.subWorkItemSnapshot?.name ? {
+      id: task.subWorkItemId ? String(task.subWorkItemId) : null,
+      subWorkNumber: task.subWorkItemSnapshot.subWorkNumber || '',
+      name: task.subWorkItemSnapshot.name || ''
+    } : null,
     status: task.status,
     netMs: task.status === 'closed' ? Number(task.closedNetMs || 0) : taskNetMs(task, now),
     grossMs: taskGrossMs(task),
@@ -100,6 +110,13 @@ function presentProject(project, tasks = [], now = new Date(), userId = null) {
     name: project.name,
     customer: project.customer || '',
     comment: project.comment || '',
+    workItemId: project.workItemId ? String(project.workItemId) : null,
+    workItem: project.workItemSnapshot?.name ? {
+      id: project.workItemId ? String(project.workItemId) : null,
+      workNumber: project.workItemSnapshot.workNumber || '',
+      name: project.workItemSnapshot.name || '',
+      customer: project.workItemSnapshot.customer || ''
+    } : null,
     status: project.status,
     netMs,
     grossMs: projectGrossMs(project),
@@ -125,6 +142,53 @@ async function getScopedTask(taskId, scope, userId) {
   const task = await EffortTask.findOne({ _id: taskId, ...ownerScopeQuery(scope, userId) });
   if (!task) throw httpError('Task not found', 404);
   return task;
+}
+
+async function getActiveWorkItem(workItemId, scope) {
+  if (!workItemId) return null;
+  const work = await WorkItem.findOne({
+    _id: workItemId,
+    ...scopeQuery(scope),
+    archivedAt: { $exists: false },
+    status: { $nin: TERMINAL_WORK_STATUSES }
+  });
+  if (!work) throw httpError('Selected work is no longer active', 409);
+  return work;
+}
+
+function setWorkReference(project, work) {
+  if (!work) {
+    project.workItemId = undefined;
+    project.workItemSnapshot = undefined;
+    return;
+  }
+  project.workItemId = work._id;
+  project.workItemSnapshot = { workNumber: work.workNumber, name: work.name, customer: work.customer || '' };
+}
+
+async function getActiveSubWorkItem(subWorkItemId, project, scope) {
+  if (!subWorkItemId) return null;
+  if (!project.workItemId) throw httpError('Select a work before selecting a sub-work');
+  const subWork = await SubWorkItem.findOne({
+    _id: subWorkItemId,
+    workItemId: project.workItemId,
+    ...scopeQuery(scope),
+    archivedAt: { $exists: false },
+    status: { $nin: TERMINAL_WORK_STATUSES }
+  });
+  if (!subWork) throw httpError('Selected sub-work is no longer active', 409);
+  return subWork;
+}
+
+function setSubWorkReference(task, subWork, project) {
+  if (!subWork) {
+    task.subWorkItemId = undefined;
+    task.subWorkItemSnapshot = undefined;
+    return;
+  }
+  const number = `${project.workItemSnapshot?.workNumber || ''}/${String(subWork.sequenceNumber).padStart(2, '0')}`;
+  task.subWorkItemId = subWork._id;
+  task.subWorkItemSnapshot = { subWorkNumber: number, name: subWork.name };
 }
 
 function stopTaskTimer(task, now = new Date()) {
@@ -197,7 +261,8 @@ exports.createProject = (req, res) => withErrors(res, async () => {
   const name = normalizeText(req.body?.name);
   if (!name) throw httpError('Project name is required');
 
-  const project = await EffortProject.create({
+  const work = await getActiveWorkItem(req.body?.workItemId, req.scope);
+  const project = new EffortProject({
     name,
     normalizedName: name.toLowerCase(),
     customer: normalizeText(req.body?.customer),
@@ -206,6 +271,8 @@ exports.createProject = (req, res) => withErrors(res, async () => {
     createdBy: req.userId,
     updatedBy: req.userId
   });
+  setWorkReference(project, work);
+  await project.save();
 
   res.status(201).json(presentProject(project, [], new Date(), req.userId));
 });
@@ -228,6 +295,19 @@ exports.updateProject = (req, res) => withErrors(res, async () => {
   }
   if (Object.prototype.hasOwnProperty.call(req.body || {}, 'customer')) project.customer = normalizeText(req.body.customer);
   if (Object.prototype.hasOwnProperty.call(req.body || {}, 'comment')) project.comment = normalizeLongText(req.body.comment);
+  if (Object.prototype.hasOwnProperty.call(req.body || {}, 'workItemId')) {
+    const nextWork = await getActiveWorkItem(req.body.workItemId, req.scope);
+    const workChanged = String(project.workItemId || '') !== String(nextWork?._id || '');
+    if (workChanged) {
+      const linkedTaskExists = await EffortTask.exists({
+        ...ownerScopeQuery(req.scope, req.userId),
+        projectId: project._id,
+        subWorkItemId: { $exists: true }
+      });
+      if (linkedTaskExists) throw httpError('Remove sub-work links from effort tasks before changing the related work', 409);
+    }
+    setWorkReference(project, nextWork);
+  }
   project.updatedBy = req.userId;
   await project.save();
 
@@ -283,7 +363,8 @@ exports.createTask = (req, res) => withErrors(res, async () => {
   const name = normalizeText(req.body?.name);
   if (!name) throw httpError('Task name is required');
 
-  const task = await EffortTask.create({
+  const subWork = await getActiveSubWorkItem(req.body?.subWorkItemId, project, req.scope);
+  const task = new EffortTask({
     projectId: project._id,
     tenantId: req.scope?.tenantId || null,
     name,
@@ -291,6 +372,8 @@ exports.createTask = (req, res) => withErrors(res, async () => {
     createdBy: req.userId,
     updatedBy: req.userId
   });
+  setSubWorkReference(task, subWork, project);
+  await task.save();
   project.updatedBy = req.userId;
   await project.save();
 
@@ -309,6 +392,9 @@ exports.updateTask = (req, res) => withErrors(res, async () => {
     task.name = name;
   }
   if (Object.prototype.hasOwnProperty.call(req.body || {}, 'note')) task.note = normalizeLongText(req.body.note);
+  if (Object.prototype.hasOwnProperty.call(req.body || {}, 'subWorkItemId')) {
+    setSubWorkReference(task, await getActiveSubWorkItem(req.body.subWorkItemId, project, req.scope), project);
+  }
   task.updatedBy = req.userId;
   await task.save();
   res.json(presentTask(task, new Date(), req.userId));

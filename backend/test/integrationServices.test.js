@@ -14,6 +14,7 @@ const { validateLicenseFile, validateMobileAppFile } = require('../src/services/
 const { integrationLicensePayload, transitionStatus } = require('../src/services/licenseIntegrationService');
 const { retryDelayMs } = require('../src/services/webhookWorkerService');
 const { parseJson, safeHeaders, tokenHash } = require('../src/controllers/webhookTestController');
+const { _test: workBoardTest } = require('../src/controllers/workBoardController');
 
 test('generated API keys expose only a lookup prefix and match their hash', () => {
   const generated = generateApiKey();
@@ -123,4 +124,39 @@ test('webhook test inbox validates tokens, redacts secrets and parses JSON safel
   );
   assert.deepEqual(parseJson('{"ok":true}', 'application/json'), { ok: true });
   assert.equal(parseJson('not-json', 'application/json'), null);
+});
+
+test('work board totals expose sub-work allocation, remaining value and percentages', () => {
+  const work = {
+    _id: '64f000000000000000000010',
+    workNumber: '26-0012',
+    year: 2026,
+    sequenceNumber: 12,
+    name: 'Inspection',
+    status: 'in_progress',
+    currency: 'HUF',
+    totalAmount: 12_000_000,
+    costAmount: 3_000_000,
+    createdAt: new Date(),
+    updatedAt: new Date()
+  };
+  const subWorks = [
+    { _id: '64f000000000000000000011', workItemId: work._id, sequenceNumber: 1, name: 'Survey', status: 'paid', amount: 3_600_000, paidAmount: 3_600_000 },
+    { _id: '64f000000000000000000012', workItemId: work._id, sequenceNumber: 2, name: 'Documentation', status: 'in_progress', amount: 4_800_000, paidAmount: 0 },
+    { _id: '64f000000000000000000013', workItemId: work._id, sequenceNumber: 3, name: 'Cancelled phase', status: 'cancelled', amount: 9_000_000, paidAmount: 0 }
+  ];
+  const presented = workBoardTest.presentWork(work, subWorks);
+  assert.equal(presented.allocatedAmount, 8_400_000);
+  assert.equal(presented.allocatedPercentage, 70);
+  assert.equal(presented.remainingAmount, 3_600_000);
+  assert.equal(presented.paidAmount, 3_600_000);
+  assert.equal(presented.subWorks[1].percentage, 40);
+  assert.equal(presented.marginPercent, 75);
+});
+
+test('work board tenant scopes stay isolated and tax numbers normalize to one registry key', () => {
+  assert.deepEqual(workBoardTest.scopeQuery({ tenantId: 'tenant-a' }), { tenantId: 'tenant-a' });
+  assert.notDeepEqual(workBoardTest.scopeQuery({ tenantId: 'tenant-a' }), workBoardTest.scopeQuery({ tenantId: 'tenant-b' }));
+  assert.equal(workBoardTest.normalizeTaxNumber('12345678-2-42'), '12345678242');
+  assert.equal(workBoardTest.normalizeTaxNumber(' hu 123-abc '), 'HU123ABC');
 });

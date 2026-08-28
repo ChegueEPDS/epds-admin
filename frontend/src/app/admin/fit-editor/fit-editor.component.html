@@ -1,0 +1,151 @@
+<section class="fit-page">
+  <header class="page-header">
+    <div>
+      <span class="eyebrow">SUPERADMIN ESZKÖZ</span>
+      <h1>FIT fájl szerkesztő</h1>
+      <p>Futás és kerékpározás adatainak elemzése, módosítása és exportálása.</p>
+    </div>
+    <div class="header-actions">
+      <button mat-stroked-button (click)="chooseFile()">
+        <mat-icon>upload_file</mat-icon>
+        {{ analysis ? 'Másik FIT fájl' : 'FIT fájl feltöltése' }}
+      </button>
+      <button mat-flat-button color="primary" *ngIf="analysis" [disabled]="loading || previewLoading" (click)="download()">
+        <mat-icon>download</mat-icon>
+        Módosított fájl letöltése
+      </button>
+    </div>
+    <input #fileInput hidden type="file" accept=".fit" (change)="onFileInput($event)">
+  </header>
+
+  <div *ngIf="!analysis && !loading" class="drop-zone" [class.dragging]="dragging"
+    (dragover)="$event.preventDefault(); dragging = true" (dragleave)="dragging = false"
+    (drop)="onDrop($event)" (click)="chooseFile()">
+    <mat-icon>directions_bike</mat-icon>
+    <h2>Húzd ide a FIT fájlt</h2>
+    <p>vagy kattints a fájl kiválasztásához · maximum 50 MB</p>
+  </div>
+
+  <div class="loading-state" *ngIf="loading">
+    <mat-spinner diameter="40"></mat-spinner>
+    <span>FIT adatok feldolgozása…</span>
+  </div>
+
+  <ng-container *ngIf="analysis as data">
+    <div class="preview-status" *ngIf="previewLoading || modificationActive">
+      <mat-spinner *ngIf="previewLoading" diameter="18"></mat-spinner>
+      <mat-icon *ngIf="!previewLoading">visibility</mat-icon>
+      <span>{{ previewLoading ? 'Módosított előnézet frissítése…' : 'A képernyő a letöltendő, módosított fájl előnézetét mutatja.' }}</span>
+    </div>
+
+    <mat-tab-group class="fit-tabs" animationDuration="180ms">
+      <mat-tab label="1. Összefoglaló">
+        <div class="tab-content">
+          <div class="summary-toolbar">
+            <h2>Összesítő adatok</h2>
+            <mat-form-field appearance="outline" subscriptSizing="dynamic">
+              <mat-label>Szakasz</mat-label>
+              <mat-select [(ngModel)]="summarySelection">
+                <mat-option value="total">Total</mat-option>
+                <mat-option *ngFor="let lap of data.summary.laps" [value]="lap.id">{{ lap.label }}</mat-option>
+              </mat-select>
+            </mat-form-field>
+          </div>
+          <div class="summary-grid">
+            <mat-card class="activity-card summary-card"><mat-icon>{{ isRunning ? 'directions_run' : 'directions_bike' }}</mat-icon><div><small>Tevékenység</small><strong>{{ data.summary.sport }}</strong></div></mat-card>
+            <mat-card class="summary-card"><mat-icon>timer</mat-icon><div><small>Nettó idő</small><strong>{{ formatDuration(selectedNetTime) }}</strong></div></mat-card>
+            <mat-card class="summary-card"><mat-icon>schedule</mat-icon><div><small>Bruttó idő</small><strong>{{ formatDuration(selectedGrossTime) }}</strong></div></mat-card>
+            <mat-card class="summary-card"><mat-icon>pause_circle</mat-icon><div><small>Összes szünet</small><strong>{{ formatDuration(selectedPauseTime) }}</strong></div></mat-card>
+            <mat-card class="summary-card"><mat-icon>device_thermostat</mat-icon><div><small>Külső hőmérséklet</small><strong>{{ data.summary.minTemperature ?? 'NA' }} / {{ data.summary.maxTemperature ?? 'NA' }} °C</strong></div></mat-card>
+            <mat-card class="summary-card"><mat-icon>trending_up</mat-icon><div><small>Összes emelkedés</small><strong>{{ displayMetric(selectedMetrics.totalAscent, ' m') }}</strong></div></mat-card>
+            <mat-card class="summary-card"><mat-icon>trending_down</mat-icon><div><small>Összes ereszkedés</small><strong>{{ displayMetric(selectedMetrics.totalDescent, ' m') }}</strong></div></mat-card>
+            <mat-card class="summary-card"><mat-icon>favorite</mat-icon><div><small>Átlagpulzus</small><strong>{{ displayMetric(selectedMetrics.avgHeartRate, ' bpm') }}</strong></div></mat-card>
+            <mat-card class="summary-card" *ngIf="!isRunning || selectedMetrics.avgPower != null"><mat-icon>bolt</mat-icon><div><small>Átlagteljesítmény</small><strong>{{ displayMetric(selectedMetrics.avgPower, ' W') }}</strong></div></mat-card>
+            <mat-card class="summary-card" *ngIf="!isRunning && selectedMetrics.normalizedPower != null"><mat-icon>electric_bolt</mat-icon><div><small>Normalized Power (NP)</small><strong>{{ displayMetric(selectedMetrics.normalizedPower, ' W') }}</strong></div></mat-card>
+            <mat-card class="summary-card"><mat-icon>rotate_right</mat-icon><div><small>Átlagkadencia</small><strong>{{ displayMetric(selectedMetrics.avgCadence, isRunning ? ' spm' : ' rpm') }}</strong></div></mat-card>
+            <mat-card class="summary-card"><mat-icon>speed</mat-icon><div><small>{{ isRunning ? 'Átlagtempó' : 'Átlagsebesség' }}</small><strong>{{ formatSpeedOrPace(selectedMetrics.avgSpeed) }}</strong></div></mat-card>
+          </div>
+        </div>
+      </mat-tab>
+
+      <mat-tab label="2. Fájl és adatpontok">
+        <div class="tab-content">
+          <mat-card class="details-card">
+            <mat-card-header><mat-card-title>Fájl részletei</mat-card-title></mat-card-header>
+            <mat-card-content><dl>
+              <div><dt>Fájlnév</dt><dd>{{ selectedFile?.name }}</dd></div>
+              <div><dt>Kezdés</dt><dd>{{ data.summary.startTime | date:'yyyy. MM. dd. HH:mm:ss' }}</dd></div>
+              <div><dt>Befejezés</dt><dd>{{ data.summary.endTime | date:'yyyy. MM. dd. HH:mm:ss' }}</dd></div>
+              <div><dt>Adatpontok</dt><dd>{{ data.summary.recordCount | number }}</dd></div>
+            </dl></mat-card-content>
+          </mat-card>
+          <mat-card class="table-card">
+            <mat-card-header><mat-card-title>Adatpontok</mat-card-title><mat-card-subtitle>{{ data.records.length | number }} megjelenített sor</mat-card-subtitle></mat-card-header>
+            <div class="table-wrap"><table mat-table [dataSource]="data.records">
+              <ng-container matColumnDef="index"><th mat-header-cell *matHeaderCellDef>#</th><td mat-cell *matCellDef="let r">{{ r.index }}</td></ng-container>
+              <ng-container matColumnDef="timestamp"><th mat-header-cell *matHeaderCellDef>Időpont</th><td mat-cell *matCellDef="let r">{{ r.timestamp | date:'HH:mm:ss' }}</td></ng-container>
+              <ng-container matColumnDef="distance"><th mat-header-cell *matHeaderCellDef>Távolság</th><td mat-cell *matCellDef="let r">{{ r.distance == null ? 'NA' : (r.distance / 1000 | number:'1.2-2') + ' km' }}</td></ng-container>
+              <ng-container matColumnDef="speed"><th mat-header-cell *matHeaderCellDef>{{ isRunning ? 'Tempó' : 'Sebesség' }}</th><td mat-cell *matCellDef="let r">{{ formatSpeedOrPace(r.speed) }}</td></ng-container>
+              <ng-container matColumnDef="heartRate"><th mat-header-cell *matHeaderCellDef>Pulzus</th><td mat-cell *matCellDef="let r">{{ r.heartRate ?? 'NA' }}</td></ng-container>
+              <ng-container matColumnDef="cadence"><th mat-header-cell *matHeaderCellDef>Kadencia</th><td mat-cell *matCellDef="let r">{{ r.cadence ?? 'NA' }}</td></ng-container>
+              <ng-container matColumnDef="power"><th mat-header-cell *matHeaderCellDef>Watt</th><td mat-cell *matCellDef="let r">{{ r.power == null ? 'NA' : r.power + ' W' }}</td></ng-container>
+              <ng-container matColumnDef="altitude"><th mat-header-cell *matHeaderCellDef>Magasság</th><td mat-cell *matCellDef="let r">{{ r.altitude == null ? 'NA' : (r.altitude | number:'1.0-1') + ' m' }}</td></ng-container>
+              <ng-container matColumnDef="temperature"><th mat-header-cell *matHeaderCellDef>Hőmérséklet</th><td mat-cell *matCellDef="let r">{{ r.temperature == null ? 'NA' : r.temperature + ' °C' }}</td></ng-container>
+              <tr mat-header-row *matHeaderRowDef="displayedColumns; sticky: true"></tr><tr mat-row *matRowDef="let row; columns: displayedColumns"></tr>
+            </table></div>
+          </mat-card>
+        </div>
+      </mat-tab>
+
+      <mat-tab label="3. Szenzorok">
+        <div class="tab-content">
+          <mat-card class="table-card">
+            <mat-card-header><mat-card-title>Szenzor- és eszközadatok</mat-card-title><mat-card-subtitle>{{ data.summary.sensorDetails.length }} eszközbejegyzés</mat-card-subtitle></mat-card-header>
+            <div class="table-wrap" *ngIf="data.summary.sensorDetails.length; else noSensors"><table mat-table [dataSource]="data.summary.sensorDetails">
+              <ng-container matColumnDef="index"><th mat-header-cell *matHeaderCellDef>#</th><td mat-cell *matCellDef="let s">{{ s.index }}</td></ng-container>
+              <ng-container matColumnDef="timestamp"><th mat-header-cell *matHeaderCellDef>Időpont</th><td mat-cell *matCellDef="let s">{{ s.timestamp ? (s.timestamp | date:'HH:mm:ss') : 'NA' }}</td></ng-container>
+              <ng-container matColumnDef="name"><th mat-header-cell *matHeaderCellDef>Eszköz</th><td mat-cell *matCellDef="let s">{{ s.name ?? 'NA' }}</td></ng-container>
+              <ng-container matColumnDef="manufacturer"><th mat-header-cell *matHeaderCellDef>Gyártó</th><td mat-cell *matCellDef="let s">{{ s.manufacturer ?? 'NA' }}</td></ng-container>
+              <ng-container matColumnDef="deviceType"><th mat-header-cell *matHeaderCellDef>Típus</th><td mat-cell *matCellDef="let s">{{ s.deviceType ?? 'NA' }}</td></ng-container>
+              <ng-container matColumnDef="serialNumber"><th mat-header-cell *matHeaderCellDef>Sorozatszám</th><td mat-cell *matCellDef="let s">{{ s.serialNumber ?? 'NA' }}</td></ng-container>
+              <ng-container matColumnDef="battery"><th mat-header-cell *matHeaderCellDef>Akkumulátor</th><td mat-cell *matCellDef="let s">{{ s.batteryStatus || (s.batteryVoltage != null ? s.batteryVoltage + ' V' : 'NA') }}</td></ng-container>
+              <ng-container matColumnDef="softwareVersion"><th mat-header-cell *matHeaderCellDef>Szoftver</th><td mat-cell *matCellDef="let s">{{ s.softwareVersion ?? 'NA' }}</td></ng-container>
+              <ng-container matColumnDef="sensorPosition"><th mat-header-cell *matHeaderCellDef>Pozíció</th><td mat-cell *matCellDef="let s">{{ s.sensorPosition ?? 'NA' }}</td></ng-container>
+              <tr mat-header-row *matHeaderRowDef="sensorColumns; sticky: true"></tr><tr mat-row *matRowDef="let row; columns: sensorColumns"></tr>
+            </table></div>
+            <ng-template #noSensors><div class="empty-tab"><mat-icon>sensors_off</mat-icon><h3>Nincs szenzoradat</h3><p>A FIT fájl nem tartalmaz device_info bejegyzést.</p></div></ng-template>
+          </mat-card>
+        </div>
+      </mat-tab>
+
+      <mat-tab label="4. Módosítások">
+        <div class="tab-content modifications-content">
+          <mat-card class="editor-card">
+            <mat-card-header><mat-card-title>Fájl módosítása</mat-card-title><mat-card-subtitle>A változások automatikusan frissítik a másik három tab előnézetét.</mat-card-subtitle></mat-card-header>
+            <mat-card-content>
+              <h3>Szünetek eltávolítása</h3>
+              <p class="hint">Csak a kijelölt szünetek kerülnek kivágásra; a későbbi időbélyegek automatikusan eltolódnak.</p>
+              <div class="pause-list" *ngIf="sourceAnalysis?.summary?.pauses?.length; else noPauses">
+                <mat-checkbox *ngFor="let pause of sourceAnalysis!.summary.pauses" [checked]="selectedPauses.has(pause.id)" (change)="togglePause(pause.id, $event.checked)">
+                  <span>{{ pause.start | date:'HH:mm:ss' }} – {{ pause.end | date:'HH:mm:ss' }}</span><small>{{ formatDuration(pause.duration) }}</small>
+                </mat-checkbox>
+              </div>
+              <button mat-stroked-button class="apply-pauses-button" *ngIf="sourceAnalysis?.summary?.pauses?.length"
+                [disabled]="!pauseSelectionChanged || previewLoading" (click)="applySelectedPauses()">
+                <mat-icon>delete_sweep</mat-icon>
+                {{ selectedPauses.size ? 'Kijelölt szünetek törlése' : 'Szünettörlés visszavonása' }}
+              </button>
+              <ng-template #noPauses><p class="empty-note">Nem található különálló szünet a fájlban.</p></ng-template>
+              <div class="field-grid">
+                <mat-form-field appearance="outline"><mat-label>Tempó / sebesség</mat-label><input matInput type="number" step="0.1" min="-99" [(ngModel)]="speedPercent" (ngModelChange)="schedulePreview()"><span matTextSuffix>%</span><mat-hint>− lassabb, + gyorsabb</mat-hint></mat-form-field>
+                <mat-form-field appearance="outline" *ngIf="!isRunning || sourceAnalysis?.summary?.metrics?.avgPower != null"><mat-label>Watt teljesítmény</mat-label><input matInput type="number" step="0.1" min="-99" [(ngModel)]="powerPercent" (ngModelChange)="schedulePreview()"><span matTextSuffix>%</span><mat-hint>− alacsonyabb, + magasabb</mat-hint></mat-form-field>
+              </div>
+              <mat-form-field appearance="outline" class="full-field"><mat-label>Tevékenység dátuma és kezdete</mat-label><input matInput type="datetime-local" [(ngModel)]="startTime" (ngModelChange)="schedulePreview()"></mat-form-field>
+              <button mat-flat-button color="primary" class="download-button" [disabled]="loading || previewLoading" (click)="download()"><mat-icon>download</mat-icon>Módosított FIT fájl letöltése</button>
+            </mat-card-content>
+          </mat-card>
+        </div>
+      </mat-tab>
+    </mat-tab-group>
+  </ng-container>
+</section>

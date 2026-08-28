@@ -1,6 +1,6 @@
 const LicenseCustomer = require('../models/licenseCustomer');
 const Tenant = require('../models/tenant');
-const azureBlob = require('../services/azureBlobService');
+const fileStorage = require('../services/fileStorageService');
 const { normalizeMobileAppVersion, replaceLicenseFile, replaceMobileAppFile } = require('../services/licenseFileService');
 const { publishOrderedEvent, transitionStatus } = require('../services/licenseIntegrationService');
 const { expireLicenses, todayUtcStart } = require('../services/licenseExpiryService');
@@ -618,7 +618,7 @@ exports.deleteLicense = async (req, res, next) => {
     const blobPaths = [license.licenseFile?.blobPath, license.mobileAppFile?.blobPath].filter(Boolean);
     await license.deleteOne();
     for (const blobPath of blobPaths) {
-      try { await azureBlob.deleteFile(blobPath); } catch (err) {
+      try { await fileStorage.deleteFile(blobPath); } catch (err) {
         console.warn('[license] deleted blob cleanup failed:', err?.message || err);
       }
     }
@@ -693,7 +693,7 @@ exports.orderLicense = async (req, res, next) => {
     license.updatedBy = req.userId;
     await license.save();
     if (previousBlobPath) {
-      try { await azureBlob.deleteFile(previousBlobPath); } catch (err) {
+      try { await fileStorage.deleteFile(previousBlobPath); } catch (err) {
         console.warn('[license] ordered license blob cleanup failed:', err?.message || err);
       }
     }
@@ -735,7 +735,7 @@ exports.downloadLicenseFile = async (req, res, next) => {
     if (!license) return res.status(404).json({ error: 'License not found' });
     if (!license.licenseFile?.blobPath) return res.status(404).json({ error: 'License file not found' });
 
-    const buffer = await azureBlob.downloadToBuffer(license.licenseFile.blobPath);
+    const buffer = await fileStorage.downloadToBuffer(license.licenseFile.blobPath);
     const fileName = license.licenseFile.fileName || 'license-file';
     res.setHeader('Content-Type', license.licenseFile.contentType || 'application/octet-stream');
     res.setHeader('Content-Length', buffer.length);
@@ -752,7 +752,7 @@ exports.downloadMobileAppFile = async (req, res, next) => {
     if (!license) return res.status(404).json({ error: 'License not found' });
     if (!license.mobileAppFile?.blobPath) return res.status(404).json({ error: 'Mobile app file not found' });
 
-    const buffer = await azureBlob.downloadToBuffer(license.mobileAppFile.blobPath);
+    const buffer = await fileStorage.downloadToBuffer(license.mobileAppFile.blobPath);
     const fileName = license.mobileAppFile.fileName || 'mobile-app.apk';
     res.setHeader('Content-Type', license.mobileAppFile.contentType || 'application/vnd.android.package-archive');
     res.setHeader('Content-Length', buffer.length);

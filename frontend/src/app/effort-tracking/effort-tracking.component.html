@@ -11,6 +11,15 @@
   </header>
 
   <form class="project-form" *ngIf="showProjectForm" (ngSubmit)="saveProject()">
+    <mat-form-field appearance="outline" class="wide-field">
+      <mat-label>Related work</mat-label>
+      <mat-select name="projectWorkItem" [(ngModel)]="projectForm.workItemId" (selectionChange)="projectWorkChanged()">
+        <mat-option value="">No related work</mat-option>
+        <mat-option *ngFor="let work of workOptions" [value]="work.id">{{ work.workNumber }} · {{ work.name }}<span *ngIf="work.customer"> · {{ work.customer }}</span></mat-option>
+        <mat-option *ngIf="selectedProject?.workItem && selectedProject?.workItemId && !selectedWorkOption()" [value]="selectedProject!.workItemId" disabled>{{ selectedProject!.workItem!.workNumber }} · {{ selectedProject!.workItem!.name }} (not active)</mat-option>
+      </mat-select>
+      <mat-hint>Only active, not completed works are available.</mat-hint>
+    </mat-form-field>
     <mat-form-field appearance="outline">
       <mat-label>Project name</mat-label>
       <input matInput name="projectName" [(ngModel)]="projectForm.name" required>
@@ -68,6 +77,10 @@
           <span class="status-pill" [class.closed]="selectedProject.status === 'closed'">{{ statusText(selectedProject.status) }}</span>
           <h2>{{ selectedProject.name }}</h2>
           <p>{{ selectedProject.customer || 'No customer' }}</p>
+          <a class="work-reference" *ngIf="selectedProject.workItem" routerLink="/work-board">
+            <mat-icon class="material-symbols-outlined">link</mat-icon>
+            {{ selectedProject.workItem.workNumber }} · {{ selectedProject.workItem.name }}
+          </a>
         </div>
         <div class="detail-actions" *ngIf="auth.canEditFeature('effortTracking')">
           <button mat-stroked-button type="button" (click)="startEditProject()" [disabled]="selectedProject.status === 'closed'">
@@ -119,6 +132,14 @@
           <mat-label>Task name</mat-label>
           <input matInput name="taskName" [(ngModel)]="taskForm.name" required>
         </mat-form-field>
+        <mat-form-field appearance="outline">
+          <mat-label>Related sub-work</mat-label>
+          <mat-select name="taskSubWorkItem" [(ngModel)]="taskForm.subWorkItemId" [disabled]="!selectedProject.workItemId">
+            <mat-option value="">No related sub-work</mat-option>
+            <mat-option *ngFor="let subWork of availableSubWorks()" [value]="subWork.id">{{ subWork.subWorkNumber }} · {{ subWork.name }}</mat-option>
+          </mat-select>
+          <mat-hint>{{ selectedProject.workItemId ? 'Optional; active sub-works only.' : 'Link the effort project to a work first.' }}</mat-hint>
+        </mat-form-field>
         <app-rich-text-editor
           class="wide-field"
           label="Note"
@@ -141,6 +162,7 @@
           <div class="task-head">
             <div class="task-title">
               <h4>{{ task.name }}</h4>
+              <span class="sub-work-reference" *ngIf="task.subWorkItem"><mat-icon class="material-symbols-outlined">account_tree</mat-icon>{{ task.subWorkItem.subWorkNumber }} · {{ task.subWorkItem.name }}</span>
             </div>
             <div class="task-status">
               <span class="status-pill" [class.closed]="task.status === 'closed'" [class.new]="taskStatusText(task) === 'New'">{{ taskStatusText(task) }}</span>
