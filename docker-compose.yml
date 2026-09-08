@@ -1,23 +1,6 @@
-services:
-  mongodb:
-    image: mongo:8.0
-    restart: unless-stopped
-    environment:
-      MONGO_INITDB_ROOT_USERNAME: ${MONGO_ROOT_USERNAME:-root}
-      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD:?MONGO_ROOT_PASSWORD is required}
-      MONGO_INITDB_DATABASE: epds_admin
-    volumes:
-      - mongodb-data:/data/db
-      - mongodb-config:/data/configdb
-    networks:
-      - epds-internal
-    healthcheck:
-      test: ["CMD-SHELL", "mongosh --quiet --username '$${MONGO_INITDB_ROOT_USERNAME}' --password '$${MONGO_INITDB_ROOT_PASSWORD}' --authenticationDatabase admin --eval 'db.adminCommand({ ping: 1 }).ok' | grep 1"]
-      interval: 10s
-      timeout: 5s
-      retries: 10
-      start_period: 20s
+version: "3.8"
 
+services:
   backend:
     build:
       context: ./backend
@@ -25,7 +8,7 @@ services:
     environment:
       NODE_ENV: production
       PORT: 4301
-      MONGODB_URI: mongodb://${MONGO_ROOT_USERNAME:-root}:${MONGO_ROOT_PASSWORD}@mongodb:27017/epds_admin?authSource=admin
+      MONGODB_URI: mongodb://${MONGO_ROOT_USERNAME:-root}:${MONGO_ROOT_PASSWORD}@host.docker.internal:27017/epds_admin?authSource=admin
       FILE_STORAGE_ROOT: /app/storage
       LOG_DIR: /app/logs
       JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
@@ -54,17 +37,20 @@ services:
       EFFORT_EMBEDDED_SESSION_LIMIT: ${EFFORT_EMBEDDED_SESSION_LIMIT:-100}
       DOMAIN_STATUS_PDF_RETENTION_DAYS: ${DOMAIN_STATUS_PDF_RETENTION_DAYS:-30}
     volumes:
-      - type: bind
-        source: ${FILE_STORAGE_HOST_PATH:-./data/files}
-        target: /app/storage
-      - backend-logs:/app/logs
+      - /mnt/storage/epds-admin/storage:/app/storage
+      - /mnt/storage/epds-admin/logs:/app/logs
     ports:
       - "${BACKEND_HOST_PORT:-4301}:4301"
     networks:
       - epds-internal
-    depends_on:
-      mongodb:
-        condition: service_healthy
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:4301/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
 
   frontend:
     build:
@@ -80,8 +66,3 @@ services:
 
 networks:
   epds-internal:
-
-volumes:
-  mongodb-data:
-  mongodb-config:
-  backend-logs:
