@@ -45,12 +45,6 @@ services:
       - epds-internal
     extra_hosts:
       - "host.docker.internal:host-gateway"
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:4301/health"]
-      interval: 10s
-      timeout: 5s
-      retries: 3
-      start_period: 10s
 
   frontend:
     build:
@@ -61,8 +55,7 @@ services:
     networks:
       - epds-internal
     depends_on:
-      backend:
-        condition: service_healthy
+      - backend
 
 networks:
   epds-internal:
