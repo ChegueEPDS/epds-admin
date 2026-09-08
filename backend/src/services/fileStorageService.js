@@ -1,4 +1,5 @@
 const fs = require('fs/promises');
+const { createReadStream } = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 
@@ -40,6 +41,27 @@ async function downloadToBuffer(storageKey) {
   return fs.readFile(absolutePath);
 }
 
+async function openDownloadStream(storageKey, rangeHeader = '') {
+  const { absolutePath } = resolveStoragePath(storageKey);
+  const stats = await fs.stat(absolutePath);
+  let start = 0;
+  let end = stats.size - 1;
+  const match = /^bytes=(\d*)-(\d*)$/.exec(String(rangeHeader || '').trim());
+  if (match) {
+    if (match[1]) start = Number(match[1]);
+    if (match[2]) end = Number(match[2]);
+    if (!match[1] && match[2]) start = Math.max(0, stats.size - Number(match[2]));
+    if (!Number.isSafeInteger(start) || !Number.isSafeInteger(end) || start < 0 || end < start || start >= stats.size) {
+      const error = new Error('Requested range is not satisfiable');
+      error.statusCode = 416;
+      error.size = stats.size;
+      throw error;
+    }
+    end = Math.min(end, stats.size - 1);
+  }
+  return { stream: createReadStream(absolutePath, { start, end }), size: stats.size, start, end, partial: Boolean(match) };
+}
+
 async function deleteFile(storageKey) {
   if (!storageKey) return { succeeded: false };
   const { absolutePath } = resolveStoragePath(storageKey);
@@ -61,6 +83,7 @@ module.exports = {
   STORAGE_ROOT,
   deleteFile,
   downloadToBuffer,
+  openDownloadStream,
   getBlobUrl,
   uploadBuffer
 };

@@ -106,6 +106,7 @@ function requestLogger(req, res, next) {
       path: req.originalUrl || req.url,
       status: res.statusCode,
       durationMs,
+      responseBytes: Number(res.getHeader('content-length')) || undefined,
       ip: req.ip,
       userId: req.userId ? String(req.userId) : undefined,
       integrationClientId: req.integrationClientId ? String(req.integrationClientId) : undefined

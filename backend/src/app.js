@@ -24,6 +24,8 @@ const fitFileRoutes = require('./routes/fitFileRoutes');
 const { startDomainHealthMonitor } = require('./services/domainMonitorService');
 const { startDomainDailyReportScheduler } = require('./services/domainDailyReportService');
 const { startDomainPageSpeedScheduler } = require('./services/domainPageSpeedSchedulerService');
+const { startDomainStatusReadModel } = require('./services/domainStatusReadModelService');
+const { startDomainStatusPdfMaintenance } = require('./services/domainStatusPdfCacheService');
 const { seedSuperAdmin } = require('./services/userSeedService');
 const { normalizeTenantTypes } = require('./services/tenantMigrationService');
 const { startWebhookWorker } = require('./services/webhookWorkerService');
@@ -115,6 +117,8 @@ if (require.main === module) {
       startDomainHealthMonitor();
       startDomainDailyReportScheduler();
       startDomainPageSpeedScheduler();
+      startDomainStatusReadModel();
+      startDomainStatusPdfMaintenance();
       startWebhookWorker();
       startLicenseExpiryScheduler();
       app.listen(port, () => console.log(`[app] EPDS Admin API listening on ${port}`));

@@ -23,6 +23,9 @@ const EffortTaskSchema = new mongoose.Schema(
     },
     status: { type: String, enum: ['open', 'closed'], default: 'open', index: true },
     sessions: [EffortSessionSchema],
+    archivedNetMs: { type: Number, min: 0, default: 0 },
+    archivedSessionCount: { type: Number, min: 0, default: 0 },
+    firstStartedAt: { type: Date },
     activeTimer: {
       userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', index: true },
       startedAt: { type: Date }

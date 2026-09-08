@@ -4,6 +4,7 @@ const WebhookDelivery = require('../models/webhookDelivery');
 const LicenseCustomer = require('../models/licenseCustomer');
 const { decryptSecret, signWebhook, validateWebhookUrl } = require('./integrationSecurityService');
 const { ensureDeliveries, presentEvent, publishOrderedEvent } = require('./licenseIntegrationService');
+const { mapWithConcurrency } = require('./scheduledJobLeaseService');
 
 const MAX_ATTEMPTS = 10;
 let workerTimer = null;
@@ -15,14 +16,18 @@ function retryDelayMs(attemptCount) {
 
 async function claimDelivery() {
   const now = new Date();
+  return WebhookDelivery.findOneAndUpdate(
+    { status: 'pending', nextAttemptAt: { $lte: now } },
+    { $set: { status: 'processing', lockedUntil: new Date(Date.now() + 5 * 60_000), lastAttemptAt: now } },
+    { new: true, sort: { nextAttemptAt: 1 } }
+  );
+}
+
+async function resetExpiredClaims() {
+  const now = new Date();
   await WebhookDelivery.updateMany(
     { status: 'processing', lockedUntil: { $lt: now } },
     { $set: { status: 'pending', nextAttemptAt: now }, $unset: { lockedUntil: 1 } }
-  );
-  return WebhookDelivery.findOneAndUpdate(
-    { status: 'pending', nextAttemptAt: { $lte: now } },
-    { $set: { status: 'processing', lockedUntil: new Date(Date.now() + 60_000), lastAttemptAt: now } },
-    { new: true, sort: { nextAttemptAt: 1 } }
   );
 }
 
@@ -105,10 +110,10 @@ async function reconcileDeliveries() {
   for (const license of unpublished) {
     await publishOrderedEvent(license, license.orderedFromStatus, { type: 'system', name: 'Outbox reconciler' });
   }
-  const recentEvents = await LicenseEvent.find({ occurredAt: { $gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) } })
-    .sort({ occurredAt: -1 })
-    .limit(1000);
-  for (const event of recentEvents) await ensureDeliveries(event);
+  const unreconciledEvents = await LicenseEvent.find({ deliveriesEnsuredAt: null })
+    .sort({ occurredAt: 1 })
+    .limit(250);
+  await mapWithConcurrency(unreconciledEvents, 5, ensureDeliveries);
 }
 
 async function runWebhookWorker() {
@@ -116,11 +121,9 @@ async function runWebhookWorker() {
   workerRunning = true;
   try {
     await reconcileDeliveries();
-    for (let processed = 0; processed < 25; processed += 1) {
-      const delivery = await claimDelivery();
-      if (!delivery) break;
-      await deliver(delivery);
-    }
+    await resetExpiredClaims();
+    const deliveries = (await Promise.all(Array.from({ length: 25 }, () => claimDelivery()))).filter(Boolean);
+    await mapWithConcurrency(deliveries, Math.max(1, Number(process.env.WEBHOOK_CONCURRENCY || 5)), deliver);
   } catch (error) {
     console.error('[webhook-worker] run failed:', error);
   } finally {

@@ -238,8 +238,31 @@ async function getDomainPageSpeedOverview(domainId, options = {}) {
   };
 }
 
+async function getPublicPageSpeedSummaries(domainIds = [], options = {}) {
+  if (!domainIds.length) return new Map();
+  const days = Number(options.days || 30);
+  const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+  const scans = await DomainPageSpeedScan.find({ domainId: { $in: domainIds }, checkedAt: { $gte: since } })
+    .sort({ domainId: 1, checkedAt: -1 })
+    .select('domainId checkedAt source scans.strategy scans.ok scans.scores.performance scans.metrics.largestContentfulPaint.numericValue scans.opportunities')
+    .lean();
+  const grouped = new Map();
+  for (const scan of scans) {
+    const key = String(scan.domainId);
+    if (!grouped.has(key)) grouped.set(key, []);
+    if (grouped.get(key).length < 60) grouped.get(key).push(scan);
+  }
+  return new Map(domainIds.map((domainId) => {
+    const docs = grouped.get(String(domainId)) || [];
+    const latest = docs[0] ? compactStoredScan(docs[0]) : null;
+    const history = buildPageSpeedHistory([...docs].reverse());
+    return [String(domainId), buildPublicPageSpeedSummary({ latest, history })];
+  }));
+}
+
 module.exports = {
   buildPublicPageSpeedSummary,
+  getPublicPageSpeedSummaries,
   getDomainPageSpeedOverview,
   runDeepScan,
   storeDomainPageSpeedScan

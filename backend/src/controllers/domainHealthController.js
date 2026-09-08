@@ -3,12 +3,12 @@ const DomainMonitor = require('../models/domainMonitor');
 const DomainHealthCheck = require('../models/domainHealthCheck');
 const Tenant = require('../models/tenant');
 const { getDomainPageSpeedOverview, storeDomainPageSpeedScan } = require('../services/pageSpeedService');
-const { generatePublicStatusPdf } = require('../services/domainStatusPdfService');
+const { getStatusSnapshot, queueSnapshotRebuild } = require('../services/domainStatusReadModelService');
+const { getOrGeneratePdf } = require('../services/domainStatusPdfCacheService');
 const {
   normalizeBaseUrl,
   assertPublicUrl,
   buildDomainList,
-  buildPublicStatusReport,
   getDomainStatusDetails,
   domainScopeQuery,
   getDomainMonitorRuntime,
@@ -182,6 +182,8 @@ exports.createDomain = async (req, res, next) => {
     });
 
     if (domain.enabled) await runDomainCheck(domain);
+    void queueSnapshotRebuild(owner);
+    void queueSnapshotRebuild('all');
     const summary = await summarizeRecentChecks(domain._id);
     return res.status(201).json({ domain: presentDomain(await populateDomainTenant(domain), summary) });
   } catch (err) {
@@ -195,6 +197,7 @@ exports.updateDomain = async (req, res, next) => {
   try {
     const domain = await DomainMonitor.findOne({ _id: req.params.id, ...domainScopeQuery(req.scope) });
     if (!domain) return res.status(404).json({ error: 'Domain not found' });
+    const previousOwner = domain.owner;
 
     if (Object.prototype.hasOwnProperty.call(req.body, 'name')) {
       const name = String(req.body.name || '').trim();
@@ -236,6 +239,9 @@ exports.updateDomain = async (req, res, next) => {
 
     domain.updatedBy = req.userId;
     await domain.save();
+    void queueSnapshotRebuild(domain.owner);
+    if (previousOwner !== domain.owner) void queueSnapshotRebuild(previousOwner);
+    void queueSnapshotRebuild('all');
     const summary = await summarizeRecentChecks(domain._id);
     return res.json({ domain: presentDomain(await populateDomainTenant(domain), summary) });
   } catch (err) {
@@ -251,6 +257,8 @@ exports.deleteDomain = async (req, res, next) => {
     if (!domain) return res.status(404).json({ error: 'Domain not found' });
     await DomainHealthCheck.deleteMany({ domainId: domain._id });
     await domain.deleteOne();
+    void queueSnapshotRebuild(domain.owner);
+    void queueSnapshotRebuild('all');
     return res.status(204).send();
   } catch (err) {
     return next(err);
@@ -263,6 +271,8 @@ exports.checkDomainNow = async (req, res, next) => {
     if (!domain) return res.status(404).json({ error: 'Domain not found' });
 
     const check = await runDomainCheck(domain);
+    void queueSnapshotRebuild(domain.owner);
+    void queueSnapshotRebuild('all');
     const summary = await summarizeRecentChecks(domain._id);
     return res.json({ domain: presentDomain(await populateDomainTenant(domain), summary), check });
   } catch (err) {
@@ -277,6 +287,8 @@ exports.deepScanDomain = async (req, res, next) => {
     if (!domain) return res.status(404).json({ error: 'Domain not found' });
 
     const result = await storeDomainPageSpeedScan(domain, 'manual');
+    void queueSnapshotRebuild(domain.owner);
+    void queueSnapshotRebuild('all');
     return res.json({
       domain: presentDomain(await populateDomainTenant(domain), await summarizeRecentChecks(domain._id)),
       ...result
@@ -348,8 +360,13 @@ exports.getPublicStatusReport = async (req, res, next) => {
   try {
     const owner = await ownerFromSlug(req.params.owner);
     if (!owner) return res.status(404).json({ error: 'Owner not found' });
-    const report = await buildPublicStatusReport({ owner: owner === 'All' ? 'all' : owner });
-    return res.json(report);
+    const snapshot = await getStatusSnapshot(owner);
+    if (!snapshot) return res.status(503).json({ error: 'Status report is being prepared' });
+    res.setHeader('Cache-Control', 'public, max-age=60, stale-while-revalidate=600, stale-if-error=86400');
+    res.setHeader('ETag', snapshot.etag);
+    res.setHeader('X-Status-Report-Cache', snapshot.stale ? 'STALE' : 'HIT');
+    if (req.headers['if-none-match'] === snapshot.etag) return res.status(304).end();
+    return res.json(snapshot.report);
   } catch (err) {
     return next(err);
   }
@@ -359,13 +376,20 @@ exports.downloadPublicStatusReportPdf = async (req, res, next) => {
   try {
     const owner = await ownerFromSlug(req.params.owner);
     if (!owner) return res.status(404).json({ error: 'Owner not found' });
-    const report = await buildPublicStatusReport({ owner: owner === 'All' ? 'all' : owner });
-    const pdf = await generatePublicStatusPdf(report);
+    const snapshot = await getStatusSnapshot(owner);
+    if (!snapshot) return res.status(503).json({ error: 'Status report is being prepared' });
+    const report = snapshot.report;
+    const pdf = await getOrGeneratePdf(report);
     const fileOwner = owner === 'All' ? 'all-domains' : ownerSlug(owner);
     const fileDate = new Date(report.generatedAt).toISOString().slice(0, 10);
     res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Length', pdf.size);
+    res.setHeader('ETag', pdf.etag);
+    res.setHeader('Cache-Control', 'public, max-age=3600, stale-if-error=86400');
+    res.setHeader('X-Status-Pdf-Cache', pdf.cacheStatus);
     res.setHeader('Content-Disposition', `attachment; filename="domain-status-${fileOwner}-${fileDate}.pdf"`);
-    return res.send(pdf);
+    if (req.headers['if-none-match'] === pdf.etag) return res.status(304).end();
+    return res.send(pdf.content);
   } catch (err) {
     return next(err);
   }

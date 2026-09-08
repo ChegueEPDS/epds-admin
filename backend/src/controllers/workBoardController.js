@@ -44,6 +44,11 @@ function numberValue(value, fallback = 0) {
   return Number.isFinite(parsed) ? parsed : fallback;
 }
 
+function requestLimit(value, fallback = 100, max = 200) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? Math.min(max, Math.max(1, Math.floor(parsed))) : fallback;
+}
+
 function optionalDate(value) {
   if (!value) return undefined;
   const date = new Date(value);
@@ -238,7 +243,8 @@ async function withErrors(res, fn) {
 exports.listWorks = (req, res) => withErrors(res, async () => {
   const query = { ...scopeQuery(req.scope), archivedAt: { $exists: false } };
   if (req.query?.active === 'true') query.status = { $nin: [...TERMINAL_STATUSES] };
-  const works = await WorkItem.find(query).sort({ status: 1, deadline: 1, updatedAt: -1 });
+  const limit = requestLimit(req.query.limit);
+  const works = await WorkItem.find(query).sort({ status: 1, deadline: 1, updatedAt: -1 }).limit(limit);
   const subWorks = await SubWorkItem.find({ ...scopeQuery(req.scope), workItemId: { $in: works.map((work) => work._id) }, archivedAt: { $exists: false } }).sort({ sequenceNumber: 1 });
   const byWork = new Map();
   subWorks.forEach((item) => {
@@ -250,7 +256,7 @@ exports.listWorks = (req, res) => withErrors(res, async () => {
 });
 
 exports.activeOptions = (req, res) => withErrors(res, async () => {
-  const works = await WorkItem.find({ ...scopeQuery(req.scope), archivedAt: { $exists: false }, status: { $nin: [...TERMINAL_STATUSES] } }).sort({ workNumber: -1 });
+  const works = await WorkItem.find({ ...scopeQuery(req.scope), archivedAt: { $exists: false }, status: { $nin: [...TERMINAL_STATUSES] } }).sort({ workNumber: -1 }).limit(250);
   const subWorks = await SubWorkItem.find({ ...scopeQuery(req.scope), workItemId: { $in: works.map((work) => work._id) }, archivedAt: { $exists: false }, status: { $nin: [...TERMINAL_STATUSES] } }).sort({ sequenceNumber: 1 });
   const byWork = new Map();
   subWorks.forEach((item) => {
@@ -356,7 +362,7 @@ exports.TERMINAL_STATUSES = TERMINAL_STATUSES;
 exports._test = { normalizeTaxNumber, presentWork, presentSubWork, scopeQuery };
 
 exports.listClients = (req, res) => withErrors(res, async () => {
-  const clients = await ClientCompany.find({ tenantIds: req.scope?.tenantId || null }).sort({ name: 1 });
+  const clients = await ClientCompany.find({ tenantIds: req.scope?.tenantId || null }).sort({ name: 1 }).limit(500);
   res.json({ clients: clients.map(presentClient) });
 });
 
@@ -395,6 +401,6 @@ exports.createOrLinkClient = (req, res) => withErrors(res, async () => {
 });
 
 exports.listTenantUsers = (req, res) => withErrors(res, async () => {
-  const users = await User.find({ tenantId: req.scope?.tenantId || null }).sort({ lastName: 1, firstName: 1, email: 1 });
+  const users = await User.find({ tenantId: req.scope?.tenantId || null }).sort({ lastName: 1, firstName: 1, email: 1 }).limit(500);
   res.json({ users: users.map(presentUser) });
 });

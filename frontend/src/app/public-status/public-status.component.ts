@@ -105,4 +105,8 @@ export class PublicStatusComponent implements OnInit, OnDestroy {
     const owner = this.report.ownerSlug || 'all';
     window.open(this.service.publicStatusPdfUrl(owner), '_blank', 'noopener');
   }
+
+  trackDomain(_index: number, item: PublicStatusReport['domains'][number]): string {
+    return item.domain.id;
+  }
 }

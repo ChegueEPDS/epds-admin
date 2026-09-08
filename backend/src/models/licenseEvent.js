@@ -14,7 +14,8 @@ const LicenseEventSchema = new mongoose.Schema(
       id: { type: String, default: '' },
       name: { type: String, default: '' }
     },
-    occurredAt: { type: Date, required: true, default: Date.now, index: true }
+    occurredAt: { type: Date, required: true, default: Date.now, index: true },
+    deliveriesEnsuredAt: { type: Date, default: null, index: true }
   },
   { timestamps: true }
 );

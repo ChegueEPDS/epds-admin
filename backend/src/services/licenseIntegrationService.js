@@ -58,7 +58,10 @@ async function ensureDeliveries(event) {
   })
     .select('_id')
     .lean();
-  if (!clients.length) return;
+  if (!clients.length) {
+    await LicenseEvent.updateOne({ _id: event._id }, { $set: { deliveriesEnsuredAt: new Date() } });
+    return;
+  }
   await WebhookDelivery.bulkWrite(clients.map((client) => ({
     updateOne: {
       filter: { eventId: event._id, clientId: client._id },
@@ -66,6 +69,7 @@ async function ensureDeliveries(event) {
       upsert: true
     }
   })), { ordered: false });
+  await LicenseEvent.updateOne({ _id: event._id }, { $set: { deliveriesEnsuredAt: new Date() } });
 }
 
 async function publishOrderedEvent(license, previousStatus, actor = { type: 'system' }) {

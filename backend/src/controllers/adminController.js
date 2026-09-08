@@ -156,6 +156,7 @@ function presentUser(user) {
 exports.listUsers = async (req, res) => {
   const users = await User.find()
     .sort({ email: 1 })
+    .limit(500)
     .populate('tenantId', 'name displayName')
     .lean();
   res.json({ users: users.map(presentUser) });

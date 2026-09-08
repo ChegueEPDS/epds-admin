@@ -47,6 +47,7 @@ const WorkItemSchema = new mongoose.Schema(
 
 WorkItemSchema.index({ tenantId: 1, year: 1, sequenceNumber: 1 }, { unique: true });
 WorkItemSchema.index({ tenantId: 1, status: 1, deadline: 1 });
+WorkItemSchema.index({ tenantId: 1, archivedAt: 1, status: 1, deadline: 1, updatedAt: -1 });
 
 module.exports = {
   WorkItem: mongoose.models.WorkItem || mongoose.model('WorkItem', WorkItemSchema),

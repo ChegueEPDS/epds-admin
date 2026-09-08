@@ -1,5 +1,6 @@
 const mailService = require('./mailService');
 const { buildDomainList } = require('./domainMonitorService');
+const { withJobLease } = require('./scheduledJobLeaseService');
 
 const REPORT_TIME_ZONE = process.env.DOMAIN_DAILY_REPORT_TIME_ZONE || 'Europe/Budapest';
 const REPORT_HOUR = Number(process.env.DOMAIN_DAILY_REPORT_HOUR || 7);
@@ -194,16 +195,18 @@ async function sendDomainDailyReport() {
   if (isSending) return;
   isSending = true;
   try {
-    const to = recipientList();
-    if (!to.length) throw new Error('DOMAIN_DAILY_REPORT_TO is empty');
-    const domains = (await buildDomainList({ role: 'SuperAdmin' }))
-      .filter((domain) => domain.enabled !== false);
-    await mailService.sendMail({
-      to,
-      subject: `EPDS Admin Domain Health riport - ${new Intl.DateTimeFormat('hu-HU', { timeZone: REPORT_TIME_ZONE }).format(new Date())}`,
-      html: buildReportHtml(domains)
-    });
-    console.log(`[domain-report] daily report sent to ${to.join(', ')}`);
+    await withJobLease(`domain-daily-report:${new Date().toISOString().slice(0, 10)}`, 23 * 60 * 60 * 1000, async () => {
+      const to = recipientList();
+      if (!to.length) throw new Error('DOMAIN_DAILY_REPORT_TO is empty');
+      const domains = (await buildDomainList({ role: 'SuperAdmin' }))
+        .filter((domain) => domain.enabled !== false);
+      await mailService.sendMail({
+        to,
+        subject: `EPDS Admin Domain Health riport - ${new Intl.DateTimeFormat('hu-HU', { timeZone: REPORT_TIME_ZONE }).format(new Date())}`,
+        html: buildReportHtml(domains)
+      });
+      console.log(`[domain-report] daily report sent to ${to.join(', ')}`);
+    }, { holdOnSuccess: true });
   } catch (err) {
     console.error('[domain-report] daily report failed:', err.message);
   } finally {

@@ -1,4 +1,5 @@
 const LicenseCustomer = require('../models/licenseCustomer');
+const { withJobLease } = require('./scheduledJobLeaseService');
 
 let timer = null;
 
@@ -8,10 +9,11 @@ function todayUtcStart() {
 }
 
 async function expireLicenses() {
-  return LicenseCustomer.updateMany(
+  const result = await withJobLease('license-expiry', 55 * 60 * 1000, () => LicenseCustomer.updateMany(
     { status: 'active', expiresAt: { $lt: todayUtcStart() } },
     { $set: { status: 'expired' }, $inc: { statusVersion: 1 } }
-  );
+  ));
+  return result.value;
 }
 
 function startLicenseExpiryScheduler() {

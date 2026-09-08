@@ -33,5 +33,6 @@ const SubWorkItemSchema = new mongoose.Schema(
 
 SubWorkItemSchema.index({ tenantId: 1, workItemId: 1, sequenceNumber: 1 }, { unique: true });
 SubWorkItemSchema.index({ tenantId: 1, workItemId: 1, status: 1 });
+SubWorkItemSchema.index({ tenantId: 1, archivedAt: 1, workItemId: 1, status: 1, sequenceNumber: 1 });
 
 module.exports = mongoose.models.SubWorkItem || mongoose.model('SubWorkItem', SubWorkItemSchema);

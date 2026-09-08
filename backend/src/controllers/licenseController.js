@@ -3,7 +3,8 @@ const Tenant = require('../models/tenant');
 const fileStorage = require('../services/fileStorageService');
 const { normalizeMobileAppVersion, replaceLicenseFile, replaceMobileAppFile } = require('../services/licenseFileService');
 const { publishOrderedEvent, transitionStatus } = require('../services/licenseIntegrationService');
-const { expireLicenses, todayUtcStart } = require('../services/licenseExpiryService');
+const { todayUtcStart } = require('../services/licenseExpiryService');
+const { pipeline } = require('stream/promises');
 
 function licenseScopeQuery(scope) {
   if (canManageAllLicenses(scope)) return {};
@@ -21,6 +22,11 @@ function tenantLabel(tenant) {
 
 function normalizeCustomerName(input) {
   return String(input || '').trim().replace(/\s+/g, ' ');
+}
+
+function requestLimit(value, fallback = 100, max = 200) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? Math.min(max, Math.max(1, Math.floor(parsed))) : fallback;
 }
 
 function safePathSegment(input, fallback = 'file') {
@@ -516,9 +522,10 @@ function applyLicensePayload(license, body) {
 exports.listLicenses = async (req, res, next) => {
   try {
     const includeVpnCredentials = req.scope?.tenantType !== 'client';
-    await expireLicenses();
+    const limit = requestLimit(req.query.limit);
     const licenses = await LicenseCustomer.find(licenseScopeQuery(req.scope))
       .sort({ customerName: 1 })
+      .limit(limit)
       .populate('tenantId', 'name displayName type')
       .lean();
     const clientTenants = canManageAllLicenses(req.scope)
@@ -735,13 +742,22 @@ exports.downloadLicenseFile = async (req, res, next) => {
     if (!license) return res.status(404).json({ error: 'License not found' });
     if (!license.licenseFile?.blobPath) return res.status(404).json({ error: 'License file not found' });
 
-    const buffer = await fileStorage.downloadToBuffer(license.licenseFile.blobPath);
+    const download = await fileStorage.openDownloadStream(license.licenseFile.blobPath, req.headers.range);
     const fileName = license.licenseFile.fileName || 'license-file';
+    res.status(download.partial ? 206 : 200);
     res.setHeader('Content-Type', license.licenseFile.contentType || 'application/octet-stream');
-    res.setHeader('Content-Length', buffer.length);
+    res.setHeader('Accept-Ranges', 'bytes');
+    res.setHeader('Content-Length', download.end - download.start + 1);
+    if (download.partial) res.setHeader('Content-Range', `bytes ${download.start}-${download.end}/${download.size}`);
     res.setHeader('Content-Disposition', contentDispositionAttachment(fileName));
-    return res.send(buffer);
+    await pipeline(download.stream, res);
+    return undefined;
   } catch (err) {
+    if (err.statusCode === 416) {
+      res.setHeader('Content-Range', `bytes */${err.size}`);
+      return res.status(416).end();
+    }
+    if (res.headersSent) return res.destroy(err);
     return next(err);
   }
 };
@@ -752,13 +768,22 @@ exports.downloadMobileAppFile = async (req, res, next) => {
     if (!license) return res.status(404).json({ error: 'License not found' });
     if (!license.mobileAppFile?.blobPath) return res.status(404).json({ error: 'Mobile app file not found' });
 
-    const buffer = await fileStorage.downloadToBuffer(license.mobileAppFile.blobPath);
+    const download = await fileStorage.openDownloadStream(license.mobileAppFile.blobPath, req.headers.range);
     const fileName = license.mobileAppFile.fileName || 'mobile-app.apk';
+    res.status(download.partial ? 206 : 200);
     res.setHeader('Content-Type', license.mobileAppFile.contentType || 'application/vnd.android.package-archive');
-    res.setHeader('Content-Length', buffer.length);
+    res.setHeader('Accept-Ranges', 'bytes');
+    res.setHeader('Content-Length', download.end - download.start + 1);
+    if (download.partial) res.setHeader('Content-Range', `bytes ${download.start}-${download.end}/${download.size}`);
     res.setHeader('Content-Disposition', contentDispositionAttachment(fileName));
-    return res.send(buffer);
+    await pipeline(download.stream, res);
+    return undefined;
   } catch (err) {
+    if (err.statusCode === 416) {
+      res.setHeader('Content-Range', `bytes */${err.size}`);
+      return res.status(416).end();
+    }
+    if (res.headersSent) return res.destroy(err);
     return next(err);
   }
 };

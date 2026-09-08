@@ -123,6 +123,8 @@ LicenseCustomerSchema.index(
   { tenantId: 1, normalizedCustomerName: 1 },
   { unique: true, partialFilterExpression: { tenantId: { $exists: true } } }
 );
+LicenseCustomerSchema.index({ tenantId: 1, customerName: 1 });
+LicenseCustomerSchema.index({ status: 1, expiresAt: 1 });
 
 LicenseCustomerSchema.statics.objectLimitOptions = OBJECT_LIMIT_OPTIONS;
 LicenseCustomerSchema.statics.databaseServerTypes = DATABASE_SERVER_TYPES;

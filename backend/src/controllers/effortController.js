@@ -2,6 +2,7 @@ const EffortProject = require('../models/effortProject');
 const EffortTask = require('../models/effortTask');
 const { WorkItem } = require('../models/workItem');
 const SubWorkItem = require('../models/subWorkItem');
+const { mapWithConcurrency } = require('../services/scheduledJobLeaseService');
 
 const TERMINAL_WORK_STATUSES = ['completed_billable', 'invoiced', 'paid', 'closed', 'cancelled'];
 
@@ -21,6 +22,11 @@ function normalizeLongText(input) {
   return String(input || '').trim();
 }
 
+function requestLimit(value, fallback = 100, max = 200) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? Math.min(max, Math.max(1, Math.floor(parsed))) : fallback;
+}
+
 function httpError(message, statusCode = 400) {
   const error = new Error(message);
   error.statusCode = statusCode;
@@ -35,12 +41,14 @@ function msBetween(start, end) {
 }
 
 function taskNetMs(task, now = new Date()) {
-  const saved = (task.sessions || []).reduce((total, session) => total + Number(session.durationMs || 0), 0);
+  const saved = Number(task.archivedNetMs || 0)
+    + (task.sessions || []).reduce((total, session) => total + Number(session.durationMs || 0), 0);
   if (task.activeTimer?.startedAt) return saved + msBetween(task.activeTimer.startedAt, now);
   return saved;
 }
 
 function taskFirstStartedAt(task) {
+  if (task.firstStartedAt) return new Date(task.firstStartedAt);
   const starts = (task.sessions || [])
     .map((session) => session.startedAt)
     .concat(task.activeTimer?.startedAt || [])
@@ -65,7 +73,7 @@ function activeByUser(task, userId) {
 }
 
 function presentTask(task, now = new Date(), userId = null) {
-  const sessionCount = (task.sessions || []).length;
+  const sessionCount = Number(task.archivedSessionCount || 0) + (task.sessions || []).length;
   const active = Boolean(task.activeTimer?.startedAt);
   return {
     id: String(task._id),
@@ -193,6 +201,7 @@ function setSubWorkReference(task, subWork, project) {
 
 function stopTaskTimer(task, now = new Date()) {
   if (!task.activeTimer?.startedAt || !task.activeTimer?.userId) return false;
+  task.firstStartedAt ||= taskFirstStartedAt(task) || task.activeTimer.startedAt;
   const durationMs = msBetween(task.activeTimer.startedAt, now);
   task.sessions.push({
     userId: task.activeTimer.userId,
@@ -200,6 +209,12 @@ function stopTaskTimer(task, now = new Date()) {
     stoppedAt: now,
     durationMs
   });
+  const configuredLimit = Number(process.env.EFFORT_EMBEDDED_SESSION_LIMIT || 100);
+  const maxEmbeddedSessions = Number.isFinite(configuredLimit) ? Math.max(20, Math.floor(configuredLimit)) : 100;
+  while (task.sessions.length > maxEmbeddedSessions) {
+    task.archivedNetMs = Number(task.archivedNetMs || 0) + Number(task.sessions.shift()?.durationMs || 0);
+    task.archivedSessionCount = Number(task.archivedSessionCount || 0) + 1;
+  }
   task.activeTimer = undefined;
   return true;
 }
@@ -244,7 +259,8 @@ async function withErrors(res, fn) {
 }
 
 exports.listProjects = (req, res) => withErrors(res, async () => {
-  const projects = await EffortProject.find(ownerScopeQuery(req.scope, req.userId)).sort({ status: 1, updatedAt: -1 });
+  const limit = requestLimit(req.query.limit);
+  const projects = await EffortProject.find(ownerScopeQuery(req.scope, req.userId)).sort({ status: 1, updatedAt: -1 }).limit(limit);
   const projectIds = projects.map((project) => project._id);
   const tasks = await EffortTask.find({ ...ownerScopeQuery(req.scope, req.userId), projectId: { $in: projectIds } }).sort({ updatedAt: -1 });
   const tasksByProject = new Map();
@@ -324,13 +340,10 @@ exports.closeProject = (req, res) => withErrors(res, async () => {
 
   const now = new Date();
   const tasks = await EffortTask.find({ ...ownerScopeQuery(req.scope, req.userId), projectId: project._id }).sort({ status: 1, updatedAt: -1 });
-  for (const task of tasks) {
-    if (closeTaskSnapshot(task, req.userId, now)) {
-      await task.save();
-    }
-  }
-
-  const freshTasks = await EffortTask.find({ ...ownerScopeQuery(req.scope, req.userId), projectId: project._id }).sort({ status: 1, updatedAt: -1 });
+  await mapWithConcurrency(tasks, 10, async (task) => {
+    if (closeTaskSnapshot(task, req.userId, now)) await task.save();
+  });
+  const freshTasks = tasks;
   project.status = 'closed';
   project.closedAt = now;
   project.closedNetMs = freshTasks.reduce((total, task) => total + Number(task.closedNetMs || 0), 0);
@@ -413,6 +426,7 @@ exports.startTask = (req, res) => withErrors(res, async () => {
   }
   if (!task.activeTimer?.startedAt) {
     task.activeTimer = { userId: req.userId, startedAt: now };
+    task.firstStartedAt ||= now;
     task.updatedBy = req.userId;
     await task.save();
   }

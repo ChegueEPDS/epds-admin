@@ -1,6 +1,7 @@
 const DomainMonitor = require('../models/domainMonitor');
 const DomainPageSpeedScan = require('../models/domainPageSpeedScan');
 const { storeDomainPageSpeedScan } = require('./pageSpeedService');
+const { mapWithConcurrency, withJobLease } = require('./scheduledJobLeaseService');
 
 const configuredDailyRuns = Number(process.env.PAGESPEED_DAILY_RUNS || 1);
 const DAILY_RUNS = Number.isFinite(configuredDailyRuns) ? Math.max(1, Math.min(configuredDailyRuns, 2)) : 1;
@@ -20,19 +21,21 @@ async function runScheduledPageSpeedScans() {
   if (isRunning) return;
   isRunning = true;
   try {
-    const domains = await DomainMonitor.find({ enabled: true }).sort({ name: 1 });
-    for (const domain of domains) {
-      try {
-        if (!(await shouldRunDomain(domain._id))) continue;
-        await storeDomainPageSpeedScan(domain, 'scheduled');
-      } catch (err) {
-        console.error(`[pagespeed-monitor] ${domain.baseUrl} scan failed:`, err.message);
-      }
-    }
+    await withJobLease('domain-pagespeed-monitor', 12 * 60 * 60 * 1000, async () => {
+      const domains = await DomainMonitor.find({ enabled: true }).sort({ name: 1 });
+      const concurrency = Math.max(1, Math.min(4, Number(process.env.PAGESPEED_CONCURRENCY || 2)));
+      await mapWithConcurrency(domains, concurrency, async (domain) => {
+        try {
+          if (await shouldRunDomain(domain._id)) await storeDomainPageSpeedScan(domain, 'scheduled');
+        } catch (err) { console.error(`[pagespeed-monitor] ${domain.baseUrl} scan failed:`, err.message); }
+      });
+    });
   } catch (err) {
     console.error('[pagespeed-monitor] scheduled scans failed:', err.message);
   } finally {
     isRunning = false;
+    const { rebuildAllSnapshots } = require('./domainStatusReadModelService');
+    void rebuildAllSnapshots().catch((err) => console.error('[domain-status] post-pagespeed rebuild failed:', err.message));
   }
 }
 

@@ -3,7 +3,8 @@ const net = require('net');
 const axios = require('axios');
 const DomainMonitor = require('../models/domainMonitor');
 const DomainHealthCheck = require('../models/domainHealthCheck');
-const { getDomainPageSpeedOverview } = require('./pageSpeedService');
+const { getPublicPageSpeedSummaries } = require('./pageSpeedService');
+const { mapWithConcurrency, withJobLease } = require('./scheduledJobLeaseService');
 
 const CHECK_TIMEOUT_MS = 10000;
 const MONITOR_INTERVAL_MS = 15 * 60 * 1000;
@@ -493,16 +494,21 @@ async function getDomainStatusDetails(domain, checks) {
 async function buildPublicStatusReport({ owner } = {}) {
   const ownerFilter = owner && owner !== 'all' ? { owner } : {};
   const domains = await DomainMonitor.find({ enabled: true, ...ownerFilter }).sort({ name: 1 }).populate('tenantId', 'name displayName').lean(false);
-  const checksByDomain = await loadChecksForDomains(domains.map((domain) => domain._id));
-  const domainsWithOverview = await Promise.all(domains.map(async (domain) => {
+  const domainIds = domains.map((domain) => domain._id);
+  const [checksByDomain, pageSpeedByDomain] = await Promise.all([
+    loadChecksForDomains(domainIds),
+    getPublicPageSpeedSummaries(domainIds, { days: 30 })
+  ]);
+  const domainsWithOverview = domains.map((domain) => {
     const checks = checksByDomain.get(String(domain._id)) || [];
-    const details = await getDomainStatusDetails(domain, checks);
-    const pageSpeed = await getDomainPageSpeedOverview(domain._id, { days: 30 });
+    const summary = summarizeChecks(checksSince(checks, 24));
+    const details = { domain: presentDomain(domain, summary), overview: buildDomainOverview(domain, checks) };
     return {
       ...details,
-      pageSpeed: pageSpeed.publicSummary
+      overview: { ...details.overview, incidents: details.overview.incidents.slice(0, 4) },
+      pageSpeed: pageSpeedByDomain.get(String(domain._id))
     };
-  }));
+  });
 
   const summary = domainsWithOverview.reduce((acc, item) => {
     acc.domainCount += 1;
@@ -672,20 +678,23 @@ async function runScheduledChecks() {
   lastRunStartedAt = new Date();
   lastRunDomainCount = 0;
   try {
-    const domains = await DomainMonitor.find({ enabled: true });
-    lastRunDomainCount = domains.length;
-    for (const domain of domains) {
-      try {
-        await runDomainCheck(domain);
-      } catch (err) {
-        console.error(`[domain-monitor] ${domain.baseUrl} check failed:`, err.message);
-      }
-    }
+    await withJobLease('domain-health-monitor', 20 * 60 * 1000, async () => {
+      const domains = await DomainMonitor.find({ enabled: true });
+      lastRunDomainCount = domains.length;
+      const concurrency = Math.max(1, Number(process.env.DOMAIN_HEALTH_CONCURRENCY || 8));
+      await mapWithConcurrency(domains, concurrency, async (domain) => {
+        try { await runDomainCheck(domain); } catch (err) {
+          console.error(`[domain-monitor] ${domain.baseUrl} check failed:`, err.message);
+        }
+      });
+    });
   } catch (err) {
     console.error('[domain-monitor] scheduled checks failed:', err.message);
   } finally {
     lastRunCompletedAt = new Date();
     isRunning = false;
+    const { rebuildAllSnapshots } = require('./domainStatusReadModelService');
+    void rebuildAllSnapshots().catch((err) => console.error('[domain-status] post-monitor rebuild failed:', err.message));
   }
 }
 

@@ -44,7 +44,7 @@
   </div>
 
   <mat-accordion class="domain-report-list" multi *ngIf="!isLoading && report">
-    <mat-expansion-panel class="domain-report" *ngFor="let item of report.domains" [expanded]="true">
+    <mat-expansion-panel class="domain-report" *ngFor="let item of report.domains; trackBy: trackDomain" [expanded]="report.domains.length <= 6">
       <mat-expansion-panel-header class="domain-head">
         <div>
           <h2>{{ item.domain.name }}</h2>
