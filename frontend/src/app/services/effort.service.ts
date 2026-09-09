@@ -64,7 +64,7 @@ export type EffortTaskPayload = {
 
 @Injectable({ providedIn: 'root' })
 export class EffortService {
-  private baseUrl = `${environment.apiUrl}/api/effort`;
+  private baseUrl = `${environment.apiBaseUrl}/effort`;
 
   constructor(private http: HttpClient) {}
 

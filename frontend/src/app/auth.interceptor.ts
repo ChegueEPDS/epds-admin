@@ -7,11 +7,11 @@ import { AuthService } from './services/auth.service';
 
 function isBackendUrl(req: HttpRequest<unknown>): boolean {
   try {
-    const api = new URL(environment.apiUrl);
+    const api = new URL(environment.apiBaseUrl, window.location.origin);
     const url = new URL(req.url, window.location.origin);
     return url.origin === api.origin;
   } catch {
-    return req.url.startsWith('/api/') || req.url.startsWith(environment.apiUrl);
+    return req.url.startsWith('/api/') || req.url.startsWith(environment.apiBaseUrl);
   }
 }
 

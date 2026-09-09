@@ -20,8 +20,8 @@ type DocEndpoint = {
   styleUrl: './webhook-docs.component.scss'
 })
 export class WebhookDocsComponent {
-  readonly apiUrl = environment.apiUrl.replace(/\/$/, '');
-  readonly basePath = '/api/integrations/v1';
+  readonly apiUrl = environment.apiBaseUrl;
+  readonly basePath = '/integrations/v1';
 
   readonly endpoints: DocEndpoint[] = [
     {

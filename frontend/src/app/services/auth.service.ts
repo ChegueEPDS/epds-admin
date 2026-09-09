@@ -57,7 +57,7 @@ const FEATURE_ORDER: TenantFeatureKey[] = ['mail', 'domainHealth', 'licenses', '
 
 @Injectable({ providedIn: 'root' })
 export class AuthService {
-  private baseUrl = `${environment.apiUrl}/api`;
+  private baseUrl = environment.apiBaseUrl;
   private currentUser: AuthUser | null = null;
   private refreshInFlight$: Observable<boolean> | null = null;
   private readonly redirectKey = 'epds-admin:returnUrl';

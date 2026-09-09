@@ -37,7 +37,7 @@ export type SubWorkPayload = Partial<Omit<SubWorkItem, 'id' | 'workItemId' | 'se
 
 @Injectable({ providedIn: 'root' })
 export class WorkBoardService {
-  private readonly baseUrl = `${environment.apiUrl}/api/work-board`;
+  private readonly baseUrl = `${environment.apiBaseUrl}/work-board`;
   constructor(private http: HttpClient) {}
 
   listWorks(): Observable<WorkItem[]> {

@@ -82,7 +82,7 @@ export interface FitAnalysis {
 
 @Injectable({ providedIn: 'root' })
 export class FitFileService {
-  private readonly baseUrl = `${environment.apiUrl}/api/admin/fit`;
+  private readonly baseUrl = `${environment.apiBaseUrl}/admin/fit`;
   constructor(private http: HttpClient) {}
 
   analyze(file: File): Observable<FitAnalysis> {

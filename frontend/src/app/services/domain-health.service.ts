@@ -265,7 +265,7 @@ export type DomainPayload = {
 
 @Injectable({ providedIn: 'root' })
 export class DomainHealthService {
-  private base = `${environment.apiUrl}/api`;
+  private base = environment.apiBaseUrl;
 
   constructor(private http: HttpClient) {}
 

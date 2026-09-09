@@ -82,7 +82,7 @@ export class WebhookTestComponent implements OnInit {
   }, null, 2);
 
   get receiverUrl(): string {
-    return `${environment.apiUrl.replace(/\/$/, '')}/api/webhook-test/inboxes/${this.token}`;
+    return `${environment.apiBaseUrl}/webhook-test/inboxes/${this.token}`;
   }
 
   ngOnInit(): void {

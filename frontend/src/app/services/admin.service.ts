@@ -95,7 +95,7 @@ export type IntegrationMutationResult = {
 
 @Injectable({ providedIn: 'root' })
 export class AdminService {
-  private baseUrl = `${environment.apiUrl}/api/admin`;
+  private baseUrl = `${environment.apiBaseUrl}/admin`;
 
   constructor(private http: HttpClient) {}
 

@@ -145,7 +145,7 @@ export type LicenseClientTenant = {
 
 @Injectable({ providedIn: 'root' })
 export class LicenseService {
-  private base = `${environment.apiUrl}/api`;
+  private base = environment.apiBaseUrl;
 
   constructor(private http: HttpClient) {}
 
