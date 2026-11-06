@@ -13,7 +13,7 @@ import { MatSelectModule } from '@angular/material/select';
 import { MatNativeDateModule } from '@angular/material/core';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { AuthService } from '../services/auth.service';
-import { ClientPayload, SubWorkItem, SubWorkPayload, TenantUserOption, WorkBoardClient, WorkBoardService, WorkItem, WorkPayload, WorkStatus } from '../services/work-board.service';
+import { ClientPayload, SubWorkItem, SubWorkPayload, TenantUserOption, WorkBoardClient, WorkBoardService, WorkDocument, WorkItem, WorkPayload, WorkStatus } from '../services/work-board.service';
 
 type WorkForm = {
   name: string; clientId: string; responsibleUserId: string; status: WorkStatus; deadline: Date | null; description: string;
@@ -52,6 +52,17 @@ export class WorkBoardComponent implements OnInit {
   activeCount = 0;
   overdueCount = 0;
   totalActiveValue = 0;
+  documents: WorkDocument[] = [];
+  documentsLoading = false;
+  documentUploading = false;
+  documentCategory = 'offer';
+  documentCustomName = '';
+  selectedDocumentFile: File | null = null;
+  readonly documentCategories = [
+    { value: 'offer', label: 'Ajánlat' }, { value: 'contract_draft', label: 'Szerződéstervezet' },
+    { value: 'contract', label: 'Szerződés' }, { value: 'order', label: 'Megrendelés' },
+    { value: 'performance_certificate', label: 'Teljesítésigazolás' }, { value: 'other', label: 'Egyéb' }
+  ];
   showWorkForm = false;
   showSubWorkForm = false;
   showClientPanel = false;
@@ -121,7 +132,7 @@ export class WorkBoardComponent implements OnInit {
     void this.load();
   }
   pageSizeChanged(): void { this.page = 1; this.expandedWorkIds = new Set<string>(); void this.load(); }
-  selectWork(work: WorkItem): void { this.selectedWork = work; this.cancelForms(); this.detailView = true; }
+  selectWork(work: WorkItem): void { this.selectedWork = work; this.cancelForms(); this.detailView = true; void this.loadDocuments(work.id); }
   toggleWorkExpansion(work: WorkItem, event?: Event): void {
     event?.stopPropagation();
     const next = new Set(this.expandedWorkIds);
@@ -132,7 +143,7 @@ export class WorkBoardComponent implements OnInit {
   isWorkExpanded(work: WorkItem): boolean { return this.expandedWorkIds.has(work.id); }
   trackWork(_: number, work: WorkItem): string { return work.id; }
   trackSubWork(_: number, subWork: SubWorkItem): string { return subWork.id; }
-  backToTable(): void { this.cancelForms(); this.detailView = false; }
+  backToTable(): void { this.cancelForms(); this.detailView = false; this.documents = []; }
   startCreateWork(): void { this.workForm = this.emptyWorkForm(); this.editingWork = false; this.detailView = false; this.showClientPanel = false; this.showWorkForm = true; }
   startEditWork(): void {
     if (!this.selectedWork) return;
@@ -198,6 +209,52 @@ export class WorkBoardComponent implements OnInit {
     if (!this.selectedWork || !confirm(`Archive ${sub.subWorkNumber} · ${sub.name}?`)) return;
     try { await firstValueFrom(this.board.archiveSubWork(sub.id)); await this.load(this.selectedWork.id); }
     catch (error: any) { this.error(error, 'Sub-work could not be archived.'); }
+  }
+  async loadDocuments(workId = this.selectedWork?.id): Promise<void> {
+    if (!workId) return;
+    this.documentsLoading = true;
+    try { this.documents = await firstValueFrom(this.board.listDocuments(workId)); }
+    catch (error: any) { this.error(error, 'Documents could not be loaded.'); }
+    finally { this.documentsLoading = false; }
+  }
+  chooseDocument(input: HTMLInputElement): void {
+    this.selectedDocumentFile = input.files?.[0] || null;
+  }
+  async uploadDocument(input: HTMLInputElement): Promise<void> {
+    if (!this.selectedWork || !this.selectedDocumentFile) return this.notice('Select a file to upload.');
+    if (this.documentCategory === 'other' && !this.documentCustomName.trim()) return this.notice('Enter a custom document name.');
+    this.documentUploading = true;
+    try {
+      await firstValueFrom(this.board.uploadDocument(this.selectedWork.id, this.selectedDocumentFile, this.documentCategory, this.documentCustomName.trim()));
+      this.selectedDocumentFile = null; this.documentCustomName = ''; input.value = '';
+      await this.loadDocuments(); this.notice('Document uploaded.');
+    } catch (error: any) { this.error(error, 'Document could not be uploaded.'); }
+    finally { this.documentUploading = false; }
+  }
+  async downloadDocument(document: WorkDocument): Promise<void> {
+    try {
+      const response = await firstValueFrom(this.board.downloadDocument(document.id));
+      const url = URL.createObjectURL(response.body as Blob);
+      const link = window.document.createElement('a'); link.href = url; link.download = document.fileName; link.click();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch (error: any) { this.error(error, 'Document could not be downloaded.'); }
+  }
+  async deleteDocument(document: WorkDocument): Promise<void> {
+    if (!confirm(`Delete ${document.displayName} · ${document.fileName}?`)) return;
+    try { await firstValueFrom(this.board.deleteDocument(document.id)); await this.loadDocuments(); this.notice('Document deleted.'); }
+    catch (error: any) { this.error(error, 'Document could not be deleted.'); }
+  }
+  formatFileSize(bytes: number): string {
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+  }
+  documentIcon(document: WorkDocument): string {
+    if (document.contentType === 'application/pdf') return 'picture_as_pdf';
+    if (document.contentType.startsWith('image/')) return 'image';
+    if (/word|document/.test(document.contentType)) return 'description';
+    if (/excel|spreadsheet/.test(document.contentType)) return 'table';
+    return 'draft';
   }
   cancelForms(): void { this.showWorkForm = false; this.showSubWorkForm = false; this.editingSubWorkId = null; }
   cancelWorkEditor(): void { this.showWorkForm = false; this.detailView = Boolean(this.editingWork && this.selectedWork); }

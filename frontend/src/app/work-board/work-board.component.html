@@ -1,4 +1,4 @@
-<section class="board-page">
+<section class="board-page" [class.editor-mode]="showWorkForm">
   <header class="page-header">
     <div>
       <p class="eyebrow">OPERATIONS</p>
@@ -44,8 +44,8 @@
       <div class="group-heading"><span>01</span><div><h2>Basic information</h2><p>Identification, client, owner and lifecycle status.</p></div></div>
       <div class="form-grid">
         <mat-form-field appearance="outline"><mat-label>Name</mat-label><input matInput name="workName" [(ngModel)]="workForm.name" required></mat-form-field>
-        <mat-form-field appearance="outline"><mat-label>Client</mat-label><mat-select name="workClient" [(ngModel)]="workForm.clientId"><mat-option value="">No client</mat-option><mat-option *ngFor="let client of clients" [value]="client.id">{{ client.name }} · {{ client.taxNumber }}</mat-option></mat-select></mat-form-field>
-        <mat-form-field appearance="outline"><mat-label>Responsible</mat-label><mat-select name="workResponsible" [(ngModel)]="workForm.responsibleUserId"><mat-option value="">No responsible</mat-option><mat-option *ngFor="let user of tenantUsers" [value]="user.id">{{ user.fullName }} · {{ user.email }}</mat-option></mat-select></mat-form-field>
+        <mat-form-field appearance="outline"><mat-label>Client</mat-label><mat-select name="workClient" [(ngModel)]="workForm.clientId"><mat-option value="">No client</mat-option><mat-option *ngFor="let client of clients" [value]="client.id">{{ client.name }}</mat-option></mat-select></mat-form-field>
+        <mat-form-field appearance="outline"><mat-label>Responsible</mat-label><mat-select name="workResponsible" [(ngModel)]="workForm.responsibleUserId"><mat-option value="">No responsible</mat-option><mat-option *ngFor="let user of tenantUsers" [value]="user.id">{{ user.fullName }}</mat-option></mat-select></mat-form-field>
         <mat-form-field appearance="outline"><mat-label>Status</mat-label><mat-select name="workStatus" [(ngModel)]="workForm.status"><mat-option *ngFor="let status of statuses" [value]="status.value">{{ status.label }}</mat-option></mat-select></mat-form-field>
         <mat-form-field appearance="outline" class="wide"><mat-label>Description</mat-label><textarea matInput rows="3" name="workDescription" [(ngModel)]="workForm.description"></textarea></mat-form-field>
       </div>
@@ -285,7 +285,7 @@
             <div class="group-heading"><span>01</span><div><h3>Basic information</h3></div></div>
             <div class="form-grid">
               <mat-form-field appearance="outline"><mat-label>Name</mat-label><input matInput name="subName" [(ngModel)]="subWorkForm.name" required></mat-form-field>
-              <mat-form-field appearance="outline"><mat-label>Responsible</mat-label><mat-select name="subResponsible" [(ngModel)]="subWorkForm.responsibleUserId"><mat-option value="">No responsible</mat-option><mat-option *ngFor="let user of tenantUsers" [value]="user.id">{{ user.fullName }} · {{ user.email }}</mat-option></mat-select></mat-form-field>
+              <mat-form-field appearance="outline"><mat-label>Responsible</mat-label><mat-select name="subResponsible" [(ngModel)]="subWorkForm.responsibleUserId"><mat-option value="">No responsible</mat-option><mat-option *ngFor="let user of tenantUsers" [value]="user.id">{{ user.fullName }}</mat-option></mat-select></mat-form-field>
               <mat-form-field appearance="outline"><mat-label>Status</mat-label><mat-select name="subStatus" [(ngModel)]="subWorkForm.status"><mat-option *ngFor="let status of statuses" [value]="status.value">{{ status.label }}</mat-option></mat-select></mat-form-field>
               <mat-form-field appearance="outline" class="wide"><mat-label>Description</mat-label><textarea matInput rows="3" name="subDescription" [(ngModel)]="subWorkForm.description"></textarea></mat-form-field>
             </div>
@@ -338,6 +338,37 @@
           </table>
         </div>
         <ng-template #noSubWorks><div class="empty large"><mat-icon class="material-symbols-outlined">account_tree</mat-icon><strong>No sub-works yet</strong><span>Add an execution step or billing milestone.</span></div></ng-template>
+      </section>
+
+      <section class="documents-card">
+        <header class="documents-header">
+          <div><h3>Documents</h3><p>Offers, contracts, orders and completion certificates related to this work.</p></div>
+          <span>{{ documents.length }} file{{ documents.length === 1 ? '' : 's' }}</span>
+        </header>
+
+        <div class="document-upload" [class.has-custom-name]="documentCategory === 'other'" *ngIf="auth.canEditFeature('workBoard')">
+          <mat-form-field appearance="outline" subscriptSizing="dynamic"><mat-label>Document type</mat-label><mat-select [(ngModel)]="documentCategory"><mat-option *ngFor="let category of documentCategories" [value]="category.value">{{ category.label }}</mat-option></mat-select></mat-form-field>
+          <mat-form-field appearance="outline" subscriptSizing="dynamic" *ngIf="documentCategory === 'other'"><mat-label>Custom document name</mat-label><input matInput [(ngModel)]="documentCustomName"></mat-form-field>
+          <input #documentFileInput type="file" hidden (change)="chooseDocument(documentFileInput)">
+          <button mat-stroked-button type="button" class="file-picker" (click)="documentFileInput.click()"><mat-icon class="material-symbols-outlined">attach_file</mat-icon><span>{{ selectedDocumentFile?.name || 'Select file' }}</span></button>
+          <button mat-flat-button color="primary" type="button" (click)="uploadDocument(documentFileInput)" [disabled]="documentUploading || !selectedDocumentFile"><mat-icon class="material-symbols-outlined">upload</mat-icon>{{ documentUploading ? 'Uploading…' : 'Upload' }}</button>
+        </div>
+
+        <div class="documents-loading" *ngIf="documentsLoading"><mat-spinner diameter="24"></mat-spinner></div>
+        <div class="documents-table-wrap" *ngIf="!documentsLoading && documents.length; else noDocuments">
+          <table class="documents-table">
+            <thead><tr><th>Document</th><th>Type</th><th>File</th><th>Uploaded</th><th class="numeric">Size</th><th aria-label="Actions"></th></tr></thead>
+            <tbody><tr *ngFor="let document of documents">
+              <td><div class="document-name"><mat-icon class="material-symbols-outlined">{{ documentIcon(document) }}</mat-icon><strong>{{ document.displayName }}</strong></div></td>
+              <td>{{ document.categoryLabel }}</td>
+              <td class="file-name" [title]="document.fileName">{{ document.fileName }}</td>
+              <td><span>{{ document.uploadedAt | date:'yyyy.MM.dd HH:mm' }}</span><small *ngIf="document.uploadedByName">{{ document.uploadedByName }}</small></td>
+              <td class="numeric">{{ formatFileSize(document.size) }}</td>
+              <td class="document-actions"><button mat-icon-button type="button" (click)="downloadDocument(document)" aria-label="Download document"><mat-icon class="material-symbols-outlined">download</mat-icon></button><button mat-icon-button type="button" *ngIf="auth.canDeleteFeature('workBoard')" (click)="deleteDocument(document)" aria-label="Delete document"><mat-icon class="material-symbols-outlined">delete</mat-icon></button></td>
+            </tr></tbody>
+          </table>
+        </div>
+        <ng-template #noDocuments><div class="documents-empty" *ngIf="!documentsLoading"><mat-icon class="material-symbols-outlined">folder_open</mat-icon><span>No documents have been uploaded for this work.</span></div></ng-template>
       </section>
     </main>
   </ng-container>

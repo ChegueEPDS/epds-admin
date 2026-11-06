@@ -1,0 +1,80 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="980" viewBox="0 0 1600 980">
+  <defs>
+    <style>
+      text{font-family:Inter,Arial,sans-serif;fill:#17201f}.muted{fill:#697572}.accent{fill:#a54f00}.label{font-size:11px;fill:#68615d}.value{font-size:14px}.h1{font-size:28px;font-weight:750}.h2{font-size:16px;font-weight:750}.small{font-size:11px}.tiny{font-size:9px;font-weight:800;letter-spacing:1px}.card{fill:#fff;stroke:#dfe3e1}.field{fill:#fff;stroke:#b98766}.badge{fill:#f8eee7}.line{stroke:#dfe3e1}.button{fill:#a54f00}.buttonText{fill:#fff;font-size:13px;font-weight:700}
+    </style>
+  </defs>
+  <rect width="1600" height="980" fill="#f5f6f2"/>
+  <rect width="1600" height="62" fill="#fff" stroke="#dfe3e1"/>
+  <text x="24" y="39" font-size="29" font-weight="800">EPDS</text>
+  <text x="170" y="37" class="muted" font-size="13" font-weight="700">HOME</text>
+  <text x="270" y="37" class="muted" font-size="13" font-weight="700">DOMAIN HEALTH</text>
+  <text x="425" y="37" class="muted" font-size="13" font-weight="700">LICENSES</text>
+  <text x="535" y="37" class="muted" font-size="13" font-weight="700">EFFORT TRACKING</text>
+  <rect x="690" y="12" width="146" height="38" rx="10" fill="#fff7ef" stroke="#ecb17e"/>
+  <text x="715" y="37" class="accent" font-size="13" font-weight="800">▤  WORK BOARD</text>
+  <text x="1435" y="37" font-size="13" font-weight="700">Kovács Gergely</text>
+
+  <text x="24" y="98" class="accent tiny">OPERATIONS</text>
+  <text x="24" y="130" class="h1">Edit work</text>
+  <text x="24" y="151" class="muted" font-size="12">Complete operational and financial record.</text>
+  <rect x="1420" y="102" width="150" height="36" rx="18" fill="#fff" stroke="#9b8d83"/>
+  <text x="1450" y="125" class="accent" font-size="12" font-weight="700">←  Back to table</text>
+
+  <rect x="24" y="172" width="1546" height="220" rx="12" class="card"/>
+  <rect x="42" y="190" width="26" height="26" rx="7" class="badge"/>
+  <text x="49" y="208" class="accent tiny">01</text>
+  <text x="78" y="207" class="h2">Basic information</text>
+  <text x="78" y="224" class="muted small">Identification, client, owner and lifecycle status.</text>
+
+  <g transform="translate(42 244)">
+    <rect width="360" height="46" rx="5" class="field"/><text x="12" y="-3" class="label">Name *</text><text x="14" y="28" class="value">Terszt</text>
+    <rect x="377" width="360" height="46" rx="5" class="field"/><text x="389" y="-3" class="label">Client</text><text x="391" y="28" class="value">Terszt</text><text x="711" y="28" class="muted">▾</text>
+    <rect x="754" width="360" height="46" rx="5" class="field"/><text x="766" y="-3" class="label">Responsible</text><text x="768" y="28" class="value">Kovács Gergely</text><text x="1088" y="28" class="muted">▾</text>
+    <rect x="1131" width="373" height="46" rx="5" class="field"/><text x="1143" y="-3" class="label">Status</text><text x="1145" y="28" class="value">Invoiced</text><text x="1478" y="28" class="muted">▾</text>
+    <rect y="66" width="1504" height="60" rx="5" class="field"/><text x="12" y="86" class="label">Description</text><text x="14" y="108" class="muted" font-size="13">Optional work description…</text>
+  </g>
+
+  <g transform="translate(24 408)">
+    <rect width="765" height="206" rx="12" class="card"/>
+    <rect x="18" y="18" width="26" height="26" rx="7" class="badge"/><text x="25" y="36" class="accent tiny">02</text>
+    <text x="54" y="35" class="h2">Offer and schedule</text><text x="54" y="51" class="muted small">Commercial value and agreed deadlines.</text>
+    <g transform="translate(18 76)">
+      <rect width="351" height="44" rx="5" class="field"/><text x="12" y="-3" class="label">Total value</text><text x="14" y="27" class="value">4 000 000</text>
+      <rect x="369" width="360" height="44" rx="5" class="field"/><text x="381" y="-3" class="label">Currency</text><text x="383" y="27" class="value">HUF</text>
+      <rect y="61" width="231" height="44" rx="5" class="field"/><text x="12" y="58" class="label">Offer date</text><text x="14" y="88" class="value">2026.07.01</text>
+      <rect x="249" y="61" width="231" height="44" rx="5" class="field"/><text x="261" y="58" class="label">Deadline</text><text x="263" y="88" class="value">2026.07.24</text>
+      <rect x="498" y="61" width="231" height="44" rx="5" class="field"/><text x="510" y="58" class="label">Payment term</text><text x="512" y="88" class="value">30 days</text>
+    </g>
+
+    <rect x="781" width="765" height="206" rx="12" class="card"/>
+    <rect x="799" y="18" width="26" height="26" rx="7" class="badge"/><text x="806" y="36" class="accent tiny">03</text>
+    <text x="835" y="35" class="h2">Execution</text><text x="835" y="51" class="muted small">Delivery costs, subcontractor and contract state.</text>
+    <g transform="translate(799 76)">
+      <rect width="351" height="44" rx="5" class="field"/><text x="12" y="-3" class="label">Cost</text><text x="14" y="27" class="value">0 HUF</text>
+      <rect x="369" width="360" height="44" rx="5" class="field"/><text x="381" y="-3" class="label">Subcontractor</text><text x="383" y="27" class="muted" font-size="13">Optional</text>
+      <rect y="66" width="16" height="16" rx="3" fill="#fff" stroke="#a54f00"/><text x="26" y="79" font-size="12">Contract signed</text>
+    </g>
+  </g>
+
+  <g transform="translate(24 630)">
+    <rect width="765" height="160" rx="12" class="card"/>
+    <rect x="18" y="18" width="26" height="26" rx="7" class="badge"/><text x="25" y="36" class="accent tiny">04</text>
+    <text x="54" y="35" class="h2">Completion</text><text x="54" y="51" class="muted small">Delivery confirmation and certificate.</text>
+    <rect x="18" y="78" width="351" height="44" rx="5" class="field"/><text x="30" y="75" class="label">Completion date</text><text x="32" y="105" class="value">2026.07.24</text>
+    <rect x="392" y="91" width="16" height="16" rx="3" fill="#fff" stroke="#a54f00"/><text x="418" y="104" font-size="12">Performance certificate signed</text>
+
+    <rect x="781" width="765" height="160" rx="12" class="card"/>
+    <rect x="799" y="18" width="26" height="26" rx="7" class="badge"/><text x="806" y="36" class="accent tiny">05</text>
+    <text x="835" y="35" class="h2">Invoicing</text><text x="835" y="51" class="muted small">Issued invoice and payment due date.</text>
+    <rect x="799" y="78" width="230" height="44" rx="5" class="field"/><text x="811" y="75" class="label">Invoice number</text><text x="813" y="105" class="value">EPDS-2026-001</text>
+    <rect x="1045" y="78" width="230" height="44" rx="5" class="field"/><text x="1057" y="75" class="label">Invoice date</text><text x="1059" y="105" class="value">2026.07.25</text>
+    <rect x="1291" y="78" width="237" height="44" rx="5" class="field"/><text x="1303" y="75" class="label">Payment deadline</text><text x="1305" y="105" class="value">2026.08.24</text>
+  </g>
+
+  <rect x="24" y="806" width="1546" height="58" rx="10" fill="#fff" stroke="#dfe3e1"/>
+  <text x="1240" y="841" class="accent" font-size="13" font-weight="700">Cancel</text>
+  <rect x="1340" y="818" width="205" height="34" rx="17" class="button"/>
+  <text x="1405" y="840" class="buttonText">Save work</text>
+  <text x="24" y="915" class="muted" font-size="11">Desktop preview · compact enterprise layout · responsive to two/one columns on smaller screens</text>
+</svg>

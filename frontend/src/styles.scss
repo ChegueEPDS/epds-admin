@@ -222,6 +222,26 @@ app-work-board .table-pagination .mat-mdc-form-field { width: 112px; }
 app-work-board .page-controls strong { min-width: 54px; color: var(--brand-ink); text-align: center; }
 app-work-board .grouped-editor,
 app-work-board .work-detail-sheet { display: grid; gap: 16px; }
+app-work-board .board-page.editor-mode { padding-top: 18px; }
+app-work-board .editor-mode .page-header { margin-bottom: 10px; }
+app-work-board .editor-mode .page-header h1 { font-size: 28px; line-height: 1.15; }
+app-work-board .editor-mode .page-header > div > p:last-child { margin-top: 3px; font-size: 13px; }
+app-work-board .editor-mode .eyebrow { margin-bottom: 3px; font-size: 10px; }
+app-work-board .grouped-editor:not(.nested) { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+app-work-board .grouped-editor:not(.nested) > .form-group { min-width: 0; padding: 14px 16px; border-radius: 10px; box-shadow: none; }
+app-work-board .grouped-editor:not(.nested) > .form-group:first-child { grid-column: 1 / -1; }
+app-work-board .grouped-editor:not(.nested) > .form-group:first-child .form-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+app-work-board .grouped-editor:not(.nested) > .form-group:not(:first-child) .form-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+app-work-board .grouped-editor:not(.nested) .group-heading { gap: 9px; margin-bottom: 11px; }
+app-work-board .grouped-editor:not(.nested) .group-heading > span { flex-basis: 25px; width: 25px; height: 25px; border-radius: 7px; font-size: 9px; }
+app-work-board .grouped-editor:not(.nested) .group-heading h2 { font-size: 16px; line-height: 1.2; }
+app-work-board .grouped-editor:not(.nested) .group-heading p { margin-top: 2px; font-size: 10px; }
+app-work-board .grouped-editor:not(.nested) .form-grid { gap: 7px 9px; }
+app-work-board .grouped-editor:not(.nested) .mat-mdc-form-field { --mat-form-field-container-height: 44px; --mat-form-field-container-vertical-padding: 10px; }
+app-work-board .grouped-editor:not(.nested) .mat-mdc-text-field-wrapper { min-height: 44px; }
+app-work-board .grouped-editor:not(.nested) textarea.mat-mdc-input-element { min-height: 44px; max-height: 72px; line-height: 1.35; }
+app-work-board .grouped-editor:not(.nested) .check-row { min-height: 44px; align-items: center; gap: 12px; font-size: 12px; }
+app-work-board .grouped-editor:not(.nested) > .sticky-actions { grid-column: 1 / -1; bottom: 8px; min-height: 46px; padding: 6px 10px; border-radius: 9px; box-shadow: 0 5px 18px rgba(0,0,0,.09); }
 app-work-board .work-detail-sheet { gap: 10px; }
 app-work-board .work-detail-sheet .detail-header { min-height: 0; padding: 12px 16px; border-radius: 10px; box-shadow: none; }
 app-work-board .work-detail-sheet .detail-header h2 { margin-top: 3px; font-size: 20px; line-height: 1.2; }
@@ -263,6 +283,32 @@ app-work-board .detail-subwork-table .numeric { text-align: right; white-space: 
 app-work-board .detail-subwork-table .row-actions { width: 74px; padding: 0 4px; text-align: right; white-space: nowrap; }
 app-work-board .detail-subwork-table .row-actions button { width: 30px; height: 30px; padding: 3px; }
 app-work-board .detail-subwork-table .row-actions mat-icon { width: 17px; height: 17px; font-size: 17px; }
+app-work-board .documents-card { display: grid; gap: 10px; padding: 13px 14px; border: 1px solid var(--brand-border); border-radius: 10px; background: var(--brand-panel); }
+app-work-board .documents-header { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+app-work-board .documents-header h3 { margin: 0; font-size: 16px; }
+app-work-board .documents-header p { margin: 2px 0 0; color: var(--brand-muted); font-size: 11px; }
+app-work-board .documents-header > span { color: var(--brand-muted); font-size: 11px; font-weight: 800; white-space: nowrap; }
+app-work-board .document-upload { display: grid; grid-template-columns: 190px minmax(220px, 1fr) auto; align-items: center; gap: 8px; padding: 8px; border-radius: 8px; background: color-mix(in srgb, var(--brand-panel) 86%, var(--brand-border)); }
+app-work-board .document-upload.has-custom-name { grid-template-columns: 190px minmax(190px, .8fr) minmax(220px, 1fr) auto; }
+app-work-board .document-upload .mat-mdc-form-field { --mat-form-field-container-height: 42px; --mat-form-field-container-vertical-padding: 9px; }
+app-work-board .document-upload .file-picker { min-width: 0; height: 42px; justify-content: flex-start; }
+app-work-board .document-upload .file-picker span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+app-work-board .documents-table-wrap { overflow-x: auto; border: 1px solid var(--brand-border); border-radius: 8px; }
+app-work-board .documents-table { width: 100%; min-width: 850px; border-collapse: collapse; font-size: 11px; }
+app-work-board .documents-table th { padding: 7px 9px; text-align: left; color: var(--brand-muted); background: color-mix(in srgb, var(--brand-panel) 88%, var(--brand-border)); border-bottom: 1px solid var(--brand-border); font-size: 8px; font-weight: 900; letter-spacing: .05em; text-transform: uppercase; white-space: nowrap; }
+app-work-board .documents-table td { height: 38px; padding: 5px 9px; border-bottom: 1px solid var(--brand-border); vertical-align: middle; }
+app-work-board .documents-table tbody tr:last-child td { border-bottom: 0; }
+app-work-board .documents-table tbody tr:hover { background: rgba(165,79,0,.04); }
+app-work-board .documents-table .numeric { text-align: right; white-space: nowrap; }
+app-work-board .document-name { display: flex; align-items: center; gap: 7px; min-width: 150px; }
+app-work-board .document-name mat-icon { width: 19px; height: 19px; color: #a54f00; font-size: 19px; }
+app-work-board .documents-table .file-name { max-width: 280px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+app-work-board .documents-table td span + small { display: block; margin-top: 2px; color: var(--brand-muted); font-size: 9px; }
+app-work-board .document-actions { width: 70px; padding: 0 3px !important; text-align: right; white-space: nowrap; }
+app-work-board .document-actions button { width: 30px; height: 30px; padding: 3px; }
+app-work-board .document-actions mat-icon { width: 17px; height: 17px; font-size: 17px; }
+app-work-board .documents-empty { display: flex; align-items: center; justify-content: center; gap: 8px; min-height: 68px; color: var(--brand-muted); border: 1px dashed var(--brand-border); border-radius: 8px; font-size: 11px; }
+app-work-board .documents-loading { display: grid; min-height: 68px; place-items: center; }
 app-work-board .form-group,
 app-work-board .detail-group { padding: 20px; border: 1px solid var(--brand-border); border-radius: 16px; background: var(--brand-panel); box-shadow: var(--brand-shadow-sm); }
 app-work-board .grouped-editor.nested { padding: 16px; border: 1px solid var(--brand-border); border-radius: 16px; background: color-mix(in srgb, var(--brand-panel) 94%, var(--brand-border)); }
@@ -291,6 +337,8 @@ app-work-board .work-detail-sheet .detail-header { position: sticky; top: 74px; 
   app-work-board .data-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   app-work-board .record-overview { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   app-work-board .record-overview > div:nth-child(3n) { border-right: 0; }
+  app-work-board .grouped-editor:not(.nested) > .form-group:first-child .form-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  app-work-board .document-upload { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
 @media (max-width: 600px) {
@@ -305,6 +353,11 @@ app-work-board .work-detail-sheet .detail-header { position: sticky; top: 74px; 
   app-work-board .detail-groups-grid { grid-template-columns: 1fr; }
   app-work-board .record-overview > div { border-right: 0; border-bottom: 1px solid var(--brand-border); }
   app-work-board .record-overview > div:last-child { border-bottom: 0; }
+  app-work-board .grouped-editor:not(.nested),
+  app-work-board .grouped-editor:not(.nested) > .form-group:first-child .form-grid,
+  app-work-board .grouped-editor:not(.nested) > .form-group:not(:first-child) .form-grid { grid-template-columns: 1fr; }
+  app-work-board .document-upload { grid-template-columns: 1fr; }
+  app-work-board .documents-header { align-items: flex-start; }
   app-work-board .work-detail-sheet .detail-header { position: static; }
   app-work-board .inline-subworks-head,
   app-work-board .inline-allocation > div:last-child { align-items: flex-start; flex-direction: column; }

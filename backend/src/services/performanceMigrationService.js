@@ -8,6 +8,8 @@ const models = [
   require('../models/licenseCustomer'),
   require('../models/workItem').WorkItem,
   require('../models/subWorkItem'),
+  require('../models/workSequence'),
+  require('../models/workDocument').WorkDocument,
   EffortTask
 ];
 const { rebuildAllSnapshots, rebuildDailyRollups } = require('./domainStatusReadModelService');

@@ -4,8 +4,16 @@ const SubWorkItem = require('../models/subWorkItem');
 const ClientCompany = require('../models/clientCompany');
 const User = require('../models/user');
 const WorkSequence = require('../models/workSequence');
+const { WorkDocument, WORK_DOCUMENT_CATEGORIES } = require('../models/workDocument');
+const fileStorage = require('../services/fileStorageService');
+const { pipeline } = require('stream/promises');
+const crypto = require('crypto');
 
 const TERMINAL_STATUSES = new Set(['completed_billable', 'invoiced', 'paid', 'closed', 'cancelled']);
+const DOCUMENT_CATEGORY_LABELS = {
+  offer: 'Ajánlat', contract_draft: 'Szerződéstervezet', contract: 'Szerződés', order: 'Megrendelés',
+  performance_certificate: 'Teljesítésigazolás', other: 'Egyéb'
+};
 
 function scopeQuery(scope) {
   if (!scope?.tenantId) throw httpError('Tenant context is required', 403);
@@ -22,6 +30,29 @@ function cleanLongText(value) {
 
 function normalizeTaxNumber(value) {
   return String(value || '').trim().toUpperCase().replace(/[^0-9A-Z]/g, '');
+}
+
+function cleanFileName(value) {
+  return cleanText(value).replace(/[\\/\u0000-\u001f\u007f]+/g, '_').slice(0, 180) || 'document';
+}
+
+function contentDispositionAttachment(fileName) {
+  const safe = cleanFileName(fileName).replace(/"/g, '');
+  const encoded = encodeURIComponent(fileName).replace(/['()]/g, escape).replace(/\*/g, '%2A');
+  return `attachment; filename="${safe}"; filename*=UTF-8''${encoded}`;
+}
+
+function presentDocument(document) {
+  return {
+    id: String(document._id), workItemId: String(document.workItemId), category: document.category,
+    categoryLabel: DOCUMENT_CATEGORY_LABELS[document.category] || document.category,
+    displayName: document.displayName, fileName: document.fileName, contentType: document.contentType,
+    size: Number(document.size || 0), uploadedByName: document.uploadedByName || '', uploadedAt: document.createdAt
+  };
+}
+
+function userDisplayName(user) {
+  return [user?.firstName, user?.lastName].filter(Boolean).join(' ').trim() || String(user?.email || '').trim() || 'Unknown user';
 }
 
 function presentClient(client) {
@@ -254,6 +285,11 @@ async function withErrors(res, fn) {
   try {
     await fn();
   } catch (error) {
+    if (res.headersSent) return res.destroy(error);
+    if (error?.statusCode === 416 && error?.size !== undefined) {
+      res.setHeader('Content-Range', `bytes */${error.size}`);
+      return res.status(416).end();
+    }
     if (error?.code === 11000) return res.status(409).json({ error: 'Work number already exists; please try again' });
     return res.status(error.statusCode || 500).json({ error: error.statusCode ? error.message : 'Internal server error' });
   }
@@ -446,4 +482,60 @@ exports.createOrLinkClient = (req, res) => withErrors(res, async () => {
 exports.listTenantUsers = (req, res) => withErrors(res, async () => {
   const users = await User.find({ tenantId: req.scope?.tenantId || null }).sort({ lastName: 1, firstName: 1, email: 1 }).limit(500);
   res.json({ users: users.map(presentUser) });
+});
+
+exports.listDocuments = (req, res) => withErrors(res, async () => {
+  const work = await scopedWork(req.params.id, req.scope);
+  const documents = await WorkDocument.find({ ...scopeQuery(req.scope), workItemId: work._id }).sort({ createdAt: -1 });
+  res.json({ documents: documents.map(presentDocument) });
+});
+
+exports.uploadDocument = (req, res) => withErrors(res, async () => {
+  const work = await scopedWork(req.params.id, req.scope);
+  if (!req.file?.buffer?.length) throw httpError('No file provided');
+  const category = String(req.body?.category || '');
+  if (!WORK_DOCUMENT_CATEGORIES.includes(category)) throw httpError('Valid document category is required');
+  const customName = cleanText(req.body?.customName);
+  if (category === 'other' && !customName) throw httpError('Custom document name is required for Other');
+
+  const fileName = cleanFileName(req.file.originalname);
+  const displayName = category === 'other' ? customName : DOCUMENT_CATEGORY_LABELS[category];
+  const storageKey = `work-documents/${req.scope.tenantId}/${work._id}/${crypto.randomUUID()}-${fileName}`;
+  await fileStorage.uploadBuffer(storageKey, req.file.buffer);
+  try {
+    const document = await WorkDocument.create({
+      ...scopeQuery(req.scope), workItemId: work._id, category, displayName, fileName, storageKey,
+      contentType: req.file.mimetype || 'application/octet-stream', size: req.file.size || req.file.buffer.length,
+      uploadedBy: req.userId, uploadedByName: userDisplayName(req.user)
+    });
+    res.status(201).json({ document: presentDocument(document) });
+  } catch (error) {
+    await fileStorage.deleteFile(storageKey).catch(() => {});
+    throw error;
+  }
+});
+
+exports.downloadDocument = (req, res) => withErrors(res, async () => {
+  if (!mongoose.isValidObjectId(req.params.documentId)) throw httpError('Document not found', 404);
+  const document = await WorkDocument.findOne({ _id: req.params.documentId, ...scopeQuery(req.scope) });
+  if (!document) throw httpError('Document not found', 404);
+  await scopedWork(document.workItemId, req.scope);
+  const download = await fileStorage.openDownloadStream(document.storageKey, req.headers.range);
+  res.status(download.partial ? 206 : 200);
+  res.setHeader('Content-Type', document.contentType || 'application/octet-stream');
+  res.setHeader('Accept-Ranges', 'bytes');
+  res.setHeader('Content-Length', download.end - download.start + 1);
+  if (download.partial) res.setHeader('Content-Range', `bytes ${download.start}-${download.end}/${download.size}`);
+  res.setHeader('Content-Disposition', contentDispositionAttachment(document.fileName));
+  await pipeline(download.stream, res);
+});
+
+exports.deleteDocument = (req, res) => withErrors(res, async () => {
+  if (!mongoose.isValidObjectId(req.params.documentId)) throw httpError('Document not found', 404);
+  const document = await WorkDocument.findOne({ _id: req.params.documentId, ...scopeQuery(req.scope) });
+  if (!document) throw httpError('Document not found', 404);
+  await scopedWork(document.workItemId, req.scope);
+  await WorkDocument.deleteOne({ _id: document._id, ...scopeQuery(req.scope) });
+  await fileStorage.deleteFile(document.storageKey).catch((error) => console.warn('[work-document] cleanup failed:', error?.message || error));
+  res.status(204).end();
 });

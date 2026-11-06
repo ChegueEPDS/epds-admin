@@ -36,6 +36,10 @@ export type WorkPage = {
   pagination: { page: number; limit: number; total: number; pages: number };
   summary: { activeCount: number; overdueCount: number; totalActiveValue: number };
 };
+export type WorkDocument = {
+  id: string; workItemId: string; category: string; categoryLabel: string; displayName: string; fileName: string;
+  contentType: string; size: number; uploadedByName: string; uploadedAt: string;
+};
 
 export type WorkPayload = Partial<Omit<WorkItem, 'id' | 'workNumber' | 'sequenceNumber' | 'subWorks' | 'createdAt' | 'updatedAt'>> & { name: string };
 export type SubWorkPayload = Partial<Omit<SubWorkItem, 'id' | 'workItemId' | 'sequenceNumber' | 'subWorkNumber' | 'percentage' | 'createdAt' | 'updatedAt'>> & { name: string };
@@ -85,5 +89,21 @@ export class WorkBoardService {
   }
   archiveSubWork(id: string): Observable<void> {
     return this.http.delete<void>(`${this.baseUrl}/sub-works/${id}`, { withCredentials: true });
+  }
+  listDocuments(workId: string): Observable<WorkDocument[]> {
+    return this.http.get<{ documents: WorkDocument[] }>(`${this.baseUrl}/works/${workId}/documents`, { withCredentials: true }).pipe(map((res) => res.documents || []));
+  }
+  uploadDocument(workId: string, file: File, category: string, customName = ''): Observable<WorkDocument> {
+    const body = new FormData();
+    body.append('file', file);
+    body.append('category', category);
+    if (customName) body.append('customName', customName);
+    return this.http.post<{ document: WorkDocument }>(`${this.baseUrl}/works/${workId}/documents`, body, { withCredentials: true }).pipe(map((res) => res.document));
+  }
+  downloadDocument(documentId: string) {
+    return this.http.get(`${this.baseUrl}/documents/${documentId}/file`, { responseType: 'blob', observe: 'response', withCredentials: true });
+  }
+  deleteDocument(documentId: string): Observable<void> {
+    return this.http.delete<void>(`${this.baseUrl}/documents/${documentId}`, { withCredentials: true });
   }
 }
