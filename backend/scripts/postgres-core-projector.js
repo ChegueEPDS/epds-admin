@@ -48,6 +48,49 @@ function stamps(doc) {
   };
 }
 
+async function resolveTenantId(client, doc, references = {}) {
+  if (doc.tenantId) return id(doc.tenantId);
+
+  const userIds = [
+    references.responsibleUserId,
+    references.userId,
+    references.createdBy,
+    references.updatedBy
+  ].filter(Boolean).map(id);
+  if (userIds.length) {
+    const result = await client.query(
+      `SELECT tenant_id FROM users
+        WHERE id = ANY($1::text[]) AND tenant_id IS NOT NULL
+        ORDER BY CASE id WHEN $2 THEN 0 ELSE 1 END LIMIT 1`,
+      [userIds, userIds[0]]
+    );
+    if (result.rows[0]?.tenant_id) return result.rows[0].tenant_id;
+  }
+
+  if (references.clientId) {
+    const result = await client.query(
+      `SELECT tenant_id FROM client_company_tenants
+        WHERE client_company_id = $1 ORDER BY tenant_id LIMIT 1`,
+      [id(references.clientId)]
+    );
+    if (result.rows[0]?.tenant_id) return result.rows[0].tenant_id;
+  }
+
+  if (references.workItemId) {
+    const result = await client.query('SELECT tenant_id FROM work_items WHERE id = $1', [id(references.workItemId)]);
+    if (result.rows[0]?.tenant_id) return result.rows[0].tenant_id;
+  }
+
+  if (references.projectId) {
+    const result = await client.query('SELECT tenant_id FROM effort_projects WHERE id = $1', [id(references.projectId)]);
+    if (result.rows[0]?.tenant_id) return result.rows[0].tenant_id;
+  }
+
+  const onlyTenant = await client.query('SELECT id FROM tenants ORDER BY id LIMIT 2');
+  if (onlyTenant.rows.length === 1) return onlyTenant.rows[0].id;
+  throw new Error(`Cannot infer tenant for legacy document ${id(doc._id) || '<unknown>'}`);
+}
+
 async function projectTenants(client) {
   const collection = await firstExistingCollection(client, ['tenants']);
   const docs = await sourceDocuments(client, collection);
@@ -115,7 +158,7 @@ async function projectClients(client) {
 async function projectWorks(client) {
   const docs = await sourceDocuments(client, await firstExistingCollection(client, ['workitems', 'work_items']));
   for (const doc of docs) await upsert(client, 'work_items', {
-    id: id(doc._id), tenant_id: id(doc.tenantId), year: Number(doc.year),
+    id: id(doc._id), tenant_id: await resolveTenantId(client, doc, doc), year: Number(doc.year),
     sequence_number: Number(doc.sequenceNumber), work_number: doc.workNumber, name: doc.name,
     client_id: id(doc.clientId), customer: doc.customer || '', responsible_user_id: id(doc.responsibleUserId),
     responsible: doc.responsible || '', contributors: json(doc.contributors, []), status: doc.status || 'inquiry',
@@ -133,7 +176,7 @@ async function projectWorks(client) {
 async function projectSubWorks(client) {
   const docs = await sourceDocuments(client, await firstExistingCollection(client, ['subworkitems', 'sub_work_items']));
   for (const doc of docs) await upsert(client, 'sub_work_items', {
-    id: id(doc._id), tenant_id: id(doc.tenantId), work_item_id: id(doc.workItemId),
+    id: id(doc._id), tenant_id: await resolveTenantId(client, doc, doc), work_item_id: id(doc.workItemId),
     sequence_number: Number(doc.sequenceNumber), name: doc.name, description: doc.description || '',
     responsible_user_id: id(doc.responsibleUserId), responsible: doc.responsible || '',
     contributors: json(doc.contributors, []), status: doc.status || 'inquiry', deadline: date(doc.deadline),
@@ -150,7 +193,7 @@ async function projectSubWorks(client) {
 async function projectDocuments(client) {
   const docs = await sourceDocuments(client, await firstExistingCollection(client, ['workdocuments', 'work_documents']));
   for (const doc of docs) await upsert(client, 'work_documents', {
-    id: id(doc._id), tenant_id: id(doc.tenantId), work_item_id: id(doc.workItemId), category: doc.category,
+    id: id(doc._id), tenant_id: await resolveTenantId(client, doc, doc), work_item_id: id(doc.workItemId), category: doc.category,
     display_name: doc.displayName, file_name: doc.fileName, storage_key: doc.storageKey,
     content_type: doc.contentType || 'application/octet-stream', size: Number(doc.size || 0),
     uploaded_by: id(doc.uploadedBy), uploaded_by_name: doc.uploadedByName || '', ...stamps(doc)
@@ -161,7 +204,7 @@ async function projectDocuments(client) {
 async function projectSequences(client) {
   const docs = await sourceDocuments(client, await firstExistingCollection(client, ['worksequences', 'work_sequences']));
   for (const doc of docs) await upsert(client, 'work_sequences', {
-    id: id(doc._id), tenant_id: id(doc.tenantId), key: doc.key, value: Number(doc.value || 0), ...stamps(doc)
+    id: id(doc._id), tenant_id: await resolveTenantId(client, doc, doc), key: doc.key, value: Number(doc.value || 0), ...stamps(doc)
   });
   return docs;
 }
@@ -169,7 +212,7 @@ async function projectSequences(client) {
 async function projectEffort(client) {
   const projects = await sourceDocuments(client, await firstExistingCollection(client, ['effortprojects', 'effort_projects']));
   for (const doc of projects) await upsert(client, 'effort_projects', {
-    id: id(doc._id), tenant_id: id(doc.tenantId), name: doc.name, normalized_name: doc.normalizedName,
+    id: id(doc._id), tenant_id: await resolveTenantId(client, doc, doc), name: doc.name, normalized_name: doc.normalizedName,
     customer: doc.customer || '', comment: doc.comment || '', work_item_id: id(doc.workItemId),
     work_item_snapshot: json(doc.workItemSnapshot, {}), status: doc.status || 'open', closed_at: date(doc.closedAt),
     closed_net_ms: Number(doc.closedNetMs || 0), closed_gross_ms: Number(doc.closedGrossMs || 0),
@@ -178,7 +221,7 @@ async function projectEffort(client) {
   const tasks = await sourceDocuments(client, await firstExistingCollection(client, ['efforttasks', 'effort_tasks']));
   for (const doc of tasks) {
     await upsert(client, 'effort_tasks', {
-      id: id(doc._id), project_id: id(doc.projectId), tenant_id: id(doc.tenantId), name: doc.name,
+      id: id(doc._id), project_id: id(doc.projectId), tenant_id: await resolveTenantId(client, doc, doc), name: doc.name,
       note: doc.note || '', sub_work_item_id: id(doc.subWorkItemId), sub_work_item_snapshot: json(doc.subWorkItemSnapshot, {}),
       status: doc.status || 'open', archived_net_ms: Number(doc.archivedNetMs || 0),
       archived_session_count: Number(doc.archivedSessionCount || 0), first_started_at: date(doc.firstStartedAt),
