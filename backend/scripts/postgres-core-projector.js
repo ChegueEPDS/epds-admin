@@ -86,6 +86,13 @@ async function resolveTenantId(client, doc, references = {}) {
     if (result.rows[0]?.tenant_id) return result.rows[0].tenant_id;
   }
 
+  // Very old records predate tenant selection. If every tenant-scoped user in
+  // the source belongs to the same tenant, that is the only defensible legacy
+  // owner and keeps the record visible without inventing a new tenant.
+  const sourceUsers = await sourceDocuments(client, await firstExistingCollection(client, ['users']));
+  const sourceUserTenants = [...new Set(sourceUsers.map((user) => id(user.tenantId)).filter(Boolean))];
+  if (sourceUserTenants.length === 1) return sourceUserTenants[0];
+
   const onlyTenant = await client.query('SELECT id FROM tenants ORDER BY id LIMIT 2');
   if (onlyTenant.rows.length === 1) return onlyTenant.rows[0].id;
   throw new Error(`Cannot infer tenant for legacy document ${id(doc._id) || '<unknown>'}`);
