@@ -164,9 +164,38 @@ async function projectClients(client) {
 
 async function projectWorks(client) {
   const docs = await sourceDocuments(client, await firstExistingCollection(client, ['workitems', 'work_items']));
-  for (const doc of docs) await upsert(client, 'work_items', {
-    id: id(doc._id), tenant_id: await resolveTenantId(client, doc, doc), year: Number(doc.year),
-    sequence_number: Number(doc.sequenceNumber), work_number: doc.workNumber, name: doc.name,
+  // Preserve tenant-aware identifiers first. Pre-tenant records can legitimately
+  // reuse a sequence, so allocate them the next free number without renumbering
+  // a newer record that already has an explicit tenant.
+  const resolved = [];
+  for (const doc of docs) resolved.push({
+    doc,
+    tenantId: await resolveTenantId(client, doc, doc),
+    explicitTenant: Boolean(doc.tenantId)
+  });
+  resolved.sort((a, b) => Number(b.explicitTenant) - Number(a.explicitTenant)
+    || id(a.doc._id).localeCompare(id(b.doc._id)));
+  const usedSequences = new Map();
+  for (const item of resolved) {
+    const { doc, tenantId } = item;
+    const year = Number(doc.year);
+    const sequenceKey = `${tenantId}:${year}`;
+    const used = usedSequences.get(sequenceKey) || new Set();
+    let sequenceNumber = Number(doc.sequenceNumber);
+    if (used.has(sequenceNumber)) {
+      sequenceNumber = Math.max(sequenceNumber, ...used) + 1;
+      while (used.has(sequenceNumber)) sequenceNumber += 1;
+    }
+    used.add(sequenceNumber);
+    usedSequences.set(sequenceKey, used);
+    const workNumber = sequenceNumber === Number(doc.sequenceNumber)
+      ? doc.workNumber
+      : (String(doc.workNumber || '').match(/^(.*?)(\d+)$/)
+          ? String(doc.workNumber).replace(/\d+$/, String(sequenceNumber).padStart(4, '0'))
+          : `${String(year).slice(-2)}-${String(sequenceNumber).padStart(4, '0')}`);
+    await upsert(client, 'work_items', {
+    id: id(doc._id), tenant_id: tenantId, year,
+    sequence_number: sequenceNumber, work_number: workNumber, name: doc.name,
     client_id: id(doc.clientId), customer: doc.customer || '', responsible_user_id: id(doc.responsibleUserId),
     responsible: doc.responsible || '', contributors: json(doc.contributors, []), status: doc.status || 'inquiry',
     deadline: date(doc.deadline), description: doc.description || '', currency: doc.currency || 'HUF',
@@ -176,7 +205,8 @@ async function projectWorks(client) {
     invoice_payment_deadline: date(doc.invoicePaymentDeadline), invoice_number: doc.invoiceNumber || '',
     contract_signed: Boolean(doc.contractSigned), performance_certificate: Boolean(doc.performanceCertificate),
     archived_at: date(doc.archivedAt), created_by: id(doc.createdBy), updated_by: id(doc.updatedBy), ...stamps(doc)
-  });
+    });
+  }
   return docs;
 }
 
