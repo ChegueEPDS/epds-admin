@@ -51,6 +51,10 @@ function requestLimit(value, fallback = 100, max = 200) {
   return Number.isFinite(parsed) ? Math.min(max, Math.max(1, Math.floor(parsed))) : fallback;
 }
 
+function escapeRegex(value) {
+  return String(value || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
 function optionalDate(value) {
   if (!value) return undefined;
   const date = new Date(value);
@@ -257,9 +261,28 @@ async function withErrors(res, fn) {
 
 exports.listWorks = (req, res) => withErrors(res, async () => {
   const query = { ...scopeQuery(req.scope), archivedAt: { $exists: false } };
-  if (req.query?.active === 'true') query.status = { $nin: [...TERMINAL_STATUSES] };
-  const limit = requestLimit(req.query.limit);
-  const works = await WorkItem.find(query).sort({ status: 1, deadline: 1, updatedAt: -1 }).limit(limit);
+  const status = String(req.query?.status || (req.query?.active === 'true' ? 'active' : 'all'));
+  if (status === 'active') query.status = { $nin: [...TERMINAL_STATUSES] };
+  else if (status !== 'all') query.status = validateStatus(status);
+
+  const search = cleanText(req.query?.search);
+  if (search) {
+    const pattern = new RegExp(escapeRegex(search), 'i');
+    query.$or = [{ workNumber: pattern }, { name: pattern }, { customer: pattern }, { responsible: pattern }];
+  }
+
+  const limit = requestLimit(req.query.limit, 25, 100);
+  const page = Math.max(1, Math.floor(numberValue(req.query.page, 1)));
+  const [works, total, activeCount, overdueCount, activeValue] = await Promise.all([
+    WorkItem.find(query).sort({ status: 1, deadline: 1, updatedAt: -1 }).skip((page - 1) * limit).limit(limit),
+    WorkItem.countDocuments(query),
+    WorkItem.countDocuments({ ...scopeQuery(req.scope), archivedAt: { $exists: false }, status: { $nin: [...TERMINAL_STATUSES] } }),
+    WorkItem.countDocuments({ ...scopeQuery(req.scope), archivedAt: { $exists: false }, status: { $nin: [...TERMINAL_STATUSES] }, deadline: { $lt: new Date(new Date().setHours(0, 0, 0, 0)) } }),
+    WorkItem.aggregate([
+      { $match: { ...scopeQuery(req.scope), archivedAt: { $exists: false }, status: { $nin: [...TERMINAL_STATUSES] } } },
+      { $group: { _id: null, value: { $sum: '$totalAmount' } } }
+    ])
+  ]);
   const subWorks = await SubWorkItem.find({ ...scopeQuery(req.scope), workItemId: { $in: works.map((work) => work._id) }, archivedAt: { $exists: false } }).sort({ sequenceNumber: 1 });
   const byWork = new Map();
   subWorks.forEach((item) => {
@@ -267,7 +290,11 @@ exports.listWorks = (req, res) => withErrors(res, async () => {
     if (!byWork.has(key)) byWork.set(key, []);
     byWork.get(key).push(item);
   });
-  res.json({ works: works.map((work) => presentWork(work, byWork.get(String(work._id)) || [])) });
+  res.json({
+    works: works.map((work) => presentWork(work, byWork.get(String(work._id)) || [])),
+    pagination: { page, limit, total, pages: Math.max(1, Math.ceil(total / limit)) },
+    summary: { activeCount, overdueCount, totalActiveValue: Number(activeValue[0]?.value || 0) }
+  });
 });
 
 exports.activeOptions = (req, res) => withErrors(res, async () => {

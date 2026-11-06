@@ -45,6 +45,13 @@ export class WorkBoardComponent implements OnInit {
   saving = false;
   search = '';
   statusFilter: WorkStatus | 'active' | 'all' = 'active';
+  page = 1;
+  pageSize = 25;
+  totalWorks = 0;
+  totalPages = 1;
+  activeCount = 0;
+  overdueCount = 0;
+  totalActiveValue = 0;
   showWorkForm = false;
   showSubWorkForm = false;
   showClientPanel = false;
@@ -65,33 +72,55 @@ export class WorkBoardComponent implements OnInit {
     inquiry: 0, offer: 1, in_progress: 2, completed_billable: 3,
     invoiced: 4, paid: 5, closed: 6, cancelled: 6
   };
+  private searchTimer: ReturnType<typeof setTimeout> | null = null;
+  private loadRequestId = 0;
+  private referencesLoaded = false;
 
   constructor(private board: WorkBoardService, private snackBar: MatSnackBar, public auth: AuthService) {}
   ngOnInit(): void { void this.load(); }
 
-  get filteredWorks(): WorkItem[] {
-    const needle = this.search.trim().toLowerCase();
-    return this.works.filter((work) => {
-      const matchesText = !needle || `${work.workNumber} ${work.name} ${work.customer} ${work.responsible}`.toLowerCase().includes(needle);
-      const matchesStatus = this.statusFilter === 'all' || (this.statusFilter === 'active' ? !this.terminalStatuses.has(work.status) : work.status === this.statusFilter);
-      return matchesText && matchesStatus;
-    });
-  }
-  get activeCount(): number { return this.works.filter((work) => !this.terminalStatuses.has(work.status)).length; }
-  get overdueCount(): number { return this.works.filter((work) => !this.terminalStatuses.has(work.status) && this.isOverdue(work.deadline)).length; }
-  get totalActiveValue(): number { return this.works.filter((work) => !this.terminalStatuses.has(work.status)).reduce((sum, work) => sum + work.totalAmount, 0); }
+  get filteredWorks(): WorkItem[] { return this.works; }
+  get pageStart(): number { return this.totalWorks ? (this.page - 1) * this.pageSize + 1 : 0; }
+  get pageEnd(): number { return Math.min(this.page * this.pageSize, this.totalWorks); }
 
   async load(selectId?: string): Promise<void> {
+    const requestId = ++this.loadRequestId;
     this.loading = true;
     try {
-      [this.works, this.clients, this.tenantUsers] = await Promise.all([
-        firstValueFrom(this.board.listWorks()), firstValueFrom(this.board.listClients()), firstValueFrom(this.board.listTenantUsers())
+      const [workPage, clients, users] = await Promise.all([
+        firstValueFrom(this.board.listWorks({ page: this.page, limit: this.pageSize, search: this.search.trim(), status: this.statusFilter })),
+        this.referencesLoaded ? Promise.resolve(this.clients) : firstValueFrom(this.board.listClients()),
+        this.referencesLoaded ? Promise.resolve(this.tenantUsers) : firstValueFrom(this.board.listTenantUsers())
       ]);
+      if (requestId !== this.loadRequestId) return;
+      this.works = workPage.works;
+      this.clients = clients;
+      this.tenantUsers = users;
+      this.referencesLoaded = true;
+      this.page = workPage.pagination.page;
+      this.totalWorks = workPage.pagination.total;
+      this.totalPages = workPage.pagination.pages;
+      this.activeCount = workPage.summary.activeCount;
+      this.overdueCount = workPage.summary.overdueCount;
+      this.totalActiveValue = workPage.summary.totalActiveValue;
       const id = selectId || this.selectedWork?.id || this.works[0]?.id;
       this.selectedWork = this.works.find((work) => work.id === id) || null;
-    } catch (error: any) { this.error(error, 'Works could not be loaded.'); }
-    finally { this.loading = false; }
+    } catch (error: any) { if (requestId === this.loadRequestId) this.error(error, 'Works could not be loaded.'); }
+    finally { if (requestId === this.loadRequestId) this.loading = false; }
   }
+  filtersChanged(debounce = false): void {
+    this.page = 1;
+    if (this.searchTimer) clearTimeout(this.searchTimer);
+    if (debounce) this.searchTimer = setTimeout(() => void this.load(), 300);
+    else void this.load();
+  }
+  changePage(nextPage: number): void {
+    if (nextPage < 1 || nextPage > this.totalPages || nextPage === this.page) return;
+    this.page = nextPage;
+    this.expandedWorkIds = new Set<string>();
+    void this.load();
+  }
+  pageSizeChanged(): void { this.page = 1; this.expandedWorkIds = new Set<string>(); void this.load(); }
   selectWork(work: WorkItem): void { this.selectedWork = work; this.cancelForms(); this.detailView = true; }
   toggleWorkExpansion(work: WorkItem, event?: Event): void {
     event?.stopPropagation();
@@ -125,7 +154,7 @@ export class WorkBoardComponent implements OnInit {
       const saved = this.editingWork && this.selectedWork
         ? await firstValueFrom(this.board.updateWork(this.selectedWork.id, payload))
         : await firstValueFrom(this.board.createWork(payload));
-      this.showWorkForm = false; await this.load(saved.id); this.detailView = true; this.notice('Work saved.');
+      this.showWorkForm = false; await this.load(saved.id); this.selectedWork = saved; this.detailView = true; this.notice('Work saved.');
     } catch (error: any) { this.error(error, 'Work could not be saved.'); }
     finally { this.saving = false; }
   }

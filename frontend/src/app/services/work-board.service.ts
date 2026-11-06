@@ -31,6 +31,11 @@ export type WorkOption = {
 export type WorkBoardClient = { id: string; taxNumber: string; name: string; country: string; postalCode: string; city: string; address: string; email: string; phone: string };
 export type TenantUserOption = { id: string; fullName: string; email: string };
 export type ClientPayload = Omit<WorkBoardClient, 'id'>;
+export type WorkPage = {
+  works: WorkItem[];
+  pagination: { page: number; limit: number; total: number; pages: number };
+  summary: { activeCount: number; overdueCount: number; totalActiveValue: number };
+};
 
 export type WorkPayload = Partial<Omit<WorkItem, 'id' | 'workNumber' | 'sequenceNumber' | 'subWorks' | 'createdAt' | 'updatedAt'>> & { name: string };
 export type SubWorkPayload = Partial<Omit<SubWorkItem, 'id' | 'workItemId' | 'sequenceNumber' | 'subWorkNumber' | 'percentage' | 'createdAt' | 'updatedAt'>> & { name: string };
@@ -40,8 +45,13 @@ export class WorkBoardService {
   private readonly baseUrl = `${environment.apiBaseUrl}/work-board`;
   constructor(private http: HttpClient) {}
 
-  listWorks(): Observable<WorkItem[]> {
-    return this.http.get<{ works: WorkItem[] }>(`${this.baseUrl}/works`, { withCredentials: true }).pipe(map((res) => res.works || []));
+  listWorks(options: { page?: number; limit?: number; search?: string; status?: string } = {}): Observable<WorkPage> {
+    const params: Record<string, string> = {};
+    if (options.page) params['page'] = String(options.page);
+    if (options.limit) params['limit'] = String(options.limit);
+    if (options.search) params['search'] = options.search;
+    if (options.status) params['status'] = options.status;
+    return this.http.get<WorkPage>(`${this.baseUrl}/works`, { params, withCredentials: true });
   }
   listActiveOptions(): Observable<WorkOption[]> {
     return this.http.get<{ works: WorkOption[] }>(`${this.baseUrl}/options`, { withCredentials: true }).pipe(map((res) => res.works || []));
