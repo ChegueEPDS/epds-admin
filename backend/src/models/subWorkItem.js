@@ -3,7 +3,7 @@ const { WORK_STATUSES } = require('./workItem');
 
 const SubWorkItemSchema = new mongoose.Schema(
   {
-    tenantId: { type: mongoose.Schema.Types.ObjectId, ref: 'Tenant', index: true },
+    tenantId: { type: mongoose.Schema.Types.ObjectId, ref: 'Tenant', required: true, index: true },
     workItemId: { type: mongoose.Schema.Types.ObjectId, ref: 'WorkItem', required: true, index: true },
     sequenceNumber: { type: Number, required: true, min: 1 },
     name: { type: String, required: true, trim: true },

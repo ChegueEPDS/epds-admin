@@ -157,6 +157,7 @@ test('work board totals expose sub-work allocation, remaining value and percenta
 test('work board tenant scopes stay isolated and tax numbers normalize to one registry key', () => {
   assert.deepEqual(workBoardTest.scopeQuery({ tenantId: 'tenant-a' }), { tenantId: 'tenant-a' });
   assert.notDeepEqual(workBoardTest.scopeQuery({ tenantId: 'tenant-a' }), workBoardTest.scopeQuery({ tenantId: 'tenant-b' }));
+  assert.throws(() => workBoardTest.scopeQuery({}), /Tenant context is required/);
   assert.equal(workBoardTest.normalizeTaxNumber('12345678-2-42'), '12345678242');
   assert.equal(workBoardTest.normalizeTaxNumber(' hu 123-abc '), 'HU123ABC');
 });

@@ -62,6 +62,13 @@ function requireTenantFeature(featureKey, permission = 'enabled') {
   };
 }
 
+function requireTenantContext(req, res, next) {
+  if (!req.scope?.tenantId) {
+    return res.status(403).json({ error: 'Tenant context is required' });
+  }
+  return next();
+}
+
 function requireSuperAdmin(req, res, next) {
   if (req.role !== 'SuperAdmin') {
     return res.status(403).json({ error: 'SuperAdmin access required' });
@@ -69,4 +76,4 @@ function requireSuperAdmin(req, res, next) {
   return next();
 }
 
-module.exports = { requireAuth, requireEpdsEmail, requireAdminFeatureAccess, requireSuperAdmin, requireTenantFeature };
+module.exports = { requireAuth, requireEpdsEmail, requireAdminFeatureAccess, requireSuperAdmin, requireTenantFeature, requireTenantContext };

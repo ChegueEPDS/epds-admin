@@ -7,7 +7,8 @@ const { mapWithConcurrency } = require('../services/scheduledJobLeaseService');
 const TERMINAL_WORK_STATUSES = ['completed_billable', 'invoiced', 'paid', 'closed', 'cancelled'];
 
 function scopeQuery(scope) {
-  return scope?.tenantId ? { tenantId: scope.tenantId } : { tenantId: null };
+  if (!scope?.tenantId) throw httpError('Tenant context is required', 403);
+  return { tenantId: scope.tenantId };
 }
 
 function ownerScopeQuery(scope, userId) {

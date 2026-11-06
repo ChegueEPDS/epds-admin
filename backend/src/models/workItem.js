@@ -13,7 +13,7 @@ const WORK_STATUSES = [
 
 const WorkItemSchema = new mongoose.Schema(
   {
-    tenantId: { type: mongoose.Schema.Types.ObjectId, ref: 'Tenant', index: true },
+    tenantId: { type: mongoose.Schema.Types.ObjectId, ref: 'Tenant', required: true, index: true },
     year: { type: Number, required: true, min: 2000, max: 9999 },
     sequenceNumber: { type: Number, required: true, min: 1 },
     workNumber: { type: String, required: true, trim: true },

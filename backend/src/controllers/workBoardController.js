@@ -3,11 +3,13 @@ const { WorkItem, WORK_STATUSES } = require('../models/workItem');
 const SubWorkItem = require('../models/subWorkItem');
 const ClientCompany = require('../models/clientCompany');
 const User = require('../models/user');
+const WorkSequence = require('../models/workSequence');
 
 const TERMINAL_STATUSES = new Set(['completed_billable', 'invoiced', 'paid', 'closed', 'cancelled']);
 
 function scopeQuery(scope) {
-  return scope?.tenantId ? { tenantId: scope.tenantId } : { tenantId: null };
+  if (!scope?.tenantId) throw httpError('Tenant context is required', 403);
+  return { tenantId: scope.tenantId };
 }
 
 function cleanText(value) {
@@ -202,6 +204,19 @@ async function scopedWork(id, scope) {
   return work;
 }
 
+async function allocateSequence(tenantId, key, currentMaximum) {
+  const counter = await WorkSequence.findOneAndUpdate(
+    { tenantId, key },
+    [{
+      $set: {
+        value: { $add: [{ $max: [{ $ifNull: ['$value', 0] }, Number(currentMaximum || 0)] }, 1] }
+      }
+    }],
+    { upsert: true, new: true }
+  );
+  return Number(counter.value);
+}
+
 async function resolveClient(clientId, scope) {
   if (!clientId) return null;
   if (!mongoose.isValidObjectId(clientId)) throw httpError('Client not found', 404);
@@ -284,7 +299,7 @@ exports.createWork = (req, res) => withErrors(res, async () => {
   const responsibleUser = await resolveResponsible(req.body?.responsibleUserId, req.scope);
   const year = Math.max(2000, Math.min(9999, numberValue(req.body?.year, new Date().getFullYear())));
   const latest = await WorkItem.findOne({ ...scopeQuery(req.scope), year }).sort({ sequenceNumber: -1 }).select('sequenceNumber').lean();
-  const sequenceNumber = Number(latest?.sequenceNumber || 0) + 1;
+  const sequenceNumber = await allocateSequence(req.scope.tenantId, `work:${year}`, latest?.sequenceNumber);
   const work = await WorkItem.create({
     ...payload, ...scopeQuery(req.scope), year, sequenceNumber,
     workNumber: `${String(year).slice(-2)}-${String(sequenceNumber).padStart(4, '0')}`,
@@ -325,9 +340,10 @@ exports.archiveWork = (req, res) => withErrors(res, async () => {
 exports.createSubWork = (req, res) => withErrors(res, async () => {
   const work = await scopedWork(req.params.id, req.scope);
   const latest = await SubWorkItem.findOne({ ...scopeQuery(req.scope), workItemId: work._id }).sort({ sequenceNumber: -1 }).select('sequenceNumber').lean();
+  const sequenceNumber = await allocateSequence(req.scope.tenantId, `sub-work:${work._id}`, latest?.sequenceNumber);
   const subWork = await SubWorkItem.create({
     ...subWorkPayload(req.body, work), ...scopeQuery(req.scope), workItemId: work._id,
-    sequenceNumber: Number(latest?.sequenceNumber || 0) + 1,
+    sequenceNumber,
     createdBy: req.userId, updatedBy: req.userId
   });
   applySubWorkResponsible(subWork, await resolveResponsible(req.body?.responsibleUserId, req.scope));
