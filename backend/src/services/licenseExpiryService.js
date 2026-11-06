@@ -1,5 +1,7 @@
 const LicenseCustomer = require('../models/licenseCustomer');
 const { withJobLease } = require('./scheduledJobLeaseService');
+const { databaseEngine } = require('../postgres');
+const licenseRepository = require('../repositories/postgres/licenseRepository');
 
 let timer = null;
 
@@ -9,10 +11,12 @@ function todayUtcStart() {
 }
 
 async function expireLicenses() {
-  const result = await withJobLease('license-expiry', 55 * 60 * 1000, () => LicenseCustomer.updateMany(
-    { status: 'active', expiresAt: { $lt: todayUtcStart() } },
-    { $set: { status: 'expired' }, $inc: { statusVersion: 1 } }
-  ));
+  const result = await withJobLease('license-expiry', 55 * 60 * 1000, () => databaseEngine() === 'postgresql'
+    ? licenseRepository.expireActive(todayUtcStart())
+    : LicenseCustomer.updateMany(
+      { status: 'active', expiresAt: { $lt: todayUtcStart() } },
+      { $set: { status: 'expired' }, $inc: { statusVersion: 1 } }
+    ));
   return result.value;
 }
 

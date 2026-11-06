@@ -1,5 +1,7 @@
 const IntegrationClient = require('../models/integrationClient');
 const WebhookDelivery = require('../models/webhookDelivery');
+const { databaseEngine } = require('../postgres');
+const integrationRepository = require('../repositories/postgres/integrationRepository');
 const {
   encryptSecret,
   generateApiKey,
@@ -32,6 +34,7 @@ function presentClient(client, deliveryCounts = {}) {
 }
 
 async function deliveryCountMap(clientIds) {
+  if (databaseEngine() === 'postgresql') return integrationRepository.deliveryStats(clientIds.map(String));
   const [rows, failures] = await Promise.all([
     WebhookDelivery.aggregate([
       { $match: { clientId: { $in: clientIds } } },
@@ -64,7 +67,7 @@ async function deliveryCountMap(clientIds) {
 
 exports.listClients = async (req, res, next) => {
   try {
-    const clients = await IntegrationClient.find().sort({ createdAt: -1 }).lean();
+    const clients = databaseEngine() === 'postgresql' ? await integrationRepository.listClients() : await IntegrationClient.find().sort({ createdAt: -1 }).lean();
     const counts = await deliveryCountMap(clients.map((client) => client._id));
     return res.json({ clients: clients.map((client) => presentClient(client, counts.get(String(client._id)))) });
   } catch (error) {
@@ -82,7 +85,7 @@ exports.createClient = async (req, res, next) => {
 
     const credentials = generateApiKey();
     const webhookSecret = generateWebhookSecret();
-    const client = await IntegrationClient.create({
+    const payload = {
       name,
       keyPrefix: credentials.keyPrefix,
       keyHash: credentials.keyHash,
@@ -91,7 +94,8 @@ exports.createClient = async (req, res, next) => {
       webhookSecretEncrypted: encryptSecret(webhookSecret),
       createdBy: req.userId,
       updatedBy: req.userId
-    });
+    };
+    const client = databaseEngine() === 'postgresql' ? await integrationRepository.saveClient(payload) : await IntegrationClient.create(payload);
     return res.status(201).json({
       client: presentClient(client),
       credentials: { apiKey: credentials.apiKey, webhookSecret }
@@ -105,7 +109,7 @@ exports.createClient = async (req, res, next) => {
 
 exports.updateClient = async (req, res, next) => {
   try {
-    const client = await IntegrationClient.findById(req.params.id);
+    const client = databaseEngine() === 'postgresql' ? await integrationRepository.findClient(req.params.id) : await IntegrationClient.findById(req.params.id);
     if (!client) return res.status(404).json({ error: 'Integration client not found' });
     const name = String(req.body?.name || '').trim();
     if (!name) return res.status(400).json({ error: 'Integration name is required' });
@@ -116,7 +120,7 @@ exports.updateClient = async (req, res, next) => {
     client.webhookUrl = webhookUrl;
     client.webhookEnabled = webhookEnabled;
     client.updatedBy = req.userId;
-    await client.save();
+    if (databaseEngine() === 'postgresql') await integrationRepository.saveClient(client); else await client.save();
     return res.json({ client: presentClient(client) });
   } catch (error) {
     if (/webhook/i.test(error.message)) return res.status(400).json({ error: error.message });
@@ -126,14 +130,14 @@ exports.updateClient = async (req, res, next) => {
 
 exports.rotateApiKey = async (req, res, next) => {
   try {
-    const client = await IntegrationClient.findById(req.params.id).select('+keyHash');
+    const client = databaseEngine() === 'postgresql' ? await integrationRepository.findClient(req.params.id) : await IntegrationClient.findById(req.params.id).select('+keyHash');
     if (!client) return res.status(404).json({ error: 'Integration client not found' });
     if (client.status !== 'active') return res.status(409).json({ error: 'Revoked integration cannot be rotated' });
     const credentials = generateApiKey();
     client.keyPrefix = credentials.keyPrefix;
     client.keyHash = credentials.keyHash;
     client.updatedBy = req.userId;
-    await client.save();
+    if (databaseEngine() === 'postgresql') await integrationRepository.saveClient(client); else await client.save();
     return res.json({ client: presentClient(client), credentials: { apiKey: credentials.apiKey } });
   } catch (error) {
     return next(error);
@@ -142,13 +146,13 @@ exports.rotateApiKey = async (req, res, next) => {
 
 exports.rotateWebhookSecret = async (req, res, next) => {
   try {
-    const client = await IntegrationClient.findById(req.params.id).select('+webhookSecretEncrypted');
+    const client = databaseEngine() === 'postgresql' ? await integrationRepository.findClient(req.params.id) : await IntegrationClient.findById(req.params.id).select('+webhookSecretEncrypted');
     if (!client) return res.status(404).json({ error: 'Integration client not found' });
     if (client.status !== 'active') return res.status(409).json({ error: 'Revoked integration cannot be rotated' });
     const webhookSecret = generateWebhookSecret();
     client.webhookSecretEncrypted = encryptSecret(webhookSecret);
     client.updatedBy = req.userId;
-    await client.save();
+    if (databaseEngine() === 'postgresql') await integrationRepository.saveClient(client); else await client.save();
     return res.json({ client: presentClient(client), credentials: { webhookSecret } });
   } catch (error) {
     if (/INTEGRATION_SECRET/i.test(error.message)) return res.status(400).json({ error: error.message });
@@ -158,17 +162,22 @@ exports.rotateWebhookSecret = async (req, res, next) => {
 
 exports.revokeClient = async (req, res, next) => {
   try {
-    const client = await IntegrationClient.findById(req.params.id);
+    const client = databaseEngine() === 'postgresql' ? await integrationRepository.findClient(req.params.id) : await IntegrationClient.findById(req.params.id);
     if (!client) return res.status(404).json({ error: 'Integration client not found' });
     client.status = 'revoked';
     client.webhookEnabled = false;
     client.revokedAt = new Date();
     client.updatedBy = req.userId;
-    await client.save();
-    await WebhookDelivery.updateMany(
+    if (databaseEngine() === 'postgresql') {
+      await integrationRepository.saveClient(client);
+      await integrationRepository.markClientDeliveries(client._id, ['pending','processing'], 'dead', 'Integration client revoked');
+    } else {
+      await client.save();
+      await WebhookDelivery.updateMany(
       { clientId: client._id, status: { $in: ['pending', 'processing'] } },
       { $set: { status: 'dead', lastError: 'Integration client revoked' }, $unset: { lockedUntil: 1 } }
-    );
+      );
+    }
     return res.json({ client: presentClient(client) });
   } catch (error) {
     return next(error);
@@ -177,8 +186,12 @@ exports.revokeClient = async (req, res, next) => {
 
 exports.retryFailedDeliveries = async (req, res, next) => {
   try {
-    const client = await IntegrationClient.findOne({ _id: req.params.id, status: 'active' });
-    if (!client) return res.status(404).json({ error: 'Active integration client not found' });
+    const client = databaseEngine() === 'postgresql' ? await integrationRepository.findClient(req.params.id) : await IntegrationClient.findOne({ _id: req.params.id, status: 'active' });
+    if (!client || client.status !== 'active') return res.status(404).json({ error: 'Active integration client not found' });
+    if (databaseEngine() === 'postgresql') {
+      const retried = await integrationRepository.markClientDeliveries(client._id, ['dead'], 'pending', '');
+      return res.json({ retried });
+    }
     const result = await WebhookDelivery.updateMany(
       { clientId: client._id, status: 'dead' },
       { $set: { status: 'pending', attemptCount: 0, nextAttemptAt: new Date(), lastError: '' }, $unset: { lockedUntil: 1 } }

@@ -25,6 +25,7 @@ const SubWorkItemSchema = new mongoose.Schema(
     paidAmount: { type: Number, min: 0, default: 0 },
     paidAt: { type: Date },
     archivedAt: { type: Date },
+    archivedByWorkAt: { type: Date },
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     updatedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' }
   },

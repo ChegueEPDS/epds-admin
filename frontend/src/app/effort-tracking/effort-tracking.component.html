@@ -82,7 +82,8 @@
             {{ selectedProject.workItem.workNumber }} · {{ selectedProject.workItem.name }}
           </a>
         </div>
-        <div class="detail-actions" *ngIf="auth.canEditFeature('effortTracking')">
+        <div class="detail-actions" *ngIf="auth.canEditFeature('effortTracking') || auth.canDeleteFeature('effortTracking')">
+          <ng-container *ngIf="auth.canEditFeature('effortTracking')">
           <button mat-stroked-button type="button" (click)="startEditProject()" [disabled]="selectedProject.status === 'closed'">
             <mat-icon class="material-symbols-outlined">edit</mat-icon>
             Edit
@@ -94,6 +95,11 @@
           <button mat-stroked-button type="button" *ngIf="selectedProject.status === 'closed'" (click)="reopenProject()" [disabled]="saving">
             <mat-icon class="material-symbols-outlined">lock_open</mat-icon>
             Reopen
+          </button>
+          </ng-container>
+          <button class="project-delete-button" mat-stroked-button type="button" *ngIf="auth.canDeleteFeature('effortTracking')" (click)="deleteProject()" [disabled]="saving">
+            <mat-icon class="material-symbols-outlined">delete</mat-icon>
+            Delete
           </button>
         </div>
       </div>
@@ -192,7 +198,8 @@
               <strong>{{ grossText(task) }}</strong>
             </div>
           </div>
-          <div class="task-actions" *ngIf="auth.canEditFeature('effortTracking')">
+          <div class="task-actions" *ngIf="auth.canEditFeature('effortTracking') || auth.canDeleteFeature('effortTracking')">
+            <ng-container *ngIf="auth.canEditFeature('effortTracking')">
             <button class="task-action-edit" mat-stroked-button type="button" *ngIf="task.status === 'open'" (click)="startEditTask(task)" [disabled]="saving || selectedProject.status === 'closed'">
               <mat-icon class="material-symbols-outlined">edit</mat-icon>
               Edit
@@ -218,6 +225,12 @@
               <mat-progress-spinner *ngIf="isTaskActionRunning(task, 'close')" diameter="18" mode="indeterminate"></mat-progress-spinner>
               <mat-icon class="material-symbols-outlined" *ngIf="!isTaskActionRunning(task, 'close')">check_circle</mat-icon>
               Close
+            </button>
+            </ng-container>
+            <button class="task-action-delete" mat-stroked-button type="button" *ngIf="auth.canDeleteFeature('effortTracking')" (click)="deleteTask(task)" [disabled]="saving">
+              <mat-progress-spinner *ngIf="isTaskActionRunning(task, 'delete')" diameter="18" mode="indeterminate"></mat-progress-spinner>
+              <mat-icon class="material-symbols-outlined" *ngIf="!isTaskActionRunning(task, 'delete')">delete</mat-icon>
+              Delete
             </button>
           </div>
           <small *ngIf="task.status === 'closed'">

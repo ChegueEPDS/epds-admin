@@ -3,6 +3,8 @@ const net = require('net');
 const axios = require('axios');
 const DomainMonitor = require('../models/domainMonitor');
 const DomainHealthCheck = require('../models/domainHealthCheck');
+const { databaseEngine } = require('../postgres');
+const domainHealthRepository = require('../repositories/postgres/domainHealthRepository');
 const { getPublicPageSpeedSummaries } = require('./pageSpeedService');
 const { mapWithConcurrency, withJobLease } = require('./scheduledJobLeaseService');
 
@@ -448,11 +450,16 @@ function presentDomain(domain, summary = {}) {
 }
 
 async function buildDomainList(scope = {}) {
-  const domains = await DomainMonitor.find(domainScopeQuery(scope)).sort({ name: 1 }).populate('tenantId', 'name displayName').lean(false);
+  const postgres = databaseEngine() === 'postgresql';
+  const domains = postgres
+    ? await domainHealthRepository.listMonitors({ tenantId: scope.tenantId || null, all: isGlobalTenant(scope) })
+    : await DomainMonitor.find(domainScopeQuery(scope)).sort({ name: 1 }).populate('tenantId', 'name displayName').lean(false);
   const since = new Date(Date.now() - RECENT_ISSUE_MS);
   const visibleDomainIds = domains.map((domain) => domain._id);
   const checks = visibleDomainIds.length
-    ? await DomainHealthCheck.find({ domainId: { $in: visibleDomainIds }, checkedAt: { $gte: since } })
+    ? postgres
+      ? await domainHealthRepository.listChecks(visibleDomainIds.map(String), since)
+      : await DomainHealthCheck.find({ domainId: { $in: visibleDomainIds }, checkedAt: { $gte: since } })
       .select('domainId ok status responseMs')
       .lean()
     : [];
@@ -470,7 +477,9 @@ async function buildDomainList(scope = {}) {
 
 async function loadChecksForDomains(domainIds = [], since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)) {
   if (!domainIds.length) return new Map();
-  const checks = await DomainHealthCheck.find({ domainId: { $in: domainIds }, checkedAt: { $gte: since } })
+  const checks = databaseEngine() === 'postgresql'
+    ? (await domainHealthRepository.listChecks(domainIds.map(String), since)).reverse()
+    : await DomainHealthCheck.find({ domainId: { $in: domainIds }, checkedAt: { $gte: since } })
     .sort({ checkedAt: 1 })
     .select('domainId checkedAt ok status statusCode responseMs finalUrl redirectCount contentType contentLength tlsValidTo tlsDaysRemaining errorType errorMessage warningType warningMessage')
     .lean();
@@ -493,7 +502,9 @@ async function getDomainStatusDetails(domain, checks) {
 
 async function buildPublicStatusReport({ owner } = {}) {
   const ownerFilter = owner && owner !== 'all' ? { owner } : {};
-  const domains = await DomainMonitor.find({ enabled: true, ...ownerFilter }).sort({ name: 1 }).populate('tenantId', 'name displayName').lean(false);
+  const domains = databaseEngine() === 'postgresql'
+    ? await domainHealthRepository.listMonitors({ all: true, enabled: true, owner: ownerFilter.owner || null })
+    : await DomainMonitor.find({ enabled: true, ...ownerFilter }).sort({ name: 1 }).populate('tenantId', 'name displayName').lean(false);
   const domainIds = domains.map((domain) => domain._id);
   const [checksByDomain, pageSpeedByDomain] = await Promise.all([
     loadChecksForDomains(domainIds),
@@ -529,12 +540,15 @@ async function buildPublicStatusReport({ owner } = {}) {
 
 async function countRecentIssues(domainId) {
   const since = new Date(Date.now() - RECENT_ISSUE_MS);
+  if (databaseEngine() === 'postgresql') return domainHealthRepository.countFailed(String(domainId), since);
   return DomainHealthCheck.countDocuments({ domainId, checkedAt: { $gte: since }, ok: false });
 }
 
 async function summarizeRecentChecks(domainId) {
   const since = new Date(Date.now() - RECENT_ISSUE_MS);
-  const checks = await DomainHealthCheck.find({ domainId, checkedAt: { $gte: since } })
+  const checks = databaseEngine() === 'postgresql'
+    ? await domainHealthRepository.listChecks([String(domainId)], since)
+    : await DomainHealthCheck.find({ domainId, checkedAt: { $gte: since } })
     .select('ok status responseMs')
     .lean();
   return summarizeChecks(checks);
@@ -619,7 +633,7 @@ async function runDomainCheck(domain) {
     };
   }
 
-  await DomainHealthCheck.create({
+  const checkPayload = {
     domainId: domain._id,
     checkedAt: result.checkedAt,
     ok: result.ok,
@@ -636,7 +650,9 @@ async function runDomainCheck(domain) {
     errorMessage: result.errorMessage,
     warningType: result.warningType,
     warningMessage: result.warningMessage
-  });
+  };
+  if (databaseEngine() === 'postgresql') await domainHealthRepository.createCheck(checkPayload);
+  else await DomainHealthCheck.create(checkPayload);
 
   const wasFailing = domain.lastStatus === 'error';
   domain.lastCheckedAt = result.checkedAt;
@@ -662,7 +678,8 @@ async function runDomainCheck(domain) {
     if (!wasFailing) domain.currentIssueSince = result.checkedAt;
   }
 
-  await domain.save();
+  if (databaseEngine() === 'postgresql') await domainHealthRepository.saveMonitor(domain);
+  else await domain.save();
   return result;
 }
 
@@ -679,7 +696,9 @@ async function runScheduledChecks() {
   lastRunDomainCount = 0;
   try {
     await withJobLease('domain-health-monitor', 20 * 60 * 1000, async () => {
-      const domains = await DomainMonitor.find({ enabled: true });
+      const domains = databaseEngine() === 'postgresql'
+        ? await domainHealthRepository.listMonitors({ all: true, enabled: true })
+        : await DomainMonitor.find({ enabled: true });
       lastRunDomainCount = domains.length;
       const concurrency = Math.max(1, Number(process.env.DOMAIN_HEALTH_CONCURRENCY || 8));
       await mapWithConcurrency(domains, concurrency, async (domain) => {

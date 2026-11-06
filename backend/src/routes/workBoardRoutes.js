@@ -1,6 +1,6 @@
 const express = require('express');
 const multer = require('multer');
-const controller = require('../controllers/workBoardController');
+const controller = require('../controllers/workBoardControllerFacade');
 const { requireAuth, requireTenantFeature, requireTenantContext } = require('../middlewares/authMiddleware');
 
 const router = express.Router();
@@ -20,6 +20,7 @@ router.get('/work-board/works/:id', requireTenantFeature('workBoard'), controlle
 router.post('/work-board/works', requireTenantFeature('workBoard', 'edit'), controller.createWork);
 router.patch('/work-board/works/:id', requireTenantFeature('workBoard', 'edit'), controller.updateWork);
 router.delete('/work-board/works/:id', requireTenantFeature('workBoard', 'delete'), controller.archiveWork);
+router.post('/work-board/works/:id/restore', requireTenantFeature('workBoard', 'delete'), controller.restoreWork);
 router.post('/work-board/works/:id/sub-works', requireTenantFeature('workBoard', 'edit'), controller.createSubWork);
 router.patch('/work-board/sub-works/:subWorkId', requireTenantFeature('workBoard', 'edit'), controller.updateSubWork);
 router.delete('/work-board/sub-works/:subWorkId', requireTenantFeature('workBoard', 'delete'), controller.archiveSubWork);

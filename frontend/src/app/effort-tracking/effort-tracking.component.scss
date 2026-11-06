@@ -280,7 +280,7 @@
 
 .task-actions {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(105px, 1fr));
   align-items: center;
   gap: 10px;
   justify-content: stretch;
@@ -328,6 +328,12 @@
 .task-actions .task-action-close {
   border-color: #2563eb;
   color: #1d4ed8;
+}
+
+.task-actions .task-action-delete,
+.project-delete-button {
+  border-color: #dc2626;
+  color: #b91c1c;
 }
 
 .task-card small {

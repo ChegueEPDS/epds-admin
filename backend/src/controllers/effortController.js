@@ -332,6 +332,13 @@ exports.updateProject = (req, res) => withErrors(res, async () => {
   res.json(presentProject(project, tasks, new Date(), req.userId));
 });
 
+exports.deleteProject = (req, res) => withErrors(res, async () => {
+  const project = await getScopedProject(req.params.id, req.scope, req.userId);
+  await EffortTask.deleteMany({ ...ownerScopeQuery(req.scope, req.userId), projectId: project._id });
+  await EffortProject.deleteOne({ _id: project._id, ...ownerScopeQuery(req.scope, req.userId) });
+  res.status(204).end();
+});
+
 exports.closeProject = (req, res) => withErrors(res, async () => {
   const project = await getScopedProject(req.params.id, req.scope, req.userId);
   if (project.status === 'closed') {
@@ -412,6 +419,13 @@ exports.updateTask = (req, res) => withErrors(res, async () => {
   task.updatedBy = req.userId;
   await task.save();
   res.json(presentTask(task, new Date(), req.userId));
+});
+
+exports.deleteTask = (req, res) => withErrors(res, async () => {
+  const task = await getScopedTask(req.params.taskId, req.scope, req.userId);
+  await getScopedProject(task.projectId, req.scope, req.userId);
+  await EffortTask.deleteOne({ _id: task._id, ...ownerScopeQuery(req.scope, req.userId) });
+  res.status(204).end();
 });
 
 exports.startTask = (req, res) => withErrors(res, async () => {

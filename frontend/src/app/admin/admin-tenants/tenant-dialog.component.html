@@ -25,8 +25,8 @@
       <h3>Features</h3>
       <div class="feature-row header-row" aria-hidden="true">
         <span>Feature</span>
-        <span>On</span>
-        <span>Edit</span>
+        <span>Read</span>
+        <span>Write</span>
         <span>Delete</span>
       </div>
       <div class="feature-row" *ngFor="let feature of featureOptions" [class.disabled-row]="isFeatureDisabled(feature)">
@@ -36,13 +36,13 @@
           (ngModelChange)="onFeatureEnabledChange(feature)"
           [name]="feature.key + 'Enabled'"
           [disabled]="isFeatureDisabled(feature)"
-          aria-label="Feature enabled"></mat-slide-toggle>
+          aria-label="Read permission"></mat-slide-toggle>
         <mat-checkbox
           *ngIf="hasPermissionControls(feature); else noPermissionControls"
           [(ngModel)]="features[feature.key].edit"
           [name]="feature.key + 'Edit'"
           [disabled]="isEditDisabled(feature)"
-          aria-label="Edit permission"></mat-checkbox>
+          aria-label="Write permission"></mat-checkbox>
         <mat-checkbox
           *ngIf="hasPermissionControls(feature); else noDeleteControl"
           [(ngModel)]="features[feature.key].delete"

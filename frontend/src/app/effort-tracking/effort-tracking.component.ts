@@ -29,7 +29,7 @@ type TaskForm = {
   subWorkItemId: string;
 };
 
-type TaskAction = 'start' | 'stop' | 'close';
+type TaskAction = 'start' | 'stop' | 'close' | 'delete';
 
 @Component({
   selector: 'app-effort-tracking',
@@ -286,6 +286,25 @@ export class EffortTrackingComponent implements OnInit, OnDestroy {
     }
   }
 
+  async deleteTask(task: EffortTask): Promise<void> {
+    if (this.saving || !this.selectedProject) return;
+    const timerWarning = task.active ? '\n\nThe running timer on this task will also be deleted.' : '';
+    if (!window.confirm(`Permanently delete task "${task.name}"?${timerWarning}\n\nThis action cannot be undone.`)) return;
+    this.saving = true;
+    this.taskAction = { taskId: task.id, action: 'delete' };
+    try {
+      await firstValueFrom(this.effortService.deleteTask(task.id));
+      this.expandedTaskNotes.delete(task.id);
+      await this.refreshSelected();
+      this.snackBar.open('Task deleted.', 'OK', { duration: 2500 });
+    } catch {
+      this.snackBar.open('Task could not be deleted.', 'OK', { duration: 3500 });
+    } finally {
+      this.saving = false;
+      this.taskAction = null;
+    }
+  }
+
   async closeProject(): Promise<void> {
     if (!this.selectedProject) return;
     this.saving = true;
@@ -311,6 +330,26 @@ export class EffortTrackingComponent implements OnInit, OnDestroy {
       this.updateDocumentTitle();
     } catch {
       this.snackBar.open('Project could not be reopened.', 'OK', { duration: 3500 });
+    } finally {
+      this.saving = false;
+    }
+  }
+
+  async deleteProject(): Promise<void> {
+    if (!this.selectedProject || this.saving) return;
+    const project = this.selectedProject;
+    const taskText = project.taskCount ? `\n\nIts ${project.taskCount} task${project.taskCount === 1 ? '' : 's'} and all recorded effort data will also be deleted.` : '';
+    if (!window.confirm(`Permanently delete project "${project.name}"?${taskText}\n\nThis action cannot be undone.`)) return;
+    this.saving = true;
+    try {
+      await firstValueFrom(this.effortService.deleteProject(project.id));
+      this.selectedProject = null;
+      this.projects = this.projects.filter((item) => item.id !== project.id);
+      this.cancelProjectForm(); this.cancelTaskForm(); this.updateDocumentTitle();
+      if (this.projects.length) await this.selectProject(this.projects[0], false);
+      this.snackBar.open('Project deleted.', 'OK', { duration: 2500 });
+    } catch {
+      this.snackBar.open('Project could not be deleted.', 'OK', { duration: 3500 });
     } finally {
       this.saving = false;
     }

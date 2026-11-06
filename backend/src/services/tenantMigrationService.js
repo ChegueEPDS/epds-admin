@@ -1,5 +1,8 @@
 const Tenant = require('../models/tenant');
 const DomainMonitor = require('../models/domainMonitor');
+const { databaseEngine } = require('../postgres');
+const tenantRepository = require('../repositories/postgres/tenantRepository');
+const domainHealthRepository = require('../repositories/postgres/domainHealthRepository');
 
 const seededTenants = [
   { name: 'epds', displayName: 'EPDS' },
@@ -132,6 +135,24 @@ async function seedKnownDomains() {
 }
 
 async function normalizeTenantTypes() {
+  if (databaseEngine() === 'postgresql') {
+    for (const seed of seededTenants) {
+      const existing = await tenantRepository.findByName(seed.name);
+      if (!existing) await tenantRepository.save({ name: seed.name, displayName: seed.displayName, type: 'company', features: defaultTenantFeatures('company'), seats: { max: 0, used: 0 }, seatsManaged: 'manual' });
+    }
+    const tenants = await tenantRepository.list();
+    const byName = new Map(tenants.map((tenant) => [tenant.name, tenant]));
+    const monitors = await domainHealthRepository.listMonitors({ all: true });
+    const byUrl = new Map(monitors.map((domain) => [domain.normalizedUrl, domain]));
+    for (const seed of seededDomains) {
+      const tenant = byName.get(seed.tenantName); if (!tenant) continue;
+      const normalizedUrl = normalizedBaseUrl(seed.domain);
+      const domain = byUrl.get(normalizedUrl) || { name: seed.domain, baseUrl: normalizedUrl, normalizedUrl, owner: seed.owner, healthConfig: {} };
+      domain.tenantId = tenant._id; domain.enabled = true;
+      await domainHealthRepository.saveMonitor(domain);
+    }
+    return;
+  }
   await seedKnownTenants();
 
   await Tenant.updateMany(

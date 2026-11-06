@@ -81,6 +81,47 @@ button mat-icon {
   flex: 1 1 auto;
 }
 
+.tenant-context {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  margin-right: 10px;
+  padding: 5px 9px;
+  color: var(--brand-muted);
+  border: 1px solid var(--brand-border);
+  border-radius: 10px;
+  background: var(--brand-panel-soft);
+}
+
+.tenant-context mat-icon {
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  font-size: 18px;
+  color: var(--brand-accent-ink);
+}
+
+.tenant-context-label {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.tenant-context select {
+  width: clamp(130px, 13vw, 210px);
+  min-width: 0;
+  padding: 3px 24px 3px 5px;
+  color: var(--brand-ink);
+  border: 0;
+  outline: 0;
+  background: transparent;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+}
+
 .app-content {
   flex: 1 1 auto;
   min-height: calc(100vh - 64px);
@@ -190,5 +231,18 @@ button mat-icon {
 
   .brand img {
     width: 84px;
+  }
+
+  .tenant-context-label {
+    display: none;
+  }
+
+  .tenant-context {
+    max-width: min(52vw, 230px);
+    margin-right: 8px;
+  }
+
+  .tenant-context select {
+    width: min(42vw, 185px);
   }
 }

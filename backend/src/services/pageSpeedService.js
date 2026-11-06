@@ -1,5 +1,7 @@
 const axios = require('axios');
 const DomainPageSpeedScan = require('../models/domainPageSpeedScan');
+const { databaseEngine } = require('../postgres');
+const domainHealthRepository = require('../repositories/postgres/domainHealthRepository');
 
 const PAGESPEED_ENDPOINT = 'https://pagespeedonline.googleapis.com/pagespeedonline/v5/runPagespeed';
 const PAGESPEED_TIMEOUT_MS = Number(process.env.PAGESPEED_TIMEOUT_MS || 90000);
@@ -212,19 +214,24 @@ function buildPublicPageSpeedSummary(overview) {
 
 async function storeDomainPageSpeedScan(domain, source = 'manual') {
   const result = await runDeepScan(domain.baseUrl);
-  const doc = await DomainPageSpeedScan.create({
+  const payload = {
     domainId: domain._id,
     checkedAt: new Date(result.checkedAt),
     source,
     scans: result.scans
-  });
+  };
+  const doc = databaseEngine() === 'postgresql'
+    ? await domainHealthRepository.createScan(payload)
+    : await DomainPageSpeedScan.create(payload);
   return compactStoredScan(doc);
 }
 
 async function getDomainPageSpeedOverview(domainId, options = {}) {
   const days = Number(options.days || 30);
   const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
-  const scans = await DomainPageSpeedScan.find({ domainId, checkedAt: { $gte: since } })
+  const scans = databaseEngine() === 'postgresql'
+    ? await domainHealthRepository.listScans([String(domainId)], since, 60)
+    : await DomainPageSpeedScan.find({ domainId, checkedAt: { $gte: since } })
     .sort({ checkedAt: -1 })
     .limit(60)
     .lean();
@@ -242,7 +249,9 @@ async function getPublicPageSpeedSummaries(domainIds = [], options = {}) {
   if (!domainIds.length) return new Map();
   const days = Number(options.days || 30);
   const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
-  const scans = await DomainPageSpeedScan.find({ domainId: { $in: domainIds }, checkedAt: { $gte: since } })
+  const scans = databaseEngine() === 'postgresql'
+    ? await domainHealthRepository.listScans(domainIds.map(String), since)
+    : await DomainPageSpeedScan.find({ domainId: { $in: domainIds }, checkedAt: { $gte: since } })
     .sort({ domainId: 1, checkedAt: -1 })
     .select('domainId checkedAt source scans.strategy scans.ok scans.scores.performance scans.metrics.largestContentfulPaint.numericValue scans.opportunities')
     .lean();

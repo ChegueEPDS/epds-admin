@@ -189,7 +189,7 @@ function presentSubWork(subWork, work) {
 }
 
 function presentWork(work, subWorks = []) {
-  const activeSubWorks = subWorks.filter((item) => !item.archivedAt && item.status !== 'cancelled');
+  const activeSubWorks = subWorks.filter((item) => (work.archivedAt || !item.archivedAt) && item.status !== 'cancelled');
   const allocatedAmount = activeSubWorks.reduce((sum, item) => sum + Number(item.amount || 0), 0);
   const totalAmount = Number(work.totalAmount || 0);
   const paidAmount = activeSubWorks.reduce((sum, item) => sum + Number(item.paidAmount || 0), 0);
@@ -232,9 +232,10 @@ function presentWork(work, subWorks = []) {
   };
 }
 
-async function scopedWork(id, scope) {
+async function scopedWork(id, scope, { includeArchived = false, archivedOnly = false } = {}) {
   if (!mongoose.isValidObjectId(id)) throw httpError('Work not found', 404);
-  const work = await WorkItem.findOne({ _id: id, ...scopeQuery(scope), archivedAt: { $exists: false } });
+  const archiveFilter = archivedOnly ? { archivedAt: { $exists: true } } : (includeArchived ? {} : { archivedAt: { $exists: false } });
+  const work = await WorkItem.findOne({ _id: id, ...scopeQuery(scope), ...archiveFilter });
   if (!work) throw httpError('Work not found', 404);
   return work;
 }
@@ -296,10 +297,14 @@ async function withErrors(res, fn) {
 }
 
 exports.listWorks = (req, res) => withErrors(res, async () => {
-  const query = { ...scopeQuery(req.scope), archivedAt: { $exists: false } };
+  const query = { ...scopeQuery(req.scope) };
   const status = String(req.query?.status || (req.query?.active === 'true' ? 'active' : 'all'));
-  if (status === 'active') query.status = { $nin: [...TERMINAL_STATUSES] };
-  else if (status !== 'all') query.status = validateStatus(status);
+  if (status === 'deleted') query.archivedAt = { $exists: true };
+  else {
+    query.archivedAt = { $exists: false };
+    if (status === 'active') query.status = { $nin: [...TERMINAL_STATUSES] };
+    else if (status !== 'all') query.status = validateStatus(status);
+  }
 
   const search = cleanText(req.query?.search);
   if (search) {
@@ -319,7 +324,8 @@ exports.listWorks = (req, res) => withErrors(res, async () => {
       { $group: { _id: null, value: { $sum: '$totalAmount' } } }
     ])
   ]);
-  const subWorks = await SubWorkItem.find({ ...scopeQuery(req.scope), workItemId: { $in: works.map((work) => work._id) }, archivedAt: { $exists: false } }).sort({ sequenceNumber: 1 });
+  const subWorkArchiveFilter = status === 'deleted' ? { archivedByWorkAt: { $exists: true } } : { archivedAt: { $exists: false } };
+  const subWorks = await SubWorkItem.find({ ...scopeQuery(req.scope), workItemId: { $in: works.map((work) => work._id) }, ...subWorkArchiveFilter }).sort({ sequenceNumber: 1 });
   const byWork = new Map();
   subWorks.forEach((item) => {
     const key = String(item.workItemId);
@@ -351,8 +357,10 @@ exports.activeOptions = (req, res) => withErrors(res, async () => {
 });
 
 exports.getWork = (req, res) => withErrors(res, async () => {
-  const work = await scopedWork(req.params.id, req.scope);
-  const subWorks = await SubWorkItem.find({ ...scopeQuery(req.scope), workItemId: work._id, archivedAt: { $exists: false } }).sort({ sequenceNumber: 1 });
+  const includeArchived = req.query?.includeDeleted === 'true';
+  const work = await scopedWork(req.params.id, req.scope, { includeArchived });
+  const subWorkArchiveFilter = work.archivedAt ? { archivedByWorkAt: { $exists: true } } : { archivedAt: { $exists: false } };
+  const subWorks = await SubWorkItem.find({ ...scopeQuery(req.scope), workItemId: work._id, ...subWorkArchiveFilter }).sort({ sequenceNumber: 1 });
   res.json({ work: presentWork(work, subWorks) });
 });
 
@@ -396,8 +404,24 @@ exports.archiveWork = (req, res) => withErrors(res, async () => {
   work.archivedAt = new Date();
   work.updatedBy = req.userId;
   await work.save();
-  await SubWorkItem.updateMany({ ...scopeQuery(req.scope), workItemId: work._id }, { $set: { archivedAt: work.archivedAt, updatedBy: req.userId } });
+  await SubWorkItem.updateMany(
+    { ...scopeQuery(req.scope), workItemId: work._id, archivedAt: { $exists: false } },
+    { $set: { archivedAt: work.archivedAt, archivedByWorkAt: work.archivedAt, updatedBy: req.userId } }
+  );
   res.status(204).end();
+});
+
+exports.restoreWork = (req, res) => withErrors(res, async () => {
+  const work = await scopedWork(req.params.id, req.scope, { archivedOnly: true });
+  work.archivedAt = undefined;
+  work.updatedBy = req.userId;
+  await work.save();
+  await SubWorkItem.updateMany(
+    { ...scopeQuery(req.scope), workItemId: work._id, archivedByWorkAt: { $exists: true } },
+    { $unset: { archivedAt: 1, archivedByWorkAt: 1 }, $set: { updatedBy: req.userId } }
+  );
+  const subWorks = await SubWorkItem.find({ ...scopeQuery(req.scope), workItemId: work._id, archivedAt: { $exists: false } }).sort({ sequenceNumber: 1 });
+  res.json({ work: presentWork(work, subWorks) });
 });
 
 exports.createSubWork = (req, res) => withErrors(res, async () => {
@@ -485,7 +509,7 @@ exports.listTenantUsers = (req, res) => withErrors(res, async () => {
 });
 
 exports.listDocuments = (req, res) => withErrors(res, async () => {
-  const work = await scopedWork(req.params.id, req.scope);
+  const work = await scopedWork(req.params.id, req.scope, { includeArchived: true });
   const documents = await WorkDocument.find({ ...scopeQuery(req.scope), workItemId: work._id }).sort({ createdAt: -1 });
   res.json({ documents: documents.map(presentDocument) });
 });
@@ -519,7 +543,7 @@ exports.downloadDocument = (req, res) => withErrors(res, async () => {
   if (!mongoose.isValidObjectId(req.params.documentId)) throw httpError('Document not found', 404);
   const document = await WorkDocument.findOne({ _id: req.params.documentId, ...scopeQuery(req.scope) });
   if (!document) throw httpError('Document not found', 404);
-  await scopedWork(document.workItemId, req.scope);
+  await scopedWork(document.workItemId, req.scope, { includeArchived: true });
   const download = await fileStorage.openDownloadStream(document.storageKey, req.headers.range);
   res.status(download.partial ? 206 : 200);
   res.setHeader('Content-Type', document.contentType || 'application/octet-stream');

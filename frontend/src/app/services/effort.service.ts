@@ -92,6 +92,10 @@ export class EffortService {
     return this.http.post<EffortProject>(`${this.baseUrl}/projects/${id}/reopen`, {}, { withCredentials: true });
   }
 
+  deleteProject(id: string): Observable<void> {
+    return this.http.delete<void>(`${this.baseUrl}/projects/${id}`, { withCredentials: true });
+  }
+
   createTask(projectId: string, payload: EffortTaskPayload): Observable<EffortTask> {
     return this.http.post<EffortTask>(`${this.baseUrl}/projects/${projectId}/tasks`, payload, { withCredentials: true });
   }
@@ -110,5 +114,9 @@ export class EffortService {
 
   closeTask(taskId: string): Observable<EffortTask> {
     return this.http.post<EffortTask>(`${this.baseUrl}/tasks/${taskId}/close`, {}, { withCredentials: true });
+  }
+
+  deleteTask(taskId: string): Observable<void> {
+    return this.http.delete<void>(`${this.baseUrl}/tasks/${taskId}`, { withCredentials: true });
   }
 }

@@ -3,6 +3,10 @@ const {
   getAccessTokenFromRequest,
   validateCsrf
 } = require('../services/authSessionService');
+const mongoose = require('mongoose');
+const Tenant = require('../models/tenant');
+const { databaseEngine } = require('../postgres');
+const tenantRepository = require('../repositories/postgres/tenantRepository');
 
 function requireAuth(req, res, next) {
   Promise.resolve()
@@ -20,11 +24,34 @@ function requireAuth(req, res, next) {
       req.scope = {
         userId: user.userId || user.id,
         role: user.role,
+        actorTenantId: user.tenantId || null,
         tenantId: user.tenantId,
         tenantName: user.tenantName,
         tenantType: user.tenantType,
+        tenantFeatures: user.tenantFeatures || {},
         sessionId: String(session._id)
       };
+
+      const requestedTenantId = String(req.headers?.['x-tenant-context'] || '').trim();
+      if (requestedTenantId) {
+        if (user.role !== 'SuperAdmin') {
+          return res.status(403).json({ error: 'Only SuperAdmin can select another tenant context' });
+        }
+        if (!mongoose.Types.ObjectId.isValid(requestedTenantId)) {
+          return res.status(400).json({ error: 'Invalid tenant context' });
+        }
+        const selectedTenant = databaseEngine() === 'postgresql'
+          ? await tenantRepository.findById(requestedTenantId)
+          : await Tenant.findById(requestedTenantId).lean();
+        if (!selectedTenant) {
+          return res.status(404).json({ error: 'Selected tenant not found' });
+        }
+        req.scope.tenantId = String(selectedTenant._id);
+        req.scope.tenantName = selectedTenant.displayName || selectedTenant.name;
+        req.scope.tenantType = selectedTenant.type;
+        req.scope.tenantFeatures = selectedTenant.features || {};
+        req.tenantContext = selectedTenant;
+      }
       return next();
     })
     .catch(() => res.status(401).json({ error: 'Invalid or expired token' }));
@@ -48,14 +75,15 @@ function requireAdminFeatureAccess(req, res, next) {
 
 function requireTenantFeature(featureKey, permission = 'enabled') {
   return (req, res, next) => {
-    if (req.role === 'SuperAdmin') return next();
+    if (req.role === 'SuperAdmin' && !req.scope?.tenantId) return next();
     if (!req.scope?.tenantId) {
       return res.status(403).json({ error: 'Tenant feature access required' });
     }
-    if (!req.user?.tenantFeatures?.[featureKey]?.enabled) {
+    const feature = req.scope?.tenantFeatures?.[featureKey] || req.user?.tenantFeatures?.[featureKey];
+    if (!feature?.enabled) {
       return res.status(403).json({ error: 'Tenant feature is disabled' });
     }
-    if (permission !== 'enabled' && !req.user?.tenantFeatures?.[featureKey]?.[permission]) {
+    if (permission !== 'enabled' && !feature?.[permission]) {
       return res.status(403).json({ error: 'Tenant feature permission is disabled' });
     }
     return next();

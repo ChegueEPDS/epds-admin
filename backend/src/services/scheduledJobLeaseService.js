@@ -1,9 +1,26 @@
 const crypto = require('crypto');
 const ScheduledJobLease = require('../models/scheduledJobLease');
+const { databaseEngine } = require('../postgres');
+const scheduledJobRepository = require('../repositories/postgres/scheduledJobRepository');
 
 async function withJobLease(name, ttlMs, work, options = {}) {
   const now = new Date();
   const holder = `${process.pid}:${crypto.randomUUID()}`;
+  if (databaseEngine() === 'postgresql') {
+    const acquired = await scheduledJobRepository.acquire(name, holder, new Date(now.getTime() + ttlMs), now);
+    if (!acquired) return { acquired: false };
+    let succeeded = false;
+    try {
+      const value = await work();
+      succeeded = true;
+      return { acquired: true, value };
+    } finally {
+      if (!(succeeded && options.holdOnSuccess)) {
+        await scheduledJobRepository.release(name, holder)
+          .catch((error) => console.error(`[scheduler] failed to release ${name}:`, error.message));
+      }
+    }
+  }
   try {
     const lease = await ScheduledJobLease.findOneAndUpdate(
       { name, $or: [{ lockedUntil: { $lte: now } }, { lockedUntil: { $exists: false } }] },

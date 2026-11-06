@@ -50,6 +50,19 @@
 
     <span class="spacer"></span>
 
+    <label class="tenant-context" *ngIf="auth.isSuperAdmin()">
+      <mat-icon class="material-symbols-outlined">apartment</mat-icon>
+      <span class="tenant-context-label">Tenant</span>
+      <select
+        name="tenantContext"
+        [(ngModel)]="tenantContextId"
+        (ngModelChange)="changeTenantContext($event)"
+        aria-label="Active tenant">
+        <option value="">Global administration</option>
+        <option *ngFor="let tenant of tenants" [value]="tenant.id">{{ tenantLabel(tenant) }}</option>
+      </select>
+    </label>
+
     <button
       mat-icon-button
       class="mobile-menu-trigger"

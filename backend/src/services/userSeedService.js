@@ -1,5 +1,7 @@
 const bcrypt = require('bcryptjs');
 const User = require('../models/user');
+const { databaseEngine, query } = require('../postgres');
+const userRepository = require('../repositories/postgres/userRepository');
 
 const SUPERADMIN_EMAIL = 'support@epds.hu';
 const SUPERADMIN_PASSWORD = 'EPDSadmin100!';
@@ -7,6 +9,13 @@ const ASSIGNABLE_ROLES = ['User', 'Admin', 'Finance'];
 
 async function seedSuperAdmin() {
   const password = await bcrypt.hash(SUPERADMIN_PASSWORD, 12);
+  if (databaseEngine() === 'postgresql') {
+    const existing = await userRepository.findByEmail(SUPERADMIN_EMAIL, { includePassword: true });
+    await userRepository.save({ ...(existing || {}), firstName: 'Super', lastName: 'Admin', email: SUPERADMIN_EMAIL,
+      role: 'SuperAdmin', password, emailVerified: true });
+    await query(`UPDATE users SET role='User',updated_at=now() WHERE email<>$1 AND role<>ALL($2::text[])`,[SUPERADMIN_EMAIL,ASSIGNABLE_ROLES]);
+    return;
+  }
   const existing = await User.findOne({ email: SUPERADMIN_EMAIL });
 
   if (existing) {

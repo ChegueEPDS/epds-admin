@@ -1,6 +1,8 @@
 const User = require('../models/user');
 const Tenant = require('../models/tenant');
 const bcrypt = require('bcryptjs');
+const { databaseEngine } = require('../postgres');
+const { repository } = require('../repositories/repositoryRegistry');
 const { verifyMicrosoftAccessToken } = require('../services/microsoftTokenVerifier');
 const {
   buildSessionMetadata,
@@ -11,6 +13,9 @@ const {
   rotateRefreshToken,
   setAuthCookies
 } = require('../services/authSessionService');
+
+const usingPostgres = () => databaseEngine() === 'postgresql';
+const authStore = () => repository('auth');
 
 function sendAuthResult(req, res, result) {
   setAuthCookies(res, req, result);
@@ -96,6 +101,7 @@ function namePartsFromMicrosoftToken(decodedToken, email) {
 async function ensureCompanyTenantForEmail(user, email) {
   const name = tenantNameFromEmail(email);
   const displayName = tenantDisplayNameFromEmail(email, name);
+  if (usingPostgres()) return authStore().ensureCompanyTenant(user, { name, displayName });
   let tenant = await Tenant.findOne({ name });
   if (!tenant) {
     tenant = await Tenant.create({
@@ -138,28 +144,33 @@ exports.microsoftLogin = async (req, res) => {
     assertAllowedCompanyEmail(email);
 
     const tokenName = namePartsFromMicrosoftToken(decodedToken, email);
-    let user = await User.findOne({ $or: [{ azureId }, { email }] });
+    let user = usingPostgres()
+      ? await authStore().findMicrosoftUser(azureId, email)
+      : await User.findOne({ $or: [{ azureId }, { email }] });
     if (!user) {
-      user = await User.create({
+      const input = {
         azureId,
         firstName: tokenName.firstName,
         lastName: tokenName.lastName,
         email,
         role: 'User',
         emailVerified: true
-      });
+      };
+      user = usingPostgres() ? await authStore().saveUser(input) : await User.create(input);
     } else {
       user.azureId = user.azureId || azureId;
       user.email = user.email || email;
       user.firstName = user.firstName || tokenName.firstName;
       user.lastName = user.lastName || tokenName.lastName;
       user.emailVerified = true;
-      await user.save();
+      if (usingPostgres()) user = await authStore().saveUser(user);
+      else await user.save();
     }
 
     user = await ensureCompanyTenantForEmail(user, email);
     user.lastLoginAt = new Date();
-    await user.save();
+    if (usingPostgres()) user = await authStore().saveUser(user);
+    else await user.save();
 
     const result = await createSession({ user, req });
     return sendAuthResult(req, res, result);
@@ -175,7 +186,9 @@ exports.login = async (req, res) => {
     const password = String(req.body?.password || '');
     if (!email || !password) return res.status(400).json({ error: 'Email and password are required' });
 
-    const user = await User.findOne({ email });
+    let user = usingPostgres()
+      ? await authStore().findPasswordUser(email)
+      : await User.findOne({ email });
     if (!user?.password) return res.status(401).json({ error: 'Invalid email or password' });
     const ok = await bcrypt.compare(password, user.password);
     if (!ok) return res.status(401).json({ error: 'Invalid email or password' });
@@ -184,7 +197,8 @@ exports.login = async (req, res) => {
       user.role = 'User';
     }
     user.lastLoginAt = new Date();
-    await user.save();
+    if (usingPostgres()) user = await authStore().saveUser(user, { includePassword: true });
+    else await user.save();
 
     const result = await createSession({ user, req });
     return sendAuthResult(req, res, result);

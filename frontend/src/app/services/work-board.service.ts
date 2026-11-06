@@ -19,7 +19,7 @@ export type WorkItem = {
   totalAmount: number; costAmount: number; marginPercent: number; allocatedAmount: number; allocatedPercentage: number;
   remainingAmount: number; paidAmount: number; subcontractor: string; paymentDeadlineDays: number; offerDate: string | null;
   completionDate: string | null; invoiceDate: string | null; invoicePaymentDeadline: string | null; invoiceNumber: string;
-  contractSigned: boolean; performanceCertificate: boolean; subWorkCount: number; subWorks: SubWorkItem[];
+  contractSigned: boolean; performanceCertificate: boolean; archivedAt: string | null; subWorkCount: number; subWorks: SubWorkItem[];
   createdAt: string; updatedAt: string;
 };
 
@@ -80,6 +80,9 @@ export class WorkBoardService {
   }
   archiveWork(id: string): Observable<void> {
     return this.http.delete<void>(`${this.baseUrl}/works/${id}`, { withCredentials: true });
+  }
+  restoreWork(id: string): Observable<WorkItem> {
+    return this.http.post<{ work: WorkItem }>(`${this.baseUrl}/works/${id}/restore`, {}, { withCredentials: true }).pipe(map((res) => res.work));
   }
   createSubWork(workId: string, payload: SubWorkPayload): Observable<SubWorkItem> {
     return this.http.post<{ subWork: SubWorkItem }>(`${this.baseUrl}/works/${workId}/sub-works`, payload, { withCredentials: true }).pipe(map((res) => res.subWork));

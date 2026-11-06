@@ -31,6 +31,14 @@ export type AuthUser = {
   tenantFeatures?: Partial<TenantFeatures>;
 };
 
+export type TenantContext = {
+  id: string;
+  name: string;
+  displayName?: string;
+  type?: string;
+  features: TenantFeatures;
+};
+
 type SessionMeta = {
   sessionId?: string | null;
   accessExpiresAt?: string | null;
@@ -61,6 +69,7 @@ export class AuthService {
   private currentUser: AuthUser | null = null;
   private refreshInFlight$: Observable<boolean> | null = null;
   private readonly redirectKey = 'epds-admin:returnUrl';
+  private readonly tenantContextKeyPrefix = 'epds-admin:tenant-context:';
 
   private userSubject = new BehaviorSubject<AuthUser | null>(null);
   user$ = this.userSubject.asObservable().pipe(distinctUntilChanged());
@@ -71,6 +80,9 @@ export class AuthService {
   private authReadySubject = new BehaviorSubject<boolean>(false);
   authReady$ = this.authReadySubject.asObservable().pipe(distinctUntilChanged());
 
+  private tenantContextSubject = new BehaviorSubject<TenantContext | null>(null);
+  tenantContext$ = this.tenantContextSubject.asObservable().pipe(distinctUntilChanged());
+
   constructor(
     private http: HttpClient,
     private router: Router,
@@ -80,7 +92,12 @@ export class AuthService {
   }
 
   private applyUser(user: AuthUser | null): void {
+    const previousUserId = this.currentUser?.id || this.currentUser?.userId || null;
     this.currentUser = user || null;
+    const currentUserId = this.currentUser?.id || this.currentUser?.userId || null;
+    if (!this.isSuperAdmin() || previousUserId !== currentUserId) {
+      this.tenantContextSubject.next(null);
+    }
     this.userSubject.next(this.currentUser);
     this.isLoggedInSubject.next(Boolean(this.currentUser));
     this.authReadySubject.next(true);
@@ -192,6 +209,40 @@ export class AuthService {
     return this.currentUser;
   }
 
+  getTenantContextId(): string | null {
+    return this.isSuperAdmin() ? this.tenantContextSubject.value?.id || this.readStoredTenantContextId() : null;
+  }
+
+  getTenantContext(): TenantContext | null {
+    return this.tenantContextSubject.value;
+  }
+
+  setTenantContext(tenant: TenantContext | null): void {
+    if (!this.isSuperAdmin()) return;
+    this.tenantContextSubject.next(tenant);
+    const userId = this.currentUser?.id || this.currentUser?.userId;
+    if (!userId) return;
+    try {
+      const key = `${this.tenantContextKeyPrefix}${userId}`;
+      if (tenant?.id) localStorage.setItem(key, tenant.id);
+      else localStorage.removeItem(key);
+    } catch {}
+  }
+
+  restoreTenantContext(tenants: TenantContext[]): TenantContext | null {
+    if (!this.isSuperAdmin()) return null;
+    const storedId = this.readStoredTenantContextId();
+    const selected = tenants.find((tenant) => tenant.id === storedId) || null;
+    this.tenantContextSubject.next(selected);
+    return selected;
+  }
+
+  private readStoredTenantContextId(): string | null {
+    const userId = this.currentUser?.id || this.currentUser?.userId;
+    if (!this.isSuperAdmin() || !userId) return null;
+    try { return localStorage.getItem(`${this.tenantContextKeyPrefix}${userId}`); } catch { return null; }
+  }
+
   isAuthenticated(): boolean {
     return Boolean(this.currentUser);
   }
@@ -201,7 +252,10 @@ export class AuthService {
   }
 
   canAccessFeature(featureKey: TenantFeatureKey): boolean {
-    if (this.isSuperAdmin()) return true;
+    if (this.isSuperAdmin()) {
+      const context = this.getTenantContext();
+      return context ? Boolean(context.features?.[featureKey]?.enabled) : true;
+    }
     return Boolean(this.currentUser?.tenantFeatures?.[featureKey]?.enabled);
   }
 
@@ -223,13 +277,19 @@ export class AuthService {
   }
 
   canEditFeature(featureKey: TenantFeatureKey): boolean {
-    if (this.isSuperAdmin()) return true;
+    if (this.isSuperAdmin()) {
+      const context = this.getTenantContext();
+      return context ? Boolean(context.features?.[featureKey]?.enabled && context.features?.[featureKey]?.edit) : true;
+    }
     const feature = this.currentUser?.tenantFeatures?.[featureKey];
     return Boolean(feature?.enabled && feature?.edit);
   }
 
   canDeleteFeature(featureKey: TenantFeatureKey): boolean {
-    if (this.isSuperAdmin()) return true;
+    if (this.isSuperAdmin()) {
+      const context = this.getTenantContext();
+      return context ? Boolean(context.features?.[featureKey]?.enabled && context.features?.[featureKey]?.delete) : true;
+    }
     const feature = this.currentUser?.tenantFeatures?.[featureKey];
     return Boolean(feature?.enabled && feature?.delete);
   }

@@ -2,6 +2,9 @@ const crypto = require('crypto');
 const IntegrationClient = require('../models/integrationClient');
 const LicenseEvent = require('../models/licenseEvent');
 const WebhookDelivery = require('../models/webhookDelivery');
+const { databaseEngine } = require('../postgres');
+const integrationRepository = require('../repositories/postgres/integrationRepository');
+const licenseRepository = require('../repositories/postgres/licenseRepository');
 
 function integrationLicensePayload(license) {
   const tenant = license.tenantId && typeof license.tenantId === 'object' ? license.tenantId : null;
@@ -50,6 +53,7 @@ function presentEvent(event) {
 }
 
 async function ensureDeliveries(event) {
+  if (databaseEngine() === 'postgresql') return integrationRepository.ensureDeliveries(event);
   const clients = await IntegrationClient.find({
     status: 'active',
     webhookEnabled: true,
@@ -79,6 +83,14 @@ async function publishOrderedEvent(license, previousStatus, actor = { type: 'sys
   const eventPreviousStatus = license.orderedFromStatus || previousStatus || 'unknown';
   const eventId = crypto.randomUUID();
   let event;
+  if (databaseEngine() === 'postgresql') {
+    event = await integrationRepository.createEvent({ eventId, eventType: 'license.ordered', licenseId: license._id,
+      statusVersion, previousStatus: eventPreviousStatus, status: 'ordered', payload: integrationLicensePayload(license), actor });
+    await ensureDeliveries(event);
+    license.integrationEventVersion = statusVersion;
+    await licenseRepository.save(license);
+    return event;
+  }
   try {
     event = await LicenseEvent.create({
       eventId,

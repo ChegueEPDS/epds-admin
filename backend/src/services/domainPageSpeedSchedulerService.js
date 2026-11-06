@@ -1,5 +1,7 @@
 const DomainMonitor = require('../models/domainMonitor');
 const DomainPageSpeedScan = require('../models/domainPageSpeedScan');
+const { databaseEngine } = require('../postgres');
+const domainHealthRepository = require('../repositories/postgres/domainHealthRepository');
 const { storeDomainPageSpeedScan } = require('./pageSpeedService');
 const { mapWithConcurrency, withJobLease } = require('./scheduledJobLeaseService');
 
@@ -12,6 +14,11 @@ let schedulerTimer;
 let isRunning = false;
 
 async function shouldRunDomain(domainId) {
+  if (databaseEngine() === 'postgresql') {
+    const latest = await domainHealthRepository.latestScan(String(domainId));
+    if (!latest?.checkedAt) return true;
+    return Date.now() - new Date(latest.checkedAt).getTime() >= RUN_INTERVAL_MS;
+  }
   const latest = await DomainPageSpeedScan.findOne({ domainId }).sort({ checkedAt: -1 }).select('checkedAt').lean();
   if (!latest?.checkedAt) return true;
   return Date.now() - new Date(latest.checkedAt).getTime() >= RUN_INTERVAL_MS;
@@ -22,7 +29,9 @@ async function runScheduledPageSpeedScans() {
   isRunning = true;
   try {
     await withJobLease('domain-pagespeed-monitor', 12 * 60 * 60 * 1000, async () => {
-      const domains = await DomainMonitor.find({ enabled: true }).sort({ name: 1 });
+      const domains = databaseEngine() === 'postgresql'
+        ? await domainHealthRepository.listMonitors({ all: true, enabled: true })
+        : await DomainMonitor.find({ enabled: true }).sort({ name: 1 });
       const concurrency = Math.max(1, Math.min(4, Number(process.env.PAGESPEED_CONCURRENCY || 2)));
       await mapWithConcurrency(domains, concurrency, async (domain) => {
         try {

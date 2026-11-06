@@ -44,7 +44,7 @@ export class WorkBoardComponent implements OnInit {
   loading = true;
   saving = false;
   search = '';
-  statusFilter: WorkStatus | 'active' | 'all' = 'active';
+  statusFilter: WorkStatus | 'active' | 'all' | 'deleted' = 'active';
   page = 1;
   pageSize = 25;
   totalWorks = 0;
@@ -170,9 +170,16 @@ export class WorkBoardComponent implements OnInit {
     finally { this.saving = false; }
   }
   async archiveWork(): Promise<void> {
-    if (!this.selectedWork || !confirm(`Archive ${this.selectedWork.workNumber} · ${this.selectedWork.name}?`)) return;
-    try { await firstValueFrom(this.board.archiveWork(this.selectedWork.id)); this.selectedWork = null; this.detailView = false; await this.load(); }
-    catch (error: any) { this.error(error, 'Work could not be archived.'); }
+    if (!this.selectedWork || !confirm(`Move ${this.selectedWork.workNumber} · ${this.selectedWork.name} to deleted works?\n\nIt can be restored later.`)) return;
+    try { await firstValueFrom(this.board.archiveWork(this.selectedWork.id)); this.selectedWork = null; this.detailView = false; await this.load(); this.notice('Work moved to deleted works.'); }
+    catch (error: any) { this.error(error, 'Work could not be deleted.'); }
+  }
+  async restoreWork(): Promise<void> {
+    if (!this.selectedWork) return;
+    try {
+      const restored = await firstValueFrom(this.board.restoreWork(this.selectedWork.id));
+      this.selectedWork = restored; this.statusFilter = 'all'; this.page = 1; await this.load(restored.id); this.selectedWork = restored; this.notice('Work restored.');
+    } catch (error: any) { this.error(error, 'Work could not be restored.'); }
   }
   startCreateSubWork(): void { if (!this.selectedWork) return; this.subWorkForm = this.emptySubWorkForm(); this.editingSubWorkId = null; this.showSubWorkForm = true; }
   startEditSubWork(sub: SubWorkItem): void {

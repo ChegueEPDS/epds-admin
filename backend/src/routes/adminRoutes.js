@@ -1,5 +1,5 @@
 const express = require('express');
-const controller = require('../controllers/adminController');
+const controller = require('../controllers/adminControllerFacade');
 const integrationController = require('../controllers/integrationAdminController');
 const { requireAuth, requireSuperAdmin } = require('../middlewares/authMiddleware');
 

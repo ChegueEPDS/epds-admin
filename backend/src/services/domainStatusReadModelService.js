@@ -2,6 +2,8 @@ const crypto = require('crypto');
 const DomainHealthCheck = require('../models/domainHealthCheck');
 const DomainHealthDailyRollup = require('../models/domainHealthDailyRollup');
 const DomainStatusReportSnapshot = require('../models/domainStatusReportSnapshot');
+const { databaseEngine } = require('../postgres');
+const domainHealthRepository = require('../repositories/postgres/domainHealthRepository');
 
 const SNAPSHOT_MAX_AGE_MS = Number(process.env.DOMAIN_STATUS_SNAPSHOT_MAX_AGE_MS || 20 * 60 * 1000);
 const LEASE_MS = Number(process.env.DOMAIN_STATUS_REBUILD_LEASE_MS || 5 * 60 * 1000);
@@ -19,6 +21,9 @@ function reportEtag(report) {
 
 async function rebuildDailyRollups(from = new Date(Date.now() - 31 * 86400000)) {
   const start = dayStart(from);
+  if (databaseEngine() === 'postgresql') {
+    return domainHealthRepository.rebuildDailyRollups(start, ROLLUP_RETENTION_DAYS);
+  }
   const rows = await DomainHealthCheck.aggregate([
     { $match: { checkedAt: { $gte: start } } },
     { $project: {
@@ -67,6 +72,9 @@ async function rebuildDailyRollups(from = new Date(Date.now() - 31 * 86400000)) 
 async function acquireLease(ownerSlug) {
   const now = new Date();
   const leaseUntil = new Date(now.getTime() + LEASE_MS);
+  if (databaseEngine() === 'postgresql') {
+    return domainHealthRepository.acquireSnapshotLease(ownerSlug, leaseUntil, now);
+  }
   try {
     const doc = await DomainStatusReportSnapshot.findOneAndUpdate(
       { ownerSlug, $or: [{ leaseUntil: null }, { leaseUntil: { $lt: now } }, { leaseUntil: { $exists: false } }] },
@@ -87,14 +95,17 @@ async function rebuildSnapshot(owner = 'all') {
   const startedAt = Date.now();
   try {
     const report = await buildPublicStatusReport({ owner });
-    await DomainStatusReportSnapshot.updateOne({ ownerSlug: slug }, {
-      $set: { report, generatedAt: new Date(report.generatedAt), buildDurationMs: Date.now() - startedAt, leaseUntil: null, ready: true }
+    const snapshot = { report, generatedAt: new Date(report.generatedAt), buildDurationMs: Date.now() - startedAt };
+    if (databaseEngine() === 'postgresql') await domainHealthRepository.saveSnapshot(slug, snapshot);
+    else await DomainStatusReportSnapshot.updateOne({ ownerSlug: slug }, {
+      $set: { ...snapshot, leaseUntil: null, ready: true }
     });
     const { ensureDailyPdf } = require('./domainStatusPdfCacheService');
     void ensureDailyPdf(report).catch((err) => console.error(`[domain-status-pdf] pre-generation failed for ${slug}:`, err.message));
     return report;
   } catch (err) {
-    await DomainStatusReportSnapshot.updateOne({ ownerSlug: slug }, { $set: { leaseUntil: null } }).catch(() => {});
+    if (databaseEngine() === 'postgresql') await domainHealthRepository.releaseSnapshotLease(slug).catch(() => {});
+    else await DomainStatusReportSnapshot.updateOne({ ownerSlug: slug }, { $set: { leaseUntil: null } }).catch(() => {});
     throw err;
   }
 }
@@ -126,7 +137,14 @@ async function rebuildAllSnapshots() {
     const ownerReport = { owner, ownerSlug: String(owner).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, ''), generatedAt: report.generatedAt, summary, domains };
     return { updateOne: { filter: { ownerSlug: ownerReport.ownerSlug }, update: { $set: { report: ownerReport, generatedAt: now, buildDurationMs: 0, leaseUntil: null, ready: true } }, upsert: true } };
   });
-  if (operations.length) await DomainStatusReportSnapshot.bulkWrite(operations, { ordered: false });
+  if (operations.length) {
+    if (databaseEngine() === 'postgresql') {
+      await Promise.all(operations.map((operation) => {
+        const data = operation.updateOne.update.$set;
+        return domainHealthRepository.saveSnapshot(operation.updateOne.filter.ownerSlug, data);
+      }));
+    } else await DomainStatusReportSnapshot.bulkWrite(operations, { ordered: false });
+  }
   const { ensureDailyPdf } = require('./domainStatusPdfCacheService');
   await Promise.all(operations.map((operation) => ensureDailyPdf(operation.updateOne.update.$set.report)
     .catch((err) => console.error('[domain-status-pdf] owner pre-generation failed:', err.message))));
@@ -149,11 +167,15 @@ function startDomainStatusReadModel() {
 
 async function getStatusSnapshot(owner, { allowBuild = true } = {}) {
   const slug = owner === 'All' || owner === 'all' ? 'all' : String(owner).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
-  let snapshot = await DomainStatusReportSnapshot.findOne({ ownerSlug: slug, ready: true }).select('report generatedAt buildDurationMs').lean();
+  let snapshot = databaseEngine() === 'postgresql'
+    ? await domainHealthRepository.getSnapshot(slug)
+    : await DomainStatusReportSnapshot.findOne({ ownerSlug: slug, ready: true }).select('report generatedAt buildDurationMs').lean();
   const stale = !snapshot || Date.now() - new Date(snapshot.generatedAt).getTime() > SNAPSHOT_MAX_AGE_MS;
   if (!snapshot && allowBuild) {
     await queueSnapshotRebuild(owner === 'All' ? 'all' : owner);
-    snapshot = await DomainStatusReportSnapshot.findOne({ ownerSlug: slug, ready: true }).select('report generatedAt buildDurationMs').lean();
+    snapshot = databaseEngine() === 'postgresql'
+      ? await domainHealthRepository.getSnapshot(slug)
+      : await DomainStatusReportSnapshot.findOne({ ownerSlug: slug, ready: true }).select('report generatedAt buildDurationMs').lean();
   } else if (stale && allowBuild) {
     void queueSnapshotRebuild(owner === 'All' ? 'all' : owner);
   }

@@ -3,6 +3,13 @@ const jwt = require('jsonwebtoken');
 const User = require('../models/user');
 const Tenant = require('../models/tenant');
 const Session = require('../models/session');
+const { databaseEngine } = require('../postgres');
+const { repository } = require('../repositories/repositoryRegistry');
+
+const usingPostgres = () => databaseEngine() === 'postgresql';
+const userStore = () => repository('user');
+const tenantStore = () => repository('tenant');
+const sessionStore = () => repository('session');
 
 const ACCESS_COOKIE = 'access_token';
 const REFRESH_COOKIE = 'refresh_token';
@@ -79,7 +86,9 @@ function parseCookies(req) {
 
 async function buildUserContext(user, session = null) {
   const tenant = user.tenantId
-    ? await Tenant.findById(user.tenantId).lean().select('name displayName type features professionRbacEnabled')
+    ? (usingPostgres()
+      ? await tenantStore().findById(user.tenantId)
+      : await Tenant.findById(user.tenantId).lean().select('name displayName type features professionRbacEnabled'))
     : null;
   const featureAccess = (value) => {
     if (typeof value === 'boolean') return { enabled: value, edit: value, delete: value };
@@ -163,7 +172,7 @@ async function createSession({ user, req }) {
   const now = Date.now();
   const absoluteExpiresAt = new Date(now + absoluteTtlMs());
   const expiresAt = new Date(Math.min(now + refreshTtlMs(), absoluteExpiresAt.getTime()));
-  const session = await Session.create({
+  const sessionInput = {
     userId: user._id,
     tenantId: user.tenantId,
     clientType: 'web',
@@ -172,7 +181,10 @@ async function createSession({ user, req }) {
     absoluteExpiresAt,
     userAgent: String(req?.headers?.['user-agent'] || '').slice(0, 500),
     ip: String(req?.ip || req?.connection?.remoteAddress || '')
-  });
+  };
+  const session = usingPostgres()
+    ? await sessionStore().create(sessionInput)
+    : await Session.create(sessionInput);
   const accessToken = await signAccessToken(user, session);
   return {
     session,
@@ -188,6 +200,36 @@ async function rotateRefreshToken({ refreshToken, req }) {
   const nowDate = new Date(now);
   const refreshHash = hashToken(refreshToken);
   const graceMs = parseDurationMs(process.env.REFRESH_ROTATION_GRACE || '10s', 10000);
+  if (usingPostgres()) {
+    const session = await sessionStore().findForRefresh(refreshHash, nowDate);
+    if (!session) throw new Error('Invalid refresh token');
+    const user = await userStore().findById(session.userId);
+    if (!user) throw new Error('Invalid session user');
+    if (session.tokenMatch === 'grace') {
+      const accessToken = await signAccessToken(user, session);
+      return { session, accessToken, refreshToken: null, user: await buildUserContext(user, session), sessionMeta: buildSessionMetadata(session, accessToken) };
+    }
+    if (session.absoluteExpiresAt && new Date(session.absoluteExpiresAt).getTime() <= now) {
+      await sessionStore().revoke(session._id, nowDate);
+      throw new Error('Session absolute lifetime expired');
+    }
+    const nextRefreshToken = randomToken();
+    const rotated = await sessionStore().rotate({
+      id: session._id, currentHash: refreshHash, nextHash: hashToken(nextRefreshToken),
+      graceUntil: new Date(now + graceMs),
+      expiresAt: new Date(Math.min(
+        now + refreshTtlMs(),
+        session.absoluteExpiresAt ? new Date(session.absoluteExpiresAt).getTime() : now + absoluteTtlMs()
+      )),
+      lastSeenAt: nowDate, userAgent: String(req?.headers?.['user-agent'] || session.userAgent || '').slice(0, 500),
+      ip: String(req?.ip || req?.connection?.remoteAddress || session.ip || '')
+    });
+    if (!rotated) throw new Error('Refresh token was already rotated');
+    const accessToken = await signAccessToken(user, rotated);
+    return { session: rotated, accessToken, refreshToken: nextRefreshToken,
+      user: await buildUserContext(user, rotated), sessionMeta: buildSessionMetadata(rotated, accessToken) };
+  }
+
   let session = await Session.findOne({ refreshTokenHash: refreshHash, revokedAt: null, expiresAt: { $gt: nowDate } });
 
   if (!session) {
@@ -246,14 +288,19 @@ async function authenticateAccessToken(token) {
   if (decoded.type !== 'access' && decoded.typ !== 'access') throw new Error('Wrong token type');
   if (!decoded.sid) throw new Error('Missing session');
 
-  const session = await Session.findOne({ _id: decoded.sid, revokedAt: null, expiresAt: { $gt: new Date() } }).lean();
+  const session = usingPostgres()
+    ? await sessionStore().findActiveById(decoded.sid, new Date())
+    : await Session.findOne({ _id: decoded.sid, revokedAt: null, expiresAt: { $gt: new Date() } }).lean();
   if (!session) throw new Error('Session revoked or expired');
   if (session.absoluteExpiresAt && new Date(session.absoluteExpiresAt).getTime() <= Date.now()) {
-    await Session.findByIdAndUpdate(session._id, { revokedAt: new Date() });
+    if (usingPostgres()) await sessionStore().revoke(session._id);
+    else await Session.findByIdAndUpdate(session._id, { revokedAt: new Date() });
     throw new Error('Session absolute lifetime expired');
   }
 
-  const user = await User.findById(session.userId).lean();
+  const user = usingPostgres()
+    ? await userStore().findById(session.userId)
+    : await User.findById(session.userId).lean();
   if (!user) throw new Error('Invalid session user');
   return { decoded, session, user: await buildUserContext(user, session) };
 }
@@ -299,7 +346,9 @@ function validateCsrf(req, tokenSource) {
 }
 
 async function revokeSession(sessionId) {
-  if (sessionId) await Session.findByIdAndUpdate(sessionId, { revokedAt: new Date() });
+  if (!sessionId) return;
+  if (usingPostgres()) await sessionStore().revoke(sessionId);
+  else await Session.findByIdAndUpdate(sessionId, { revokedAt: new Date() });
 }
 
 module.exports = {

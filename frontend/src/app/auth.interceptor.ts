@@ -15,6 +15,14 @@ function isBackendUrl(req: HttpRequest<unknown>): boolean {
   }
 }
 
+function isGlobalAdministrationRequest(req: HttpRequest<unknown>): boolean {
+  try {
+    return new URL(req.url, window.location.origin).pathname.includes('/api/admin/');
+  } catch {
+    return req.url.includes('/api/admin/');
+  }
+}
+
 export const authInterceptor: HttpInterceptorFn = (req, next) => {
   const router = inject(Router);
   const injector = inject(Injector);
@@ -29,6 +37,10 @@ export const authInterceptor: HttpInterceptorFn = (req, next) => {
     const setHeaders: Record<string, string> = {};
     if (csrf && !['GET', 'HEAD', 'OPTIONS'].includes(req.method.toUpperCase())) {
       setHeaders['X-CSRF-Token'] = decodeURIComponent(csrf);
+    }
+    const tenantContext = injector.get(AuthService).getTenantContextId();
+    if (tenantContext && !isGlobalAdministrationRequest(req)) {
+      setHeaders['X-Tenant-Context'] = tenantContext;
     }
 
     req = req.clone({ setHeaders, withCredentials: true });

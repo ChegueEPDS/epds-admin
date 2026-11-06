@@ -1,5 +1,6 @@
 import { CommonModule } from '@angular/common';
 import { Component } from '@angular/core';
+import { FormsModule } from '@angular/forms';
 import { NavigationEnd, Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
@@ -8,6 +9,7 @@ import { MatToolbarModule } from '@angular/material/toolbar';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { filter } from 'rxjs';
 import { AuthService } from './services/auth.service';
+import { AdminService, AdminTenant } from './services/admin.service';
 import { ThemeService } from './services/theme.service';
 
 @Component({
@@ -15,6 +17,7 @@ import { ThemeService } from './services/theme.service';
   standalone: true,
   imports: [
     CommonModule,
+    FormsModule,
     RouterOutlet,
     RouterLink,
     RouterLinkActive,
@@ -30,10 +33,14 @@ import { ThemeService } from './services/theme.service';
 export class AppComponent {
   isPublicRoute = false;
   currentUrl = '';
+  tenants: AdminTenant[] = [];
+  tenantContextId = '';
+  private tenantListLoaded = false;
 
   constructor(
     public auth: AuthService,
     public theme: ThemeService,
+    private admin: AdminService,
     private router: Router
   ) {
     this.currentUrl = this.router.url;
@@ -44,6 +51,36 @@ export class AppComponent {
         this.currentUrl = (event as NavigationEnd).urlAfterRedirects;
         this.isPublicRoute = this.isPublicPath(this.currentUrl);
       });
+    this.auth.user$.subscribe((user) => {
+      if (user?.role === 'SuperAdmin' && !this.tenantListLoaded) this.loadTenantContexts();
+      if (user?.role !== 'SuperAdmin') {
+        this.tenants = [];
+        this.tenantContextId = '';
+        this.tenantListLoaded = false;
+      }
+    });
+  }
+
+  private loadTenantContexts(): void {
+    this.tenantListLoaded = true;
+    this.admin.listTenants().subscribe({
+      next: (tenants) => {
+        this.tenants = tenants;
+        const selected = this.auth.restoreTenantContext(tenants);
+        this.tenantContextId = selected?.id || '';
+      },
+      error: () => { this.tenantListLoaded = false; }
+    });
+  }
+
+  tenantLabel(tenant: AdminTenant): string {
+    return tenant.displayName || tenant.name;
+  }
+
+  changeTenantContext(tenantId: string): void {
+    const tenant = this.tenants.find((item) => item.id === tenantId) || null;
+    this.auth.setTenantContext(tenant);
+    window.location.reload();
   }
 
   get isWebhookSectionActive(): boolean {

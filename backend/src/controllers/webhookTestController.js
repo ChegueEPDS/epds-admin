@@ -1,5 +1,7 @@
 const WebhookTestReceipt = require('../models/webhookTestReceipt');
 const { sha256 } = require('../services/integrationSecurityService');
+const { databaseEngine } = require('../postgres');
+const integrationRepository = require('../repositories/postgres/integrationRepository');
 
 const TOKEN_PATTERN = /^[A-Za-z0-9_-]{32,128}$/;
 const RETENTION_MS = 24 * 60 * 60 * 1000;
@@ -38,7 +40,7 @@ async function receive(req, res) {
     if (!inboxTokenHash) return;
     const bodyBuffer = Buffer.isBuffer(req.body) ? req.body : Buffer.from('');
     const rawBody = bodyBuffer.toString('utf8');
-    const receipt = await WebhookTestReceipt.create({
+    const payload = {
       inboxTokenHash,
       method: req.method,
       path: req.originalUrl,
@@ -48,9 +50,10 @@ async function receive(req, res) {
       byteLength: bodyBuffer.length,
       receivedAt: new Date(),
       expiresAt: new Date(Date.now() + RETENTION_MS)
-    });
+    };
+    const receipt = databaseEngine() === 'postgresql' ? await integrationRepository.createReceipt(payload) : await WebhookTestReceipt.create(payload);
 
-    const overflow = await WebhookTestReceipt.find({ inboxTokenHash })
+    const overflow = databaseEngine() === 'postgresql' ? [] : await WebhookTestReceipt.find({ inboxTokenHash })
       .sort({ receivedAt: -1, _id: -1 })
       .skip(MAX_RECEIPTS)
       .select('_id')
@@ -70,7 +73,7 @@ async function list(req, res) {
   try {
     const inboxTokenHash = requireToken(req, res);
     if (!inboxTokenHash) return;
-    const receipts = await WebhookTestReceipt.find({ inboxTokenHash })
+    const receipts = databaseEngine() === 'postgresql' ? await integrationRepository.listReceipts(inboxTokenHash) : await WebhookTestReceipt.find({ inboxTokenHash })
       .sort({ receivedAt: -1, _id: -1 })
       .limit(MAX_RECEIPTS)
       .lean();
@@ -85,7 +88,7 @@ async function clear(req, res) {
   try {
     const inboxTokenHash = requireToken(req, res);
     if (!inboxTokenHash) return;
-    const result = await WebhookTestReceipt.deleteMany({ inboxTokenHash });
+    const result = databaseEngine() === 'postgresql' ? await integrationRepository.clearReceipts(inboxTokenHash) : await WebhookTestReceipt.deleteMany({ inboxTokenHash });
     return res.json({ deletedCount: result.deletedCount || 0 });
   } catch (error) {
     console.error('[webhook-test] clear failed:', error);

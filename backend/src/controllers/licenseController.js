@@ -1,5 +1,8 @@
 const LicenseCustomer = require('../models/licenseCustomer');
 const Tenant = require('../models/tenant');
+const { databaseEngine } = require('../postgres');
+const licenseRepository = require('../repositories/postgres/licenseRepository');
+const tenantRepository = require('../repositories/postgres/tenantRepository');
 const fileStorage = require('../services/fileStorageService');
 const { normalizeMobileAppVersion, replaceLicenseFile, replaceMobileAppFile } = require('../services/licenseFileService');
 const { publishOrderedEvent, transitionStatus } = require('../services/licenseIntegrationService');
@@ -363,9 +366,16 @@ function presentLicense(license, options = {}) {
 async function clientTenantFromPayload(body) {
   const tenantId = String(body?.tenantId || '').trim();
   if (!tenantId) throw httpError('Customer is required');
-  const tenant = await Tenant.findOne({ _id: tenantId, type: 'client' });
-  if (!tenant) throw httpError('Valid client customer is required', 404);
+  const tenant = databaseEngine() === 'postgresql' ? await tenantRepository.findById(tenantId) : await Tenant.findOne({ _id: tenantId, type: 'client' });
+  if (!tenant || tenant.type !== 'client') throw httpError('Valid client customer is required', 404);
   return tenant;
+}
+
+function postgresScope(scope = {}) { return { tenantId: scope.tenantId || null, all: canManageAllLicenses(scope) }; }
+async function findLicense(id, scope) {
+  return databaseEngine() === 'postgresql'
+    ? licenseRepository.findById(id, postgresScope(scope))
+    : LicenseCustomer.findOne({ _id: id, ...licenseScopeQuery(scope) });
 }
 
 function applyLicensePayload(license, body) {
@@ -523,13 +533,17 @@ exports.listLicenses = async (req, res, next) => {
   try {
     const includeVpnCredentials = req.scope?.tenantType !== 'client';
     const limit = requestLimit(req.query.limit);
-    const licenses = await LicenseCustomer.find(licenseScopeQuery(req.scope))
+    const licenses = databaseEngine() === 'postgresql'
+      ? await licenseRepository.list({ ...postgresScope(req.scope), limit })
+      : await LicenseCustomer.find(licenseScopeQuery(req.scope))
       .sort({ customerName: 1 })
       .limit(limit)
       .populate('tenantId', 'name displayName type')
       .lean();
     const clientTenants = canManageAllLicenses(req.scope)
-      ? await Tenant.find({ type: 'client' }).sort({ displayName: 1, name: 1 }).select('name displayName type').lean()
+      ? databaseEngine() === 'postgresql'
+        ? (await tenantRepository.list()).filter((tenant) => tenant.type === 'client')
+        : await Tenant.find({ type: 'client' }).sort({ displayName: 1, name: 1 }).select('name displayName type').lean()
       : [];
     return res.json({
       licenses: licenses.map((license) => presentLicense(license, { includeVpnCredentials })),
@@ -552,10 +566,9 @@ exports.createLicense = async (req, res, next) => {
     const payload = { ...(req.body || {}) };
     if (!includeVpnCredentials) delete payload.vpnCredentials;
     const clientTenant = canManageAllLicenses(req.scope) ? await clientTenantFromPayload(req.body || {}) : null;
-    const license = new LicenseCustomer({
-      tenantId: clientTenant?._id || req.scope?.tenantId,
-      createdBy: req.userId
-    });
+    const license = databaseEngine() === 'postgresql'
+      ? { tenantId: clientTenant?._id || clientTenant?.id || req.scope?.tenantId, createdBy: req.userId, status: 'active', statusVersion: 0, integrationEventVersion: 0, objectLimitOption: '1000', description: '', save: async function(){const saved=await licenseRepository.save(this);Object.assign(this,saved);return this;}, populate: async function(){return this;} }
+      : new LicenseCustomer({ tenantId: clientTenant?._id || req.scope?.tenantId, createdBy: req.userId });
     const previousStatus = license.status;
     for (const field of ['customerName', 'status', 'objectLimitOption', 'expiresAt']) {
       if (!Object.prototype.hasOwnProperty.call(req.body || {}, field)) {
@@ -586,7 +599,7 @@ exports.updateLicense = async (req, res, next) => {
     const includeVpnCredentials = req.scope?.tenantType !== 'client';
     const payload = { ...(req.body || {}) };
     if (!includeVpnCredentials) delete payload.vpnCredentials;
-    const license = await LicenseCustomer.findOne({ _id: req.params.id, ...licenseScopeQuery(req.scope) });
+    const license = await findLicense(req.params.id, req.scope);
     if (!license) return res.status(404).json({ error: 'License not found' });
     applyExpiredStatus(license);
     const previousStatus = license.status;
@@ -594,12 +607,14 @@ exports.updateLicense = async (req, res, next) => {
     const clientTenant = isGlobalManager && Object.prototype.hasOwnProperty.call(req.body || {}, 'tenantId')
       ? await clientTenantFromPayload(req.body || {})
       : isGlobalManager && license.tenantId
-        ? await Tenant.findOne({ _id: license.tenantId, type: 'client' })
+        ? databaseEngine() === 'postgresql'
+          ? await tenantRepository.findById(license.tenantId?._id || license.tenantId)
+          : await Tenant.findOne({ _id: license.tenantId, type: 'client' })
         : null;
 
     applyLicensePayload(license, payload);
     if (clientTenant) {
-      license.tenantId = clientTenant._id;
+      license.tenantId = clientTenant._id || clientTenant.id;
       license.customerName = tenantLabel(clientTenant);
       license.normalizedCustomerName = license.customerName.toLowerCase();
     }
@@ -620,7 +635,7 @@ exports.updateLicense = async (req, res, next) => {
 
 exports.deleteLicense = async (req, res, next) => {
   try {
-    const license = await LicenseCustomer.findOne({ _id: req.params.id, ...licenseScopeQuery(req.scope) });
+    const license = await findLicense(req.params.id, req.scope);
     if (!license) return res.status(404).json({ error: 'License not found' });
     const blobPaths = [license.licenseFile?.blobPath, license.mobileAppFile?.blobPath].filter(Boolean);
     await license.deleteOne();
@@ -637,7 +652,7 @@ exports.deleteLicense = async (req, res, next) => {
 
 exports.uploadMobileAppFile = async (req, res, next) => {
   try {
-    const license = await LicenseCustomer.findOne({ _id: req.params.id, ...licenseScopeQuery(req.scope) });
+    const license = await findLicense(req.params.id, req.scope);
     if (!license) return res.status(404).json({ error: 'License not found' });
     if (!req.file) return res.status(400).json({ error: 'No file provided' });
 
@@ -652,7 +667,7 @@ exports.uploadMobileAppFile = async (req, res, next) => {
 
 exports.uploadLicenseFile = async (req, res, next) => {
   try {
-    const license = await LicenseCustomer.findOne({ _id: req.params.id, ...licenseScopeQuery(req.scope) });
+    const license = await findLicense(req.params.id, req.scope);
     if (!license) return res.status(404).json({ error: 'License not found' });
     if (!req.file) return res.status(400).json({ error: 'No file provided' });
 
@@ -668,7 +683,7 @@ exports.uploadLicenseFile = async (req, res, next) => {
 exports.orderLicense = async (req, res, next) => {
   try {
     const includeVpnCredentials = req.scope?.tenantType !== 'client';
-    const license = await LicenseCustomer.findOne({ _id: req.params.id, ...licenseScopeQuery(req.scope) });
+    const license = await findLicense(req.params.id, req.scope);
     if (!license) return res.status(404).json({ error: 'License not found' });
     applyExpiredStatus(license);
     const previousStatus = license.status;
@@ -718,7 +733,7 @@ exports.orderLicense = async (req, res, next) => {
 exports.activateLicense = async (req, res, next) => {
   try {
     const includeVpnCredentials = req.scope?.tenantType !== 'client';
-    const license = await LicenseCustomer.findOne({ _id: req.params.id, ...licenseScopeQuery(req.scope) });
+    const license = await findLicense(req.params.id, req.scope);
     if (!license) return res.status(404).json({ error: 'License not found' });
     if (!license.licenseFile?.blobPath) return res.status(400).json({ error: 'License file is required before activation' });
 
@@ -738,7 +753,7 @@ exports.downloadLicenseFile = async (req, res, next) => {
     if (req.scope?.tenantType === 'client') {
       return res.status(403).json({ error: 'Client tenants cannot download license files' });
     }
-    const license = await LicenseCustomer.findOne({ _id: req.params.id, ...licenseScopeQuery(req.scope) }).lean();
+    const license = await findLicense(req.params.id, req.scope);
     if (!license) return res.status(404).json({ error: 'License not found' });
     if (!license.licenseFile?.blobPath) return res.status(404).json({ error: 'License file not found' });
 
@@ -764,7 +779,7 @@ exports.downloadLicenseFile = async (req, res, next) => {
 
 exports.downloadMobileAppFile = async (req, res, next) => {
   try {
-    const license = await LicenseCustomer.findOne({ _id: req.params.id, ...licenseScopeQuery(req.scope) }).lean();
+    const license = await findLicense(req.params.id, req.scope);
     if (!license) return res.status(404).json({ error: 'License not found' });
     if (!license.mobileAppFile?.blobPath) return res.status(404).json({ error: 'Mobile app file not found' });
 

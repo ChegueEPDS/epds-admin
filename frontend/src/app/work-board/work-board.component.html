@@ -101,7 +101,7 @@
       </div>
       <div class="table-toolbar">
         <mat-form-field appearance="outline" subscriptSizing="dynamic"><mat-label>Search works</mat-label><mat-icon class="material-symbols-outlined" matPrefix>search</mat-icon><input matInput [(ngModel)]="search" (ngModelChange)="filtersChanged(true)"></mat-form-field>
-        <mat-form-field appearance="outline" subscriptSizing="dynamic"><mat-label>Status</mat-label><mat-select [(ngModel)]="statusFilter" (selectionChange)="filtersChanged()"><mat-option value="active">Active</mat-option><mat-option value="all">All</mat-option><mat-option *ngFor="let status of statuses" [value]="status.value">{{ status.label }}</mat-option></mat-select></mat-form-field>
+        <mat-form-field appearance="outline" subscriptSizing="dynamic"><mat-label>Status</mat-label><mat-select [(ngModel)]="statusFilter" (selectionChange)="filtersChanged()"><mat-option value="active">Active</mat-option><mat-option value="all">All</mat-option><mat-option value="deleted">Deleted</mat-option><mat-option *ngFor="let status of statuses" [value]="status.value">{{ status.label }}</mat-option></mat-select></mat-form-field>
         <span class="result-count">{{ totalWorks }} work{{ totalWorks === 1 ? '' : 's' }}</span>
       </div>
       <div class="work-table-wrap">
@@ -109,7 +109,7 @@
           <thead><tr><th>Work no.</th><th>Client / work</th><th>Responsible</th><th>Status</th><th>Deadline</th><th class="numeric">Value</th><th class="numeric">Sub-works</th><th aria-label="Actions"></th></tr></thead>
           <tbody>
             <ng-container *ngFor="let work of filteredWorks; trackBy: trackWork">
-              <tr class="work-main-row" [class.expanded]="isWorkExpanded(work)" (click)="selectWork(work)" tabindex="0" (keydown.enter)="selectWork(work)">
+              <tr class="work-main-row" [class.expanded]="isWorkExpanded(work)" [class.deleted]="work.archivedAt" (dblclick)="selectWork(work)" title="Double-click to open work details">
                 <td>
                   <div class="work-number-cell">
                     <button
@@ -118,7 +118,7 @@
                       [attr.aria-expanded]="isWorkExpanded(work)"
                       [attr.aria-controls]="'subworks-' + work.id"
                       [attr.aria-label]="(isWorkExpanded(work) ? 'Collapse ' : 'Expand ') + work.workNumber + ' sub-works'"
-                      (click)="toggleWorkExpansion(work, $event)">
+                      (click)="toggleWorkExpansion(work, $event)" (dblclick)="$event.stopPropagation()">
                       <mat-icon class="material-symbols-outlined">expand_more</mat-icon>
                     </button>
                     <strong class="work-number">{{ work.workNumber }}</strong>
@@ -126,7 +126,7 @@
                 </td>
                 <td><strong>{{ work.name }}</strong><small>{{ work.customer || 'No client' }}</small></td>
                 <td>{{ work.responsible || '—' }}</td>
-                <td><span class="status" [attr.data-status]="work.status">{{ statusLabel(work.status) }}</span></td>
+                <td><span class="status" [attr.data-status]="work.archivedAt ? 'deleted' : work.status">{{ work.archivedAt ? 'Deleted' : statusLabel(work.status) }}</span></td>
                 <td [class.overdue]="isOverdue(work.deadline)">{{ work.deadline ? (work.deadline | date:'yyyy.MM.dd') : '—' }}</td>
                 <td class="numeric">{{ showFrom('offer', work.status) ? formatMoney(work.totalAmount, work.currency) : '—' }}</td>
                 <td class="numeric"><strong>{{ work.subWorkCount }}</strong><small *ngIf="work.totalAmount">{{ work.allocatedPercentage | number:'1.0-1' }}%</small></td>
@@ -217,8 +217,12 @@
 
     <main class="work-detail-sheet" *ngIf="detailView && selectedWork as work">
       <header class="detail-header">
-        <div><div class="detail-kicker"><span class="work-number">{{ work.workNumber }}</span><span class="status" [attr.data-status]="work.status">{{ statusLabel(work.status) }}</span></div><h2>{{ work.name }}</h2><p>{{ work.customer || 'No client' }}<span *ngIf="work.responsible"> · {{ work.responsible }}</span></p></div>
-        <div class="detail-actions" *ngIf="auth.canEditFeature('workBoard')"><button mat-stroked-button type="button" (click)="startEditWork()"><mat-icon class="material-symbols-outlined">edit</mat-icon>Edit</button><button mat-icon-button type="button" *ngIf="auth.canDeleteFeature('workBoard')" (click)="archiveWork()"><mat-icon class="material-symbols-outlined">archive</mat-icon></button></div>
+        <div><div class="detail-kicker"><span class="work-number">{{ work.workNumber }}</span><span class="status" [attr.data-status]="work.archivedAt ? 'deleted' : work.status">{{ work.archivedAt ? 'Deleted' : statusLabel(work.status) }}</span></div><h2>{{ work.name }}</h2><p>{{ work.customer || 'No client' }}<span *ngIf="work.responsible"> · {{ work.responsible }}</span></p></div>
+        <div class="detail-actions" *ngIf="auth.canEditFeature('workBoard') || auth.canDeleteFeature('workBoard')">
+          <button mat-stroked-button type="button" *ngIf="!work.archivedAt && auth.canEditFeature('workBoard')" (click)="startEditWork()"><mat-icon class="material-symbols-outlined">edit</mat-icon>Edit</button>
+          <button mat-stroked-button type="button" *ngIf="work.archivedAt && auth.canDeleteFeature('workBoard')" (click)="restoreWork()"><mat-icon class="material-symbols-outlined">restore_from_trash</mat-icon>Restore</button>
+          <button mat-icon-button type="button" *ngIf="!work.archivedAt && auth.canDeleteFeature('workBoard')" (click)="archiveWork()" aria-label="Move work to deleted works"><mat-icon class="material-symbols-outlined">delete</mat-icon></button>
+        </div>
       </header>
 
       <dl class="record-overview">
@@ -278,7 +282,7 @@
       </div>
 
       <section class="sub-section">
-        <div class="section-title"><div><h3>Sub-works</h3><p>Execution steps and separately billable milestones.</p></div><button mat-stroked-button type="button" *ngIf="auth.canEditFeature('workBoard')" (click)="startCreateSubWork()"><mat-icon class="material-symbols-outlined">add</mat-icon>Add sub-work</button></div>
+        <div class="section-title"><div><h3>Sub-works</h3><p>Execution steps and separately billable milestones.</p></div><button mat-stroked-button type="button" *ngIf="!work.archivedAt && auth.canEditFeature('workBoard')" (click)="startCreateSubWork()"><mat-icon class="material-symbols-outlined">add</mat-icon>Add sub-work</button></div>
 
         <form class="grouped-editor nested" *ngIf="showSubWorkForm" (ngSubmit)="saveSubWork()">
           <section class="form-group">
@@ -333,7 +337,7 @@
               <td class="numeric">{{ showFrom('offer', sub.status) ? formatMoney(sub.amount, work.currency) : '—' }}</td>
               <td class="numeric">{{ showFrom('offer', sub.status) ? ((sub.percentage | number:'1.0-2') + '%') : '—' }}</td>
               <td>{{ showFrom('invoice', sub.status) && sub.invoiceNumber ? sub.invoiceNumber : '—' }}</td>
-              <td class="row-actions"><ng-container *ngIf="auth.canEditFeature('workBoard')"><button mat-icon-button type="button" (click)="startEditSubWork(sub)" aria-label="Edit sub-work"><mat-icon class="material-symbols-outlined">edit</mat-icon></button><button mat-icon-button type="button" *ngIf="auth.canDeleteFeature('workBoard')" (click)="archiveSubWork(sub)" aria-label="Archive sub-work"><mat-icon class="material-symbols-outlined">archive</mat-icon></button></ng-container></td>
+              <td class="row-actions"><ng-container *ngIf="!work.archivedAt && auth.canEditFeature('workBoard')"><button mat-icon-button type="button" (click)="startEditSubWork(sub)" aria-label="Edit sub-work"><mat-icon class="material-symbols-outlined">edit</mat-icon></button><button mat-icon-button type="button" *ngIf="auth.canDeleteFeature('workBoard')" (click)="archiveSubWork(sub)" aria-label="Archive sub-work"><mat-icon class="material-symbols-outlined">archive</mat-icon></button></ng-container></td>
             </tr></tbody>
           </table>
         </div>
@@ -346,7 +350,7 @@
           <span>{{ documents.length }} file{{ documents.length === 1 ? '' : 's' }}</span>
         </header>
 
-        <div class="document-upload" [class.has-custom-name]="documentCategory === 'other'" *ngIf="auth.canEditFeature('workBoard')">
+        <div class="document-upload" [class.has-custom-name]="documentCategory === 'other'" *ngIf="!work.archivedAt && auth.canEditFeature('workBoard')">
           <mat-form-field appearance="outline" subscriptSizing="dynamic"><mat-label>Document type</mat-label><mat-select [(ngModel)]="documentCategory"><mat-option *ngFor="let category of documentCategories" [value]="category.value">{{ category.label }}</mat-option></mat-select></mat-form-field>
           <mat-form-field appearance="outline" subscriptSizing="dynamic" *ngIf="documentCategory === 'other'"><mat-label>Custom document name</mat-label><input matInput [(ngModel)]="documentCustomName"></mat-form-field>
           <input #documentFileInput type="file" hidden (change)="chooseDocument(documentFileInput)">
@@ -364,7 +368,7 @@
               <td class="file-name" [title]="document.fileName">{{ document.fileName }}</td>
               <td><span>{{ document.uploadedAt | date:'yyyy.MM.dd HH:mm' }}</span><small *ngIf="document.uploadedByName">{{ document.uploadedByName }}</small></td>
               <td class="numeric">{{ formatFileSize(document.size) }}</td>
-              <td class="document-actions"><button mat-icon-button type="button" (click)="downloadDocument(document)" aria-label="Download document"><mat-icon class="material-symbols-outlined">download</mat-icon></button><button mat-icon-button type="button" *ngIf="auth.canDeleteFeature('workBoard')" (click)="deleteDocument(document)" aria-label="Delete document"><mat-icon class="material-symbols-outlined">delete</mat-icon></button></td>
+              <td class="document-actions"><button mat-icon-button type="button" (click)="downloadDocument(document)" aria-label="Download document"><mat-icon class="material-symbols-outlined">download</mat-icon></button><button mat-icon-button type="button" *ngIf="!work.archivedAt && auth.canDeleteFeature('workBoard')" (click)="deleteDocument(document)" aria-label="Delete document"><mat-icon class="material-symbols-outlined">delete</mat-icon></button></td>
             </tr></tbody>
           </table>
         </div>

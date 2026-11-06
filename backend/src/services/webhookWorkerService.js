@@ -5,6 +5,9 @@ const LicenseCustomer = require('../models/licenseCustomer');
 const { decryptSecret, signWebhook, validateWebhookUrl } = require('./integrationSecurityService');
 const { ensureDeliveries, presentEvent, publishOrderedEvent } = require('./licenseIntegrationService');
 const { mapWithConcurrency } = require('./scheduledJobLeaseService');
+const { databaseEngine } = require('../postgres');
+const integrationRepository = require('../repositories/postgres/integrationRepository');
+const licenseRepository = require('../repositories/postgres/licenseRepository');
 
 const MAX_ATTEMPTS = 10;
 let workerTimer = null;
@@ -15,6 +18,7 @@ function retryDelayMs(attemptCount) {
 }
 
 async function claimDelivery() {
+  if (databaseEngine() === 'postgresql') return integrationRepository.claimDelivery();
   const now = new Date();
   return WebhookDelivery.findOneAndUpdate(
     { status: 'pending', nextAttemptAt: { $lte: now } },
@@ -24,6 +28,7 @@ async function claimDelivery() {
 }
 
 async function resetExpiredClaims() {
+  if (databaseEngine() === 'postgresql') return integrationRepository.resetExpiredClaims();
   const now = new Date();
   await WebhookDelivery.updateMany(
     { status: 'processing', lockedUntil: { $lt: now } },
@@ -32,12 +37,14 @@ async function resetExpiredClaims() {
 }
 
 async function deliver(delivery) {
-  const [client, event] = await Promise.all([
+  const [client, event] = databaseEngine() === 'postgresql' ? await Promise.all([
+    integrationRepository.findClient(delivery.clientId), integrationRepository.findEvent(delivery.eventId)
+  ]) : await Promise.all([
     IntegrationClient.findOne({ _id: delivery.clientId, status: 'active', webhookEnabled: true })
       .select('+webhookSecretEncrypted'),
     LicenseEvent.findById(delivery.eventId)
   ]);
-  if (!client || !event || !client.webhookUrl) {
+  if (!client || client.status !== 'active' || !client.webhookEnabled || !event || !client.webhookUrl) {
     delivery.status = 'dead';
     delivery.lastError = 'Integration client or event is unavailable';
     await delivery.save();
@@ -76,7 +83,10 @@ async function deliver(delivery) {
       delivery.lastError = '';
       delivery.lockedUntil = undefined;
       await delivery.save();
-      await IntegrationClient.updateOne({ _id: client._id }, { $set: { lastWebhookSuccessAt: new Date() } });
+      if (databaseEngine() === 'postgresql') {
+        client.lastWebhookSuccessAt = new Date();
+        await integrationRepository.saveClient(client);
+      } else await IntegrationClient.updateOne({ _id: client._id }, { $set: { lastWebhookSuccessAt: new Date() } });
       return;
     }
     errorMessage = `Webhook returned HTTP ${response.status}`;
@@ -100,7 +110,9 @@ async function deliver(delivery) {
 }
 
 async function reconcileDeliveries() {
-  const unpublished = await LicenseCustomer.find({
+  const unpublished = databaseEngine() === 'postgresql'
+    ? (await licenseRepository.list({ all: true, limit: 250 })).filter((license) => license.status === 'ordered' && Number(license.statusVersion) > Number(license.integrationEventVersion))
+    : await LicenseCustomer.find({
     status: 'ordered',
     $or: [
       { integrationEventVersion: { $exists: false } },
@@ -110,7 +122,9 @@ async function reconcileDeliveries() {
   for (const license of unpublished) {
     await publishOrderedEvent(license, license.orderedFromStatus, { type: 'system', name: 'Outbox reconciler' });
   }
-  const unreconciledEvents = await LicenseEvent.find({ deliveriesEnsuredAt: null })
+  const unreconciledEvents = databaseEngine() === 'postgresql'
+    ? await integrationRepository.listEvents({ unreconciled: true, limit: 250 })
+    : await LicenseEvent.find({ deliveriesEnsuredAt: null })
     .sort({ occurredAt: 1 })
     .limit(250);
   await mapWithConcurrency(unreconciledEvents, 5, ensureDeliveries);

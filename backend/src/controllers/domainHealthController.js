@@ -2,6 +2,9 @@ const dns = require('dns').promises;
 const DomainMonitor = require('../models/domainMonitor');
 const DomainHealthCheck = require('../models/domainHealthCheck');
 const Tenant = require('../models/tenant');
+const { databaseEngine } = require('../postgres');
+const tenantRepository = require('../repositories/postgres/tenantRepository');
+const domainHealthRepository = require('../repositories/postgres/domainHealthRepository');
 const { getDomainPageSpeedOverview, storeDomainPageSpeedScan } = require('../services/pageSpeedService');
 const { getStatusSnapshot, queueSnapshotRebuild } = require('../services/domainStatusReadModelService');
 const { getOrGeneratePdf } = require('../services/domainStatusPdfCacheService');
@@ -40,11 +43,11 @@ function isSuperAdmin(req) {
 async function tenantForDomain(req) {
   if (!isSuperAdmin(req)) {
     if (!req.scope?.tenantId) return null;
-    return Tenant.findById(req.scope.tenantId);
+    return databaseEngine() === 'postgresql' ? tenantRepository.findById(req.scope.tenantId) : Tenant.findById(req.scope.tenantId);
   }
   const tenantId = String(req.body?.tenantId || '').trim();
   if (!tenantId) return null;
-  return Tenant.findById(tenantId);
+  return databaseEngine() === 'postgresql' ? tenantRepository.findById(tenantId) : Tenant.findById(tenantId);
 }
 
 function defaultOwnerForTenant(tenant) {
@@ -58,6 +61,7 @@ function ownerForTenant(tenant, input) {
 }
 
 async function populateDomainTenant(domain) {
+  if (databaseEngine() === 'postgresql') return domain;
   await domain.populate('tenantId', 'name displayName');
   return domain;
 }
@@ -67,7 +71,7 @@ async function ownerFromSlug(input) {
   if (!raw || raw === 'all') return 'All';
   const staticOwner = DomainMonitor.owners.find((owner) => ownerSlug(owner) === raw);
   if (staticOwner) return staticOwner;
-  const owners = await DomainMonitor.distinct('owner');
+  const owners = databaseEngine() === 'postgresql' ? await domainHealthRepository.distinctOwners() : await DomainMonitor.distinct('owner');
   return owners.find((owner) => ownerSlug(owner) === raw) || null;
 }
 
@@ -170,16 +174,19 @@ exports.createDomain = async (req, res, next) => {
     if (!owner) return res.status(400).json({ error: 'Valid owner badge is required' });
     await assertPublicUrl(normalizedUrl);
 
-    const domain = await DomainMonitor.create({
+    const payload = {
       name,
       baseUrl: normalizedUrl,
       normalizedUrl,
       owner,
-      tenantId: tenant._id,
+      tenantId: tenant._id || tenant.id,
       enabled: req.body?.enabled !== false,
       healthConfig: normalizeHealthConfig(req.body?.healthConfig),
       createdBy: req.userId
-    });
+    };
+    const domain = databaseEngine() === 'postgresql'
+      ? await domainHealthRepository.saveMonitor(payload)
+      : await DomainMonitor.create(payload);
 
     if (domain.enabled) await runDomainCheck(domain);
     void queueSnapshotRebuild(owner);
@@ -195,7 +202,9 @@ exports.createDomain = async (req, res, next) => {
 
 exports.updateDomain = async (req, res, next) => {
   try {
-    const domain = await DomainMonitor.findOne({ _id: req.params.id, ...domainScopeQuery(req.scope) });
+    const domain = databaseEngine() === 'postgresql'
+      ? await domainHealthRepository.findMonitor(req.params.id, { tenantId: req.scope?.tenantId || null, all: isSuperAdmin(req) })
+      : await DomainMonitor.findOne({ _id: req.params.id, ...domainScopeQuery(req.scope) });
     if (!domain) return res.status(404).json({ error: 'Domain not found' });
     const previousOwner = domain.owner;
 
@@ -216,14 +225,16 @@ exports.updateDomain = async (req, res, next) => {
     if (isSuperAdmin(req) && Object.prototype.hasOwnProperty.call(req.body, 'tenantId')) {
       const tenantId = String(req.body.tenantId || '').trim();
       if (!tenantId) return res.status(400).json({ error: 'Valid tenant owner is required' });
-      const tenant = await Tenant.findById(tenantId);
+      const tenant = databaseEngine() === 'postgresql' ? await tenantRepository.findById(tenantId) : await Tenant.findById(tenantId);
       if (!tenant) return res.status(404).json({ error: 'Tenant not found' });
-      domain.tenantId = tenant._id;
+      domain.tenantId = tenant._id || tenant.id;
       selectedTenant = tenant;
     }
 
     if (isSuperAdmin(req) && (selectedTenant || Object.prototype.hasOwnProperty.call(req.body, 'owner'))) {
-      const tenant = selectedTenant || await Tenant.findById(domain.tenantId);
+      const tenant = selectedTenant || (databaseEngine() === 'postgresql'
+        ? await tenantRepository.findById(domain.tenantId?._id || domain.tenantId)
+        : await Tenant.findById(domain.tenantId));
       const owner = ownerForTenant(tenant, req.body.owner);
       if (!owner) return res.status(400).json({ error: 'Valid owner badge is required' });
       domain.owner = owner;
@@ -238,7 +249,8 @@ exports.updateDomain = async (req, res, next) => {
     }
 
     domain.updatedBy = req.userId;
-    await domain.save();
+    if (databaseEngine() === 'postgresql') await domainHealthRepository.saveMonitor(domain);
+    else await domain.save();
     void queueSnapshotRebuild(domain.owner);
     if (previousOwner !== domain.owner) void queueSnapshotRebuild(previousOwner);
     void queueSnapshotRebuild('all');
@@ -253,10 +265,15 @@ exports.updateDomain = async (req, res, next) => {
 
 exports.deleteDomain = async (req, res, next) => {
   try {
-    const domain = await DomainMonitor.findOne({ _id: req.params.id, ...domainScopeQuery(req.scope) });
+    const domain = databaseEngine() === 'postgresql'
+      ? await domainHealthRepository.findMonitor(req.params.id, { tenantId: req.scope?.tenantId || null, all: isSuperAdmin(req) })
+      : await DomainMonitor.findOne({ _id: req.params.id, ...domainScopeQuery(req.scope) });
     if (!domain) return res.status(404).json({ error: 'Domain not found' });
-    await DomainHealthCheck.deleteMany({ domainId: domain._id });
-    await domain.deleteOne();
+    if (databaseEngine() === 'postgresql') await domainHealthRepository.deleteMonitor(domain._id, isSuperAdmin(req) ? null : req.scope?.tenantId);
+    else {
+      await DomainHealthCheck.deleteMany({ domainId: domain._id });
+      await domain.deleteOne();
+    }
     void queueSnapshotRebuild(domain.owner);
     void queueSnapshotRebuild('all');
     return res.status(204).send();
@@ -267,7 +284,9 @@ exports.deleteDomain = async (req, res, next) => {
 
 exports.checkDomainNow = async (req, res, next) => {
   try {
-    const domain = await DomainMonitor.findOne({ _id: req.params.id, ...domainScopeQuery(req.scope) });
+    const domain = databaseEngine() === 'postgresql'
+      ? await domainHealthRepository.findMonitor(req.params.id, { tenantId: req.scope?.tenantId || null, all: isSuperAdmin(req) })
+      : await DomainMonitor.findOne({ _id: req.params.id, ...domainScopeQuery(req.scope) });
     if (!domain) return res.status(404).json({ error: 'Domain not found' });
 
     const check = await runDomainCheck(domain);
@@ -283,7 +302,9 @@ exports.checkDomainNow = async (req, res, next) => {
 
 exports.deepScanDomain = async (req, res, next) => {
   try {
-    const domain = await DomainMonitor.findOne({ _id: req.params.id, ...domainScopeQuery(req.scope) });
+    const domain = databaseEngine() === 'postgresql'
+      ? await domainHealthRepository.findMonitor(req.params.id, { tenantId: req.scope?.tenantId || null, all: isSuperAdmin(req) })
+      : await DomainMonitor.findOne({ _id: req.params.id, ...domainScopeQuery(req.scope) });
     if (!domain) return res.status(404).json({ error: 'Domain not found' });
 
     const result = await storeDomainPageSpeedScan(domain, 'manual');
@@ -301,7 +322,9 @@ exports.deepScanDomain = async (req, res, next) => {
 
 exports.getDomainPageSpeed = async (req, res, next) => {
   try {
-    const domain = await DomainMonitor.findOne({ _id: req.params.id, ...domainScopeQuery(req.scope) });
+    const domain = databaseEngine() === 'postgresql'
+      ? await domainHealthRepository.findMonitor(req.params.id, { tenantId: req.scope?.tenantId || null, all: isSuperAdmin(req) })
+      : await DomainMonitor.findOne({ _id: req.params.id, ...domainScopeQuery(req.scope) });
     if (!domain) return res.status(404).json({ error: 'Domain not found' });
 
     const pageSpeed = await getDomainPageSpeedOverview(domain._id);
@@ -316,13 +339,17 @@ exports.getDomainPageSpeed = async (req, res, next) => {
 
 exports.getDomainChecks = async (req, res, next) => {
   try {
-    const domain = await DomainMonitor.findOne({ _id: req.params.id, ...domainScopeQuery(req.scope) });
+    const domain = databaseEngine() === 'postgresql'
+      ? await domainHealthRepository.findMonitor(req.params.id, { tenantId: req.scope?.tenantId || null, all: isSuperAdmin(req) })
+      : await DomainMonitor.findOne({ _id: req.params.id, ...domainScopeQuery(req.scope) });
     if (!domain) return res.status(404).json({ error: 'Domain not found' });
 
     const range = String(req.query.range || '24h');
     const hours = range === '7d' ? 24 * 7 : range === '30d' ? 24 * 30 : 24;
     const since = new Date(Date.now() - hours * 60 * 60 * 1000);
-    const checks = await DomainHealthCheck.find({ domainId: domain._id, checkedAt: { $gte: since } })
+    const checks = databaseEngine() === 'postgresql'
+      ? (await domainHealthRepository.listChecks([String(domain._id)], since, 3000)).reverse()
+      : await DomainHealthCheck.find({ domainId: domain._id, checkedAt: { $gte: since } })
       .sort({ checkedAt: 1 })
       .limit(3000)
       .lean();

@@ -7,6 +7,9 @@ const { replaceLicenseFile, replaceMobileAppFile } = require('../services/licens
 const { integrationLicensePayload, presentEvent } = require('../services/licenseIntegrationService');
 const { sha256 } = require('../services/integrationSecurityService');
 const { expireLicenses } = require('../services/licenseExpiryService');
+const { databaseEngine } = require('../postgres');
+const licenseRepository = require('../repositories/postgres/licenseRepository');
+const integrationRepository = require('../repositories/postgres/integrationRepository');
 
 function parseLimit(input) {
   const value = Number(input || 50);
@@ -68,7 +71,9 @@ exports.listLicenses = async (req, res, next) => {
       query.updatedAt = { $gt: updatedAfter };
     }
 
-    const rows = await LicenseCustomer.find(query)
+    const rows = databaseEngine() === 'postgresql'
+      ? await licenseRepository.listForIntegration({ cursor: cursor ? { updatedAt: cursor.updatedAt, id: String(cursor.id) } : null, updatedAfter, limit: limit + 1 })
+      : await LicenseCustomer.find(query)
       .sort({ updatedAt: 1, _id: 1 })
       .limit(limit + 1)
       .populate('tenantId', 'name displayName type')
@@ -96,7 +101,9 @@ exports.listEvents = async (req, res, next) => {
     if (cursor) query._id = { $gt: cursor };
     if (occurredAfter) query.occurredAt = { $gt: occurredAfter };
 
-    const rows = await LicenseEvent.find(query).sort({ _id: 1 }).limit(limit + 1).lean();
+    const rows = databaseEngine() === 'postgresql'
+      ? await integrationRepository.listEvents({ afterId: cursor ? String(cursor) : null, occurredAfter, limit: limit + 1 })
+      : await LicenseEvent.find(query).sort({ _id: 1 }).limit(limit + 1).lean();
     const hasMore = rows.length > limit;
     const events = rows.slice(0, limit);
     return res.json({
@@ -143,15 +150,20 @@ async function uploadIntegrationFile(req, res, next, options) {
       .digest('hex');
 
     try {
-      requestRecord = await IntegrationRequest.create({
+      const requestPayload = {
         clientId: req.integrationClientId,
         idempotencyKey: keyHash,
         requestFingerprint: fingerprint,
         expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000)
-      });
+      };
+      requestRecord = databaseEngine() === 'postgresql'
+        ? await integrationRepository.createRequest(requestPayload)
+        : await IntegrationRequest.create(requestPayload);
     } catch (error) {
-      if (error?.code !== 11000) throw error;
-      const existing = await IntegrationRequest.findOne({ clientId: req.integrationClientId, idempotencyKey: keyHash });
+      if (!['11000','23505'].includes(String(error?.code))) throw error;
+      const existing = databaseEngine() === 'postgresql'
+        ? await integrationRepository.findRequest(req.integrationClientId, keyHash)
+        : await IntegrationRequest.findOne({ clientId: req.integrationClientId, idempotencyKey: keyHash });
       if (!existing || existing.requestFingerprint !== fingerprint) {
         return res.status(409).json({ error: 'Idempotency-Key was already used for a different request' });
       }
@@ -162,10 +174,14 @@ async function uploadIntegrationFile(req, res, next, options) {
         [`${options.metadataPath}.integrationClientId`]: req.integrationClientId,
         [`${options.metadataPath}.idempotencyKeyHash`]: keyHash
       };
-      const completedLicense = await LicenseCustomer.findOne(completedQuery)
+      const completedLicense = databaseEngine() === 'postgresql'
+        ? await licenseRepository.findById(req.params.id, { all: true })
+        : await LicenseCustomer.findOne(completedQuery)
         .select(`+${options.metadataPath}.idempotencyKeyHash`)
         .populate('tenantId', 'name displayName type');
-      if (completedLicense) {
+      const completedMetadata = completedLicense?.[options.metadataPath];
+      if (completedLicense && (databaseEngine() !== 'postgresql' ||
+        (String(completedMetadata?.integrationClientId || '') === String(req.integrationClientId) && completedMetadata?.idempotencyKeyHash === keyHash))) {
         const responseBody = { data: integrationLicensePayload(completedLicense) };
         existing.status = 'completed';
         existing.responseStatus = 200;
@@ -177,7 +193,9 @@ async function uploadIntegrationFile(req, res, next, options) {
       return res.status(409).json({ error: 'Request with this Idempotency-Key is still processing' });
     }
 
-    const license = await LicenseCustomer.findById(req.params.id);
+    const license = databaseEngine() === 'postgresql'
+      ? await licenseRepository.findById(req.params.id, { all: true })
+      : await LicenseCustomer.findById(req.params.id);
     if (!license) {
       await requestRecord.deleteOne();
       return res.status(404).json({ error: 'License not found' });
@@ -196,7 +214,8 @@ async function uploadIntegrationFile(req, res, next, options) {
     return res.json(responseBody);
   } catch (error) {
     if (requestRecord?._id && requestRecord.status !== 'completed') {
-      await IntegrationRequest.deleteOne({ _id: requestRecord._id }).catch(() => {});
+      if (databaseEngine() === 'postgresql') await integrationRepository.deleteRequest(requestRecord._id).catch(() => {});
+      else await IntegrationRequest.deleteOne({ _id: requestRecord._id }).catch(() => {});
     }
     if (error.statusCode) return res.status(error.statusCode).json({ error: error.message });
     return next(error);
