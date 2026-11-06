@@ -29,10 +29,6 @@
         <mat-icon class="material-symbols-outlined">view_list</mat-icon>
         WORK BOARD
       </a>
-      <a mat-button routerLink="/admin/fit-editor" routerLinkActive="active-link" *ngIf="auth.isSuperAdmin()">
-        <mat-icon class="material-symbols-outlined">exercise</mat-icon>
-        FIT EDITOR
-      </a>
       <a
         mat-button
         routerLink="/webhook"
@@ -136,10 +132,6 @@
             <mat-icon class="material-symbols-outlined">api</mat-icon>
             License integrations
           </a>
-          <a mat-menu-item routerLink="/admin/fit-editor" routerLinkActive="active-menu-item">
-            <mat-icon class="material-symbols-outlined">exercise</mat-icon>
-            FIT fájl szerkesztő
-          </a>
         </ng-container>
       </ng-container>
 
@@ -184,10 +176,6 @@
         <a mat-menu-item routerLink="/admin/integrations">
           <mat-icon class="material-symbols-outlined">api</mat-icon>
           License integrations
-        </a>
-        <a mat-menu-item routerLink="/admin/fit-editor">
-          <mat-icon class="material-symbols-outlined">exercise</mat-icon>
-          FIT fájl szerkesztő
         </a>
       </mat-menu>
     </ng-container>

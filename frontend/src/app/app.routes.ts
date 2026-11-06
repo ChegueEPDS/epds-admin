@@ -32,12 +32,6 @@ export const routes: Routes = [
   { path: 'admin/users', component: AdminUsersComponent, canActivate: [AuthGuard], data: { requiresSuperAdmin: true } },
   { path: 'admin/tenants', component: AdminTenantsComponent, canActivate: [AuthGuard], data: { requiresSuperAdmin: true } },
   { path: 'admin/integrations', component: AdminIntegrationsComponent, canActivate: [AuthGuard], data: { requiresSuperAdmin: true } },
-  {
-    path: 'admin/fit-editor',
-    loadComponent: () => import('./admin/fit-editor/fit-editor.component').then((m) => m.FitEditorComponent),
-    canActivate: [AuthGuard],
-    data: { requiresSuperAdmin: true }
-  },
   { path: '', pathMatch: 'full', redirectTo: 'home' },
   { path: '**', redirectTo: 'home' }
 ];

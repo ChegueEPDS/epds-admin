@@ -14,7 +14,6 @@ type FeatureCard = {
   route: string;
   description: string;
   featureKey?: TenantFeatureKey;
-  superAdminOnly?: boolean;
   opensInNewTab?: boolean;
 };
 
@@ -75,13 +74,6 @@ export class HomeComponent implements OnInit, OnDestroy {
       description: 'Inspect received webhook payloads and verify signatures.',
       featureKey: 'webhookTester',
       opensInNewTab: true
-    },
-    {
-      title: 'FIT Editor',
-      icon: 'directions_bike',
-      route: '/admin/fit-editor',
-      description: 'Analyze and edit running and cycling FIT activity files.',
-      superAdminOnly: true
     }
   ];
 
@@ -102,7 +94,7 @@ export class HomeComponent implements OnInit, OnDestroy {
 
   get visibleCards(): FeatureCard[] {
     return this.cards.filter((card) =>
-      card.superAdminOnly ? this.auth.isSuperAdmin() : Boolean(card.featureKey && this.auth.canAccessFeature(card.featureKey))
+      Boolean(card.featureKey && this.auth.canAccessFeature(card.featureKey))
     );
   }
 
