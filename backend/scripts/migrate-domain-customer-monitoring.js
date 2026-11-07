@@ -1,10 +1,8 @@
 require('dotenv').config();
-const fs=require('fs');
-const path=require('path');
-const {databaseEngine,query,closePostgres}=require('../src/postgres');
+const {databaseEngine,closePostgres}=require('../src/postgres');
 async function migrate(){
   if(databaseEngine()==='postgresql'){
-    await query(fs.readFileSync(path.join(__dirname,'../postgres/002_domain_customer_monitoring.sql'),'utf8'));
+    await require('../src/services/domainSchemaMigrationService').ensureDomainCustomerSchema();
     await closePostgres();
   }else{
     const mongoose=require('mongoose');

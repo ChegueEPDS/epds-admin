@@ -1,5 +1,6 @@
 const mongoose = require('mongoose');
 const { databaseEngine, checkPostgresHealth } = require('./postgres');
+const { ensureDomainCustomerSchema } = require('./services/domainSchemaMigrationService');
 const { assertPostgresRuntimeReady } = require('./repositories/repositoryRegistry');
 
 async function connectDb() {
@@ -8,6 +9,7 @@ async function connectDb() {
     assertPostgresRuntimeReady();
     const health = await checkPostgresHealth(5000);
     if (!health.ok) throw new Error(`PostgreSQL connection failed: ${health.error || health.stateLabel}`);
+    await ensureDomainCustomerSchema();
     console.log('[db] PostgreSQL connected');
     return;
   }
