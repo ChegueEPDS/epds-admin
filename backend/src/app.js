@@ -14,6 +14,8 @@ const { connectDb, checkDbHealth } = require('./db');
 const authRoutes = require('./routes/authRoutes');
 const adminRoutes = require('./routes/adminRoutes');
 const mailRoutes = require('./routes/mailRoutes');
+const { startDomainNotifications } = require('./services/domainNotificationService');
+const { startDomainMonthlyReports } = require('./services/domainMonthlyReportService');
 const domainHealthRoutes = require('./routes/domainHealthRoutes');
 const licenseRoutes = require('./routes/licenseRoutes');
 const effortRoutes = require('./routes/effortRoutes');
@@ -112,6 +114,8 @@ if (require.main === module) {
     .then(() => normalizeTenantTypes())
     .then(() => seedSuperAdmin())
     .then(() => {
+      startDomainNotifications();
+      startDomainMonthlyReports();
       startDomainHealthMonitor();
       startDomainDailyReportScheduler();
       startDomainPageSpeedScheduler();

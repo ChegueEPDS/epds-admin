@@ -270,6 +270,19 @@
         </div>
       </div>
 
+      <div class="monthly-report-panel" *ngIf="selectedDomain.tenantId">
+        <h3>Monthly customer report</h3>
+        <p>Closed calendar months · Europe/Budapest · All services belonging to this customer</p>
+        <div class="monthly-report-controls" *ngIf="monthlyReports.length">
+          <mat-form-field appearance="outline"><mat-label>Report month</mat-label><mat-select [(ngModel)]="selectedReportMonth"><mat-option *ngFor="let report of monthlyReports" [value]="report.month">{{ report.month }}{{ report.archived ? ' · Archived' : '' }}</mat-option></mat-select></mat-form-field>
+          <button mat-stroked-button type="button" [disabled]="isDownloadingMonthly || !selectedReportMonth" (click)="downloadMonthlyReport()"><mat-icon *ngIf="!isDownloadingMonthly" class="material-symbols-outlined">picture_as_pdf</mat-icon><mat-progress-spinner *ngIf="isDownloadingMonthly" diameter="18" mode="indeterminate"></mat-progress-spinner>{{ isDownloadingMonthly ? 'Preparing report…' : 'Download PDF' }}</button>
+        </div>
+        <div *ngIf="monthlyReportsError" role="alert">{{ monthlyReportsError }} <button mat-button type="button" (click)="loadMonthlyReports(selectedDomain.tenantId)">Retry</button></div>
+      </div>
+      <div class="measurement-note" *ngIf="selectedDomain.monitoringState as measurement">
+        <span *ngIf="measurement.decision === 'unknown'">Latest measurements could not confirm a status change. Last confirmed status is shown.</span>
+        <span *ngIf="measurement.locations?.length">Measurement locations: {{ measurement.locations?.length }} · Required agreement: {{ measurement.quorum }}</span>
+      </div>
       <div class="history-panel" *ngIf="overview">
         <div class="section-head">
           <h3>Availability · Last 24 hours</h3>

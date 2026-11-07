@@ -33,6 +33,7 @@ export type DomainMonitor = {
   tenantName?: string | null;
   tenantDisplayName?: string | null;
   enabled: boolean;
+  monitoringState?: { lastAttemptAt?: string; decision?: string; quorum?: number; locations?: { name: string; vote: string }[] };
   lastCheckedAt?: string;
   lastStatus: DomainMonitorStatus;
   displayStatus: DomainMonitorStatus;
@@ -239,6 +240,7 @@ export type PublicStatusReport = {
     okCount: number;
     warningCount: number;
     errorCount: number;
+    unknownCount?: number;
   };
   domains: PublicStatusDomain[];
 };
@@ -317,7 +319,15 @@ export class DomainHealthService {
     return this.http.get<PublicStatusReport>(`${this.base}/public/domain-status/${owner}`);
   }
 
-  publicStatusPdfUrl(owner: string) {
-    return `${this.base}/public/domain-status/${encodeURIComponent(owner)}/pdf`;
+  getStatusPdf(owner: string) {
+    return this.http.get(`${this.base}/public/domain-status/${encodeURIComponent(owner)}/pdf`, { responseType: 'blob' });
+  }
+
+  getMonthlyReports(tenantId: string) {
+    return this.http.get<{ months: { month: string; archived: boolean }[] }>(`${this.base}/domain-reports/${encodeURIComponent(tenantId)}/months`);
+  }
+
+  getMonthlyPdf(tenantId: string, month: string) {
+    return this.http.get(`${this.base}/domain-reports/${encodeURIComponent(tenantId)}/${encodeURIComponent(month)}/pdf`, { responseType: 'blob' });
   }
 }

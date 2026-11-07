@@ -15,7 +15,9 @@
     "postgres:migrate": "node scripts/migrate-mongodb-to-postgres.js all",
     "postgres:schema": "node scripts/migrate-mongodb-to-postgres.js schema",
     "postgres:project": "node scripts/migrate-mongodb-to-postgres.js project",
-    "postgres:verify": "node scripts/migrate-mongodb-to-postgres.js verify"
+    "postgres:verify": "node scripts/migrate-mongodb-to-postgres.js verify",
+    "migrate:domain-customers": "node scripts/migrate-domain-customer-monitoring.js",
+    "start:domain-probe": "node scripts/domain-probe-server.js"
   },
   "dependencies": {
     "@azure/identity": "^4.12.0",

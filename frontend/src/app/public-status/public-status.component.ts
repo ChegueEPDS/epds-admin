@@ -100,10 +100,17 @@ export class PublicStatusComponent implements OnInit, OnDestroy {
     return 'Unknown';
   }
 
-  exportPdf(): void {
+  async exportPdf(): Promise<void> {
     if (!this.report) return;
-    const owner = this.report.ownerSlug || 'all';
-    window.open(this.service.publicStatusPdfUrl(owner), '_blank', 'noopener');
+    try {
+      const blob = await firstValueFrom(this.service.getStatusPdf(this.report.ownerSlug || 'all'));
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = 'service-status.pdf';
+      link.click();
+      setTimeout(() => URL.revokeObjectURL(url), 10000);
+    } catch { this.error = 'Could not download the report. Please try again.'; }
   }
 
   trackDomain(_index: number, item: PublicStatusReport['domains'][number]): string {

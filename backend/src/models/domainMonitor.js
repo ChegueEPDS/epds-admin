@@ -12,6 +12,7 @@ const DomainMonitorSchema = new mongoose.Schema(
     enabled: { type: Boolean, default: true, index: true },
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     updatedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+    monitoringState: { type: mongoose.Schema.Types.Mixed, default: {} },
     lastCheckedAt: { type: Date },
     lastStatus: { type: String, enum: ['ok', 'warning', 'error', 'unknown'], default: 'unknown', index: true },
     lastResponseMs: { type: Number },

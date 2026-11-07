@@ -6,12 +6,14 @@ const { databaseEngine } = require('../postgres');
 const tenantRepository = require('../repositories/postgres/tenantRepository');
 const domainHealthRepository = require('../repositories/postgres/domainHealthRepository');
 const { getDomainPageSpeedOverview, storeDomainPageSpeedScan } = require('../services/pageSpeedService');
-const { getStatusSnapshot, queueSnapshotRebuild } = require('../services/domainStatusReadModelService');
-const { getOrGeneratePdf } = require('../services/domainStatusPdfCacheService');
+const { queueSnapshotRebuild } = require('../services/domainStatusReadModelService');
+const { sanitizeCustomerReport } = require('../services/domainCustomerReportService');
+const { generatePublicStatusPdf } = require('../services/domainStatusPdfService');
 const {
   normalizeBaseUrl,
   assertPublicUrl,
   buildDomainList,
+  buildPublicStatusReport,
   getDomainStatusDetails,
   domainScopeQuery,
   getDomainMonitorRuntime,
@@ -224,6 +226,7 @@ exports.updateDomain = async (req, res, next) => {
     let selectedTenant = null;
     if (isSuperAdmin(req) && Object.prototype.hasOwnProperty.call(req.body, 'tenantId')) {
       const tenantId = String(req.body.tenantId || '').trim();
+      if (domain.lastCheckedAt && String(domain.tenantId?._id || domain.tenantId) !== tenantId) return res.status(409).json({ error: 'A monitored service with measurement history cannot be moved between customers. Archive it and create a separate service for the new customer.' });
       if (!tenantId) return res.status(400).json({ error: 'Valid tenant owner is required' });
       const tenant = databaseEngine() === 'postgresql' ? await tenantRepository.findById(tenantId) : await Tenant.findById(tenantId);
       if (!tenant) return res.status(404).json({ error: 'Tenant not found' });
@@ -269,11 +272,12 @@ exports.deleteDomain = async (req, res, next) => {
       ? await domainHealthRepository.findMonitor(req.params.id, { tenantId: req.scope?.tenantId || null, all: isSuperAdmin(req) })
       : await DomainMonitor.findOne({ _id: req.params.id, ...domainScopeQuery(req.scope) });
     if (!domain) return res.status(404).json({ error: 'Domain not found' });
-    if (databaseEngine() === 'postgresql') await domainHealthRepository.deleteMonitor(domain._id, isSuperAdmin(req) ? null : req.scope?.tenantId);
-    else {
-      await DomainHealthCheck.deleteMany({ domainId: domain._id });
-      await domain.deleteOne();
-    }
+    // Preserve historical evidence for monthly reports while removing active access.
+    domain.enabled = false;
+    domain.monitoringState = { ...(domain.monitoringState?.toObject?.() || domain.monitoringState || {}), archivedAt: new Date().toISOString() };
+    domain.normalizedUrl = `archived:${domain._id}:${domain.normalizedUrl}`;
+    if (databaseEngine() === 'postgresql') await domainHealthRepository.saveMonitor(domain);
+    else await domain.save();
     void queueSnapshotRebuild(domain.owner);
     void queueSnapshotRebuild('all');
     return res.status(204).send();
@@ -348,10 +352,9 @@ exports.getDomainChecks = async (req, res, next) => {
     const hours = range === '7d' ? 24 * 7 : range === '30d' ? 24 * 30 : 24;
     const since = new Date(Date.now() - hours * 60 * 60 * 1000);
     const checks = databaseEngine() === 'postgresql'
-      ? (await domainHealthRepository.listChecks([String(domain._id)], since, 3000)).reverse()
+      ? (await domainHealthRepository.listChecks([String(domain._id)], since)).reverse()
       : await DomainHealthCheck.find({ domainId: domain._id, checkedAt: { $gte: since } })
       .sort({ checkedAt: 1 })
-      .limit(3000)
       .lean();
 
     const details = await getDomainStatusDetails(await populateDomainTenant(domain), checks);
@@ -383,41 +386,54 @@ exports.getDomainChecks = async (req, res, next) => {
   }
 };
 
+async function customerReport(req) {
+  const owner = await ownerFromSlug(req.params.owner);
+  if (!owner) throw Object.assign(new Error('Report not found'), { statusCode: 404 });
+  const report = sanitizeCustomerReport(await buildPublicStatusReport({ owner: owner === 'All' ? 'all' : owner, scope: req.scope }));
+  if (!report.domains.length) throw Object.assign(new Error('Report not found'), { statusCode: 404 });
+  return report;
+}
 exports.getPublicStatusReport = async (req, res, next) => {
   try {
-    const owner = await ownerFromSlug(req.params.owner);
-    if (!owner) return res.status(404).json({ error: 'Owner not found' });
-    const snapshot = await getStatusSnapshot(owner);
-    if (!snapshot) return res.status(503).json({ error: 'Status report is being prepared' });
-    res.setHeader('Cache-Control', 'public, max-age=60, stale-while-revalidate=600, stale-if-error=86400');
-    res.setHeader('ETag', snapshot.etag);
-    res.setHeader('X-Status-Report-Cache', snapshot.stale ? 'STALE' : 'HIT');
-    if (req.headers['if-none-match'] === snapshot.etag) return res.status(304).end();
-    return res.json(snapshot.report);
-  } catch (err) {
-    return next(err);
-  }
+    const report = await customerReport(req);
+    res.setHeader('Cache-Control', 'private, no-store');
+    return res.json(report);
+  } catch (err) { if (err.statusCode) return res.status(err.statusCode).json({error:err.message}); return next(err); }
 };
-
 exports.downloadPublicStatusReportPdf = async (req, res, next) => {
   try {
-    const owner = await ownerFromSlug(req.params.owner);
-    if (!owner) return res.status(404).json({ error: 'Owner not found' });
-    const snapshot = await getStatusSnapshot(owner);
-    if (!snapshot) return res.status(503).json({ error: 'Status report is being prepared' });
-    const report = snapshot.report;
-    const pdf = await getOrGeneratePdf(report);
-    const fileOwner = owner === 'All' ? 'all-domains' : ownerSlug(owner);
-    const fileDate = new Date(report.generatedAt).toISOString().slice(0, 10);
+    const report = await customerReport(req);
+    const content = await generatePublicStatusPdf(report);
     res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Length', pdf.size);
-    res.setHeader('ETag', pdf.etag);
-    res.setHeader('Cache-Control', 'public, max-age=3600, stale-if-error=86400');
-    res.setHeader('X-Status-Pdf-Cache', pdf.cacheStatus);
-    res.setHeader('Content-Disposition', `attachment; filename="domain-status-${fileOwner}-${fileDate}.pdf"`);
-    if (req.headers['if-none-match'] === pdf.etag) return res.status(304).end();
-    return res.send(pdf.content);
-  } catch (err) {
-    return next(err);
+    res.setHeader('Cache-Control', 'private, no-store');
+    res.setHeader('Content-Disposition', `attachment; filename="service-status-${report.ownerSlug}.pdf"`);
+    return res.send(content);
+  } catch (err) { if (err.statusCode) return res.status(err.statusCode).json({error:err.message}); return next(err); }
+};
+function monthlyTenant(req, res) {
+  const id = String(req.params.tenantId || '');
+  if (!/^[a-f\d]{24}$/i.test(id) || (req.scope?.tenantId ? String(req.scope.tenantId) !== id : req.role !== 'SuperAdmin')) {
+    res.status(404).json({error:'Report not found'}); return null;
   }
+  return id;
+}
+exports.listMonthlyReports = async (req,res,next) => {
+  const tenant = monthlyTenant(req,res); if (!tenant) return;
+  try {
+    const { listMonthlyReports } = require('../services/domainMonthlyReportService');
+    res.setHeader('Cache-Control','private, no-store');
+    res.json(await listMonthlyReports(tenant));
+  } catch(error) { next(error); }
+};
+exports.downloadMonthlyReport = async (req,res,next) => {
+  const tenant = monthlyTenant(req,res); if (!tenant) return;
+  try {
+    const { ensureMonthlyReport } = require('../services/domainMonthlyReportService');
+    const report = await ensureMonthlyReport(tenant,req.params.month);
+    if (!report) return res.status(404).json({error:'Report not found'});
+    res.setHeader('Cache-Control','private, no-store');
+    res.setHeader('Content-Type','application/pdf');
+    res.setHeader('Content-Disposition',`attachment; filename="service-report-${report.month}.pdf"`);
+    res.send(report.content);
+  } catch(error) { if(error.statusCode) return res.status(error.statusCode).json({error:error.message}); next(error); }
 };

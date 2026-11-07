@@ -4,8 +4,10 @@ const { requireAuth, requireTenantFeature } = require('../middlewares/authMiddle
 
 const router = express.Router();
 
-router.get('/public/domain-status/:owner', controller.getPublicStatusReport);
-router.get('/public/domain-status/:owner/pdf', controller.downloadPublicStatusReportPdf);
+router.get('/public/domain-status/:owner', requireAuth, requireTenantFeature('domainHealth'), controller.getPublicStatusReport);
+router.get('/public/domain-status/:owner/pdf', requireAuth, requireTenantFeature('domainHealth'), controller.downloadPublicStatusReportPdf);
+router.get('/domain-reports/:tenantId/months', requireAuth, requireTenantFeature('domainHealth'), controller.listMonthlyReports);
+router.get('/domain-reports/:tenantId/:month/pdf', requireAuth, requireTenantFeature('domainHealth'), controller.downloadMonthlyReport);
 router.get('/domain-health', requireAuth, requireTenantFeature('domainHealth'), controller.checkDomainHealth);
 router.get('/domains', requireAuth, requireTenantFeature('domainHealth'), controller.listDomains);
 router.post('/domains', requireAuth, requireTenantFeature('domainHealth', 'edit'), controller.createDomain);

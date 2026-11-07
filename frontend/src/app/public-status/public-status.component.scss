@@ -479,3 +479,6 @@
     padding: 6px 0;
   }
 }
+
+.customer-health-summary { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 16px; font-size: 13px; }
+.data-quality-note { padding: 12px 16px; background: #fff7ed; color: #9a3412; border-radius: 8px; }

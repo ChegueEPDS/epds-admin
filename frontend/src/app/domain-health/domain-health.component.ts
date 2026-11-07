@@ -76,6 +76,10 @@ export class DomainHealthComponent implements OnInit, OnDestroy {
   isLoading = false;
   isChecking = false;
   isLoadingChecks = false;
+  monthlyReports: { month: string; archived: boolean }[] = [];
+  selectedReportMonth = '';
+  isDownloadingMonthly = false;
+  monthlyReportsError = '';
   checksError = '';
   checksUpdatedAt: Date | null = null;
   private chartMaximum = 10000;
@@ -243,7 +247,47 @@ export class DomainHealthComponent implements OnInit, OnDestroy {
     this.overview = null;
     this.activeChartPoint = null;
     this.showDetails = false;
+    void this.loadMonthlyReports(domain.tenantId || '');
     await this.loadChecks();
+  }
+
+  async loadMonthlyReports(tenantId: string): Promise<void> {
+    this.monthlyReports = [];
+    this.selectedReportMonth = '';
+    this.monthlyReportsError = '';
+    if (!tenantId) return;
+    try {
+      const response = await firstValueFrom(this.service.getMonthlyReports(tenantId));
+      if (this.selectedDomain?.tenantId !== tenantId) return;
+      this.monthlyReports = response.months;
+      this.selectedReportMonth = response.months[0]?.month || '';
+    } catch {
+      if (this.selectedDomain?.tenantId === tenantId) this.monthlyReportsError = 'Could not load monthly reports.';
+    }
+  }
+
+  async downloadMonthlyReport(): Promise<void> {
+    const tenant = this.selectedDomain?.tenantId;
+    if (!tenant || !this.selectedReportMonth || this.isDownloadingMonthly) return;
+    this.isDownloadingMonthly = true;
+    const month = this.selectedReportMonth;
+    try {
+      const blob = await firstValueFrom(this.service.getMonthlyPdf(tenant, month));
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `service-report-${month}.pdf`;
+      link.click();
+      setTimeout(() => URL.revokeObjectURL(url), 10000);
+      const item = this.monthlyReports.find(report => report.month === month);
+      if (item) item.archived = true;
+    } catch (error: any) {
+      let message = 'Could not download monthly report. Please retry.';
+      if (error.error instanceof Blob) {
+        try { message = JSON.parse(await error.error.text()).error || message; } catch { /* Keep readable fallback. */ }
+      }
+      this.snackBar.open(message, 'Close', { duration: 6000 });
+    } finally { this.isDownloadingMonthly = false; }
   }
 
   openChartDialog(template: TemplateRef<unknown>): void {

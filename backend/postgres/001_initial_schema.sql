@@ -490,3 +490,21 @@ CREATE INDEX IF NOT EXISTS webhook_delivery_worker_idx ON webhook_deliveries(sta
 CREATE INDEX IF NOT EXISTS webhook_receipt_inbox_idx ON webhook_test_receipts(inbox_token_hash, received_at DESC);
 
 COMMIT;
+
+ALTER TABLE domain_monitors ADD COLUMN IF NOT EXISTS monitoring_state jsonb NOT NULL DEFAULT '{}'::jsonb;
+ALTER TABLE domain_health_checks ADD COLUMN IF NOT EXISTS measurement jsonb NOT NULL DEFAULT '{}'::jsonb;
+CREATE TABLE IF NOT EXISTS domain_operations (
+  key text PRIMARY KEY,
+  kind text NOT NULL,
+  tenant_id varchar(24) NOT NULL,
+  month varchar(7),
+  payload jsonb NOT NULL DEFAULT '{}'::jsonb,
+  content bytea,
+  sent_at timestamptz,
+  attempts integer NOT NULL DEFAULT 0,
+  next_attempt_at timestamptz NOT NULL DEFAULT now(),
+  last_error text,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS domain_operations_month_idx ON domain_operations(tenant_id,kind,month DESC);
+CREATE INDEX IF NOT EXISTS domain_operations_pending_idx ON domain_operations(next_attempt_at) WHERE sent_at IS NULL;

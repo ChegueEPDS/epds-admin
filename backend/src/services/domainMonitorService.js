@@ -1,5 +1,9 @@
+const { confirmMeasurement, remoteProbeConfiguration } = require('./domainReliabilityService');
+const { reportScope } = require('./domainCustomerReportService');
 const dns = require('dns').promises;
 const net = require('net');
+const http = require('http');
+const https = require('https');
 const axios = require('axios');
 const DomainMonitor = require('../models/domainMonitor');
 const DomainHealthCheck = require('../models/domainHealthCheck');
@@ -27,7 +31,7 @@ function normalizeBaseUrl(input) {
     throw Object.assign(new Error('Valid URL is required'), { statusCode: 400 });
   }
 
-  if (!['http:', 'https:'].includes(url.protocol)) {
+  if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password) {
     throw Object.assign(new Error('Only HTTP and HTTPS URLs are allowed'), { statusCode: 400 });
   }
 
@@ -45,7 +49,17 @@ function isPrivateIp(ip) {
 
   if (version === 6) {
     const value = ip.toLowerCase();
-    return value === '::1' || value.startsWith('fc') || value.startsWith('fd') || value.startsWith('fe80:');
+    if (value.startsWith('::ffff:')) {
+      const mapped = value.slice(7);
+      if (net.isIP(mapped) === 4) return isPrivateIp(mapped);
+      const words = mapped.split(':');
+      if (words.length === 2) {
+        const number = parseInt(words[0], 16) * 65536 + parseInt(words[1], 16);
+        return isPrivateIp([number >>> 24, (number >>> 16) & 255, (number >>> 8) & 255, number & 255].join('.'));
+      }
+      return true;
+    }
+    return !value.startsWith('2') && !value.startsWith('3');
   }
 
   const parts = ip.split('.').map(Number);
@@ -55,7 +69,7 @@ function isPrivateIp(ip) {
     (parts[0] === 169 && parts[1] === 254) ||
     (parts[0] === 172 && parts[1] >= 16 && parts[1] <= 31) ||
     (parts[0] === 192 && parts[1] === 168) ||
-    parts[0] === 0
+    parts[0] === 0 || parts[0] >= 224 || (parts[0] === 100 && parts[1] >= 64 && parts[1] <= 127)
   );
 }
 
@@ -74,8 +88,9 @@ function isGlobalTenant(scope = {}) {
 }
 
 function domainScopeQuery(scope = {}) {
-  if (isGlobalTenant(scope)) return {};
-  return { tenantId: scope.tenantId || null };
+  const active = { 'monitoringState.archivedAt': null };
+  if (isGlobalTenant(scope)) return active;
+  return { ...active, tenantId: scope.tenantId || null };
 }
 
 function percentile(sortedValues, p) {
@@ -395,7 +410,8 @@ function presentDomain(domain, summary = {}) {
   const hasRecentIssue = recentIssueCount > 0 || Boolean(
     domain.lastFailureAt && Date.now() - domain.lastFailureAt.getTime() <= RECENT_ISSUE_MS
   );
-  const displayStatus = hasCurrentIssue
+  const stale = !domain.lastCheckedAt || Date.now() - new Date(domain.lastCheckedAt).getTime() > 35 * 60000;
+  const displayStatus = stale ? 'unknown' : hasCurrentIssue
     ? 'error'
     : hasCurrentWarning || (hasRecentIssue && domain.lastStatus === 'ok')
       ? 'warning'
@@ -410,6 +426,7 @@ function presentDomain(domain, summary = {}) {
     tenantName: tenant?.name || null,
     tenantDisplayName: tenant?.displayName || tenant?.name || null,
     enabled: domain.enabled,
+    monitoringState: domain.monitoringState,
     lastCheckedAt: domain.lastCheckedAt,
     lastStatus: domain.lastStatus,
     displayStatus,
@@ -432,14 +449,14 @@ function presentDomain(domain, summary = {}) {
     recentIssueCount,
     recentWarningCount,
     availability: {
-      status: displayStatus,
+      status: stale ? 'unknown' : hasCurrentIssue ? 'error' : domain.lastStatus === 'unknown' ? 'unknown' : 'ok',
       uptimePercent: summary.uptimePercent ?? null,
       totalChecks: summary.totalChecks || 0,
       recentIssueCount,
       recentWarningCount
     },
     performance: {
-      status: summary.performanceStatus || performanceStatus(domain.lastResponseMs),
+      status: stale ? 'unknown' : summary.performanceStatus || performanceStatus(domain.lastResponseMs),
       lastResponseMs: domain.lastResponseMs,
       medianResponseMs: summary.medianResponseMs ?? null,
       p95ResponseMs: summary.p95ResponseMs ?? null
@@ -500,11 +517,11 @@ async function getDomainStatusDetails(domain, checks) {
   };
 }
 
-async function buildPublicStatusReport({ owner } = {}) {
+async function buildPublicStatusReport({ owner, scope = { role: 'SuperAdmin' } } = {}) {
   const ownerFilter = owner && owner !== 'all' ? { owner } : {};
   const domains = databaseEngine() === 'postgresql'
-    ? await domainHealthRepository.listMonitors({ all: true, enabled: true, owner: ownerFilter.owner || null })
-    : await DomainMonitor.find({ enabled: true, ...ownerFilter }).sort({ name: 1 }).populate('tenantId', 'name displayName').lean(false);
+    ? await domainHealthRepository.listMonitors({ ...reportScope(scope), enabled: true, owner: ownerFilter.owner || null })
+    : await DomainMonitor.find({ enabled: true, ...ownerFilter, ...(reportScope(scope).all ? {} : { tenantId: scope.tenantId || null }) }).sort({ name: 1 }).populate('tenantId', 'name displayName').lean(false);
   const domainIds = domains.map((domain) => domain._id);
   const [checksByDomain, pageSpeedByDomain] = await Promise.all([
     loadChecksForDomains(domainIds),
@@ -554,7 +571,40 @@ async function summarizeRecentChecks(domainId) {
   return summarizeChecks(checks);
 }
 
-async function runDomainCheck(domain) {
+async function publicResponse(url, config) {
+  const lookup = (hostname, options, callback) => {
+    dns.lookup(hostname, { all: true }).then(addresses => {
+      if (!addresses.length || addresses.some(entry => isPrivateIp(entry.address))) return callback(new Error('Blocked address'));
+      if (options?.all) return callback(null, addresses);
+      callback(null, addresses[0].address, addresses[0].family);
+    }, callback);
+  };
+  const httpAgent = new http.Agent({ lookup });
+  const httpsAgent = new https.Agent({ lookup });
+  const deadline = Date.now() + config.timeoutMs;
+  try {
+    for (let redirects = 0; ; redirects += 1) {
+      await assertPublicUrl(url);
+      if (Date.now() >= deadline) throw Object.assign(new Error('Request timeout'), { code: 'ECONNABORTED' });
+      const response = await axios.get(url, {
+        timeout: Math.max(1, deadline - Date.now()), maxRedirects: 0, httpAgent, httpsAgent,
+        maxContentLength: 2 * 1024 * 1024, validateStatus: () => true,
+        headers: { 'User-Agent': 'EPDS-Admin-DomainHealth/1.0' }
+      });
+      if (!config.followRedirects || ![301,302,303,307,308].includes(response.status) || !response.headers.location) {
+        response.monitorRedirectCount = redirects;
+        response.monitorFinalUrl = url;
+        return response;
+      }
+      if (redirects >= 5) throw new Error('Too many redirects');
+      const target = new URL(response.headers.location, url);
+      if (!['http:', 'https:'].includes(target.protocol) || target.username || target.password) throw new Error('Blocked redirect');
+      url = target.href;
+    }
+  } finally { httpAgent.destroy(); httpsAgent.destroy(); }
+}
+
+async function performDomainProbe(domain) {
   const checkedAt = new Date();
   const startedAt = Date.now();
   const config = domainHealthConfig(domain);
@@ -562,17 +612,11 @@ async function runDomainCheck(domain) {
   let result;
 
   try {
-    await assertPublicUrl(checkUrl);
-    const response = await axios.get(checkUrl, {
-      timeout: config.timeoutMs,
-      maxRedirects: config.followRedirects ? 5 : 0,
-      validateStatus: () => true,
-      headers: { 'User-Agent': 'EPDS-Admin-DomainHealth/1.0' }
-    });
+    const response = await publicResponse(checkUrl, config);
     const responseMs = Date.now() - startedAt;
     const expectedStatus = response.status >= config.expectedStatusMin && response.status <= config.expectedStatusMax;
-    const redirectCount = responseRedirectCount(response);
-    const finalUrl = responseFinalUrl(response);
+    const redirectCount = response.monitorRedirectCount ?? responseRedirectCount(response);
+    const finalUrl = response.monitorFinalUrl || responseFinalUrl(response);
     const tlsInfo = responseTlsInfo(response, checkedAt);
     let status = expectedStatus ? 'ok' : 'error';
     let warningType;
@@ -581,9 +625,9 @@ async function runDomainCheck(domain) {
     let errorMessage = expectedStatus ? undefined : `HTTP ${response.status}`;
 
     if (expectedStatus && responseMs >= config.errorResponseMs) {
-      status = 'error';
-      errorType = 'slow_response';
-      errorMessage = `Response exceeded ${config.errorResponseMs} ms`;
+      status = 'warning';
+      warningType = 'slow_response';
+      warningMessage = `Response exceeded ${config.errorResponseMs} ms`;
     } else if (expectedStatus && responseMs >= config.warningResponseMs) {
       status = 'warning';
       warningType = 'slow_response';
@@ -633,8 +677,50 @@ async function runDomainCheck(domain) {
     };
   }
 
+  return result;
+}
+
+const runningChecks = new Map();
+async function runDomainCheck(domain) {
+  const id = String(domain._id);
+  if (runningChecks.has(id)) return runningChecks.get(id);
+  const promise = withJobLease(`domain-check:${id}`, 10 * 60000, () => runConfirmedDomainCheck(domain))
+    .then(outcome => outcome.acquired ? outcome.value : { confirmed: false, status: domain.lastStatus, ok: domain.lastStatus !== 'error', checkedAt: domain.lastCheckedAt })
+    .finally(() => runningChecks.delete(id));
+  runningChecks.set(id, promise);
+  return promise;
+}
+
+async function runConfirmedDomainCheck(domain) {
+  const fresh = databaseEngine() === 'postgresql' ? await domainHealthRepository.findMonitor(String(domain._id), { all: true }) : await DomainMonitor.findById(domain._id);
+  if (!fresh || !fresh.enabled) return { confirmed: false, status: 'unknown', ok: false };
+  if (typeof domain.set === 'function') domain.set(fresh.toObject());
+  else Object.assign(domain, fresh);
+  const previous = domain.lastStatus;
+  if (domain.monitoringState?.pendingNotification) {
+    const pending = domain.monitoringState.pendingNotification;
+    await require('./domainNotificationService').enqueueDomainTransition(domain, pending.event, pending.at);
+  }
+  const remoteProbes = remoteProbeConfiguration().map(probe => ({ name: probe.name, run: async () => {
+    const response = await axios.post(probe.url, { baseUrl: domain.baseUrl, healthConfig: domainHealthConfig(domain) }, {
+      timeout: domainHealthConfig(domain).timeoutMs + 5000, maxRedirects: 0,
+      headers: { Authorization: `Bearer ${probe.token}` }
+    });
+    const result = response.data;
+    if (!result || typeof result.ok !== 'boolean' || !['ok', 'warning', 'error'].includes(result.status) || result.ok !== (result.status !== 'error') || !Number.isFinite(Date.parse(result.checkedAt))) throw new Error('Invalid remote measurement');
+    return result;
+  }}));
+  const measurement = await confirmMeasurement({ localProbe: () => performDomainProbe(domain), remoteProbes, recovering: previous === 'error' });
+  domain.monitoringState = { lastAttemptAt: new Date(), decision: measurement.decision, locations: measurement.locations, quorum: measurement.quorum };
+  if (measurement.decision === 'unknown') {
+    if (databaseEngine() === 'postgresql') await domainHealthRepository.saveMonitor(domain);
+    else await domain.save();
+    return { confirmed: false, ok: previous !== 'error', status: previous || 'unknown', checkedAt: domain.lastCheckedAt, measurement: domain.monitoringState };
+  }
+  const result = { ...measurement.result, checkedAt: measurement.confirmedAt, confirmed: true };
   const checkPayload = {
     domainId: domain._id,
+    measurement: { attempts: measurement.attempts, locations: measurement.locations, quorum: measurement.quorum },
     checkedAt: result.checkedAt,
     ok: result.ok,
     status: result.status,
@@ -678,8 +764,17 @@ async function runDomainCheck(domain) {
     if (!wasFailing) domain.currentIssueSince = result.checkedAt;
   }
 
+  const transitioned = (previous === 'error') !== (result.status === 'error') && (previous === 'error' || result.status === 'error');
+  if (transitioned) domain.monitoringState.pendingNotification = {
+    event: result.status === 'error' ? 'down' : 'recovered',
+    at: result.status === 'error' ? domain.currentIssueSince : domain.lastRecoveryAt
+  };
   if (databaseEngine() === 'postgresql') await domainHealthRepository.saveMonitor(domain);
   else await domain.save();
+  if (transitioned) {
+    const pending = domain.monitoringState.pendingNotification;
+    await require('./domainNotificationService').enqueueDomainTransition(domain, pending.event, pending.at);
+  }
   return result;
 }
 
@@ -755,5 +850,8 @@ module.exports = {
   getDomainMonitorRuntime,
   summarizeRecentChecks,
   runDomainCheck,
+  performDomainProbe,
+  buildIncidents,
+  summarizeWindow,
   startDomainHealthMonitor
 };
