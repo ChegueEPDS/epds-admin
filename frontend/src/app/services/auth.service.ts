@@ -88,7 +88,9 @@ export class AuthService {
     private router: Router,
     private msalService: MsalService
   ) {
-    this.checkSession().subscribe();
+    // The interceptor resolves AuthService too; wait until DI has finished
+    // constructing this instance before sending the initial session request.
+    queueMicrotask(() => this.checkSession().subscribe());
   }
 
   private applyUser(user: AuthUser | null): void {

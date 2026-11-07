@@ -269,7 +269,7 @@ async function findDocument(tenantId, documentId) {
 async function createDocument(tenantId, workId, actorId, input) {
   const result = await query(`INSERT INTO work_documents
     (id,tenant_id,work_item_id,category,display_name,file_name,storage_key,content_type,size,uploaded_by,uploaded_by_name,created_at,updated_at)
-    SELECT $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,now(),now()
+    SELECT $1::varchar(24),$2::varchar(24),$3::varchar(24),$4,$5,$6,$7,$8,$9,$10::varchar(24),$11,now(),now()
     WHERE EXISTS(SELECT 1 FROM work_items WHERE id=$3 AND tenant_id=$2 AND archived_at IS NULL) RETURNING *`,
   [id(),tenantId,workId,input.category,input.displayName,input.fileName,input.storageKey,input.contentType||'application/octet-stream',
     Number(input.size||0),actorId,input.uploadedByName||'']);
