@@ -1,5 +1,5 @@
 import { CommonModule } from '@angular/common';
-import { Component, OnDestroy, OnInit } from '@angular/core';
+import { Component, OnDestroy, OnInit, TemplateRef } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { firstValueFrom } from 'rxjs';
 import { MatButtonModule } from '@angular/material/button';
@@ -40,6 +40,7 @@ type ChartPoint = {
   detailText: string;
   statusText: string;
   check: DomainCheck;
+  maxY?: number;
 };
 
 @Component({
@@ -75,6 +76,12 @@ export class DomainHealthComponent implements OnInit, OnDestroy {
   isLoading = false;
   isChecking = false;
   isLoadingChecks = false;
+  checksError = '';
+  checksUpdatedAt: Date | null = null;
+  private chartMaximum = 10000;
+  private chartStart = 0;
+  private chartEnd = 0;
+  private plottedPoints: ChartPoint[] = [];
   showDetails = false;
   activeChartPoint: ChartPoint | null = null;
   private refreshTimer?: ReturnType<typeof setInterval>;
@@ -86,7 +93,7 @@ export class DomainHealthComponent implements OnInit, OnDestroy {
     left: 52,
     right: 18,
     top: 22,
-    bottom: 475
+    bottom: 450
   };
 
   constructor(
@@ -179,6 +186,8 @@ export class DomainHealthComponent implements OnInit, OnDestroy {
     if (!showDisabled && this.selectedDomain && !this.selectedDomain.enabled) {
       this.selectedDomain = null;
       this.checks = [];
+    this.checksUpdatedAt = null;
+    this.checksError = "";
       this.overview = null;
       this.activeChartPoint = null;
     }
@@ -237,22 +246,38 @@ export class DomainHealthComponent implements OnInit, OnDestroy {
     await this.loadChecks();
   }
 
+  openChartDialog(template: TemplateRef<unknown>): void {
+    this.activeChartPoint = null;
+    this.dialog.open(template, {
+      width: '1200px', maxWidth: '96vw', maxHeight: '94dvh',
+      ariaLabel: 'Enlarged response time chart'
+    }).afterClosed().subscribe(() => this.activeChartPoint = null);
+  }
+
   async loadChecks(options: { silent?: boolean } = {}): Promise<void> {
     if (!this.selectedDomain) return;
     const requestId = ++this.checksRequestId;
     const domainId = this.selectedDomain.id;
     const range = this.selectedRange;
-    if (!options.silent) this.isLoadingChecks = true;
+    this.checksError = '';
+    if (!options.silent) {
+      this.isLoadingChecks = true;
+      this.activeChartPoint = null;
+    }
     try {
       const response = await firstValueFrom(this.service.getChecks(domainId, range));
       if (requestId !== this.checksRequestId || this.selectedDomain?.id !== domainId || this.selectedRange !== range) return;
       this.selectedDomain = response.domain;
       this.checks = response.checks;
       this.overview = response.overview;
+      this.checksUpdatedAt = new Date();
+      this.chartEnd = this.checksUpdatedAt.getTime();
+      this.chartStart = this.chartEnd - ({ '24h': 1, '7d': 7, '30d': 30 }[range] * 86400000);
+      this.rebuildChartPoints();
       this.activeChartPoint = null;
     } catch (error: any) {
       if (requestId === this.checksRequestId && !options.silent) {
-        this.snackBar.open(error?.error?.error || 'Failed to load timeline.', 'Close', { duration: 4500 });
+        this.checksError = error?.error?.error || 'Failed to load timeline.';
       }
     } finally {
       if (requestId === this.checksRequestId && !options.silent) this.isLoadingChecks = false;
@@ -451,9 +476,7 @@ export class DomainHealthComponent implements OnInit, OnDestroy {
   }
 
   chartMaxMs(): number {
-    const values = this.checks.map((check) => check.ok ? Math.max(check.responseMs || 0, 1) : 10000);
-    const max = Math.max(...values, 10000);
-    return Math.ceil(max / 1000) * 1000;
+    return this.chartMaximum;
   }
 
   chartY(value: number): number {
@@ -479,23 +502,51 @@ export class DomainHealthComponent implements OnInit, OnDestroy {
     return `${Math.round(value / 1000)}s`;
   }
 
-  chartPoints(): ChartPoint[] {
-    if (!this.checks.length) return [];
-    const plotWidth = this.chart.width - this.chart.left - this.chart.right;
-    const span = Math.max(this.checks.length - 1, 1);
+  chartTimeTicks(): { x: number; label: string }[] {
+    return Array.from({ length: 5 }, (_, index) => {
+      const time = new Date(this.chartStart + (this.chartEnd - this.chartStart) * index / 4);
+      return {
+        x: this.chart.left + (this.chart.width - this.chart.left - this.chart.right) * index / 4,
+        label: this.selectedRange === '24h'
+          ? time.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+          : time.toLocaleDateString([], { month: 'short', day: 'numeric' })
+      };
+    });
+  }
 
-    return this.checks.map((check, index) => {
-      const value = check.ok ? Math.max(check.responseMs || 0, 1) : this.chartMaxMs();
-      const x = this.chart.left + (index / span) * plotWidth;
-      const y = this.chartY(value);
+  chartPoints(): ChartPoint[] {
+    return this.plottedPoints;
+  }
+
+  private rebuildChartPoints(): void {
+    this.chartMaximum = Math.ceil(this.checks.reduce((maximum, check) => Math.max(maximum, check.ok ? check.responseMs || 0 : 10000), 10000) / 1000) * 1000;
+    const groups = new Map<number, DomainCheck[]>();
+    const sorted = [...this.checks].sort((a, b) => Date.parse(a.checkedAt) - Date.parse(b.checkedAt));
+    sorted.forEach((check, index) => {
+      const key = this.selectedRange === '24h' ? index : Math.floor(Date.parse(check.checkedAt) / 3600000);
+      const group = groups.get(key);
+      if (group) group.push(check);
+      else groups.set(key, [check]);
+    });
+    this.plottedPoints = Array.from(groups.values()).map((samples) => {
+      const failures = samples.filter(check => this.checkStatus(check) === 'error');
+      const warnings = samples.filter(check => this.checkStatus(check) === 'warning');
+      const check = failures[0] || warnings[0] || samples[0];
+      const values = samples.filter(item => item.ok && typeof item.responseMs === 'number').map(item => item.responseMs!);
+      const average = values.length ? Math.round(values.reduce((a, b) => a + b, 0) / values.length) : 0;
+      const maximum = values.length ? Math.max(...values) : 0;
       const status = this.checkStatus(check);
+      const grouped = this.selectedRange !== '24h';
+      const time = Date.parse(samples[0].checkedAt);
+      const x = this.chart.left + Math.max(0, Math.min(1, (time - this.chartStart) / (this.chartEnd - this.chartStart))) * (this.chart.width - this.chart.left - this.chart.right);
+      const y = this.chartY(failures.length ? this.chartMaxMs() : average);
       const color = status === 'error' ? '#b91c1c' : status === 'warning' ? '#b45309' : '#047857';
-      const timeText = new Date(check.checkedAt).toLocaleString();
-      const valueText = check.ok ? `${check.responseMs || 0} ms` : 'Failed';
-      const detailText = this.checkDetailText(check);
+      const timeText = new Date(time).toLocaleString();
+      const valueText = grouped ? `Avg ${average} ms · Max ${maximum} ms` : (check.ok ? `${check.responseMs || 0} ms` : 'Failed');
+      const detailText = grouped ? `${samples.length} checks · ${failures.length} down · ${warnings.length} warnings` : this.checkDetailText(check);
       const statusText = status === 'error' ? 'Down' : status === 'warning' ? 'Warning' : 'OK';
-      const label = `${timeText} · ${valueText} · ${detailText}`;
-      return { x, y, color, label, timeText, valueText, detailText, statusText, check };
+      return { x, y, color, label: `${timeText} · ${valueText} · ${detailText}`, timeText, valueText, detailText, statusText, check,
+        maxY: grouped && values.length ? this.chartY(maximum) : undefined };
     });
   }
 

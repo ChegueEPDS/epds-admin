@@ -546,7 +546,6 @@
 }
 
 .response-line {
-  stroke: url(#chartLineGradient);
   stroke-width: 3;
   stroke-linecap: round;
   stroke-linejoin: round;
@@ -936,3 +935,23 @@
     padding: 28px 12px;
   }
 }
+
+.expand-chart-button { margin-left: auto; }
+.chart-loading { min-height: 280px; aspect-ratio: 720 / 540; justify-content: center; }
+.chart-dialog-header { display: flex; align-items: center; padding-right: 12px; }
+.chart-dialog-header h2 { flex: 1; margin: 0; }
+.chart-dialog-content { max-height: calc(94dvh - 88px); }
+.chart-dialog-content .timeline-chart svg { max-height: calc(94dvh - 230px); }
+
+.timeline-heading { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 8px; margin-top: 20px; }
+.timeline-heading h3 { margin: 0 0 12px; }
+.timeline-heading > span, .chart-explanation { font-size: 12px; color: #64748b; }
+.timeline-summary { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin-bottom: 12px; }
+.timeline-summary > div { display: flex; flex-direction: column; gap: 6px; padding: 12px 8px; background: #f8fafc; border-radius: 8px; }
+.timeline-summary span { color: #64748b; font-size: 12px; }
+.timeline-summary strong { font-size: 14px; }
+.timeline-error { display: flex; align-items: center; justify-content: space-between; padding: 16px; color: #b91c1c; background: #fef2f2; border-radius: 8px; }
+.time-ticks text { fill: #64748b; font-size: 11px; }
+.maximum-line { stroke: #94a3b8; stroke-width: 1; opacity: .65; }
+.chart-point-details { display: flex; flex-direction: column; gap: 4px; padding: 12px 16px; background: #f1f5f9; overflow-wrap: anywhere; font-size: 12px; }
+@media (max-width: 420px) { .timeline-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
