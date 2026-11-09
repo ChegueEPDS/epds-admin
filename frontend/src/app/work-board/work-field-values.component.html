@@ -1,0 +1,67 @@
+@if (fields.length) {
+  <div class="fields">
+    @for (field of fields; track field.id) {
+      @if (!changes) {
+        <div class="item" [class.wide]="field.type === 'longText'">
+          <small>{{ field.label }}</small>
+          @if (isFile(value(field))) {
+            <button class="link" type="button" (click)="download.emit(field)">{{ display(field, value(field)) }}</button>
+          } @else {
+            <span [style.white-space]="field.type === 'longText' ? 'pre-wrap' : null">{{ display(field, value(field)) }}</span>
+          }
+        </div>
+      } @else {
+        @switch (field.type) {
+          @case ('longText') {
+            <mat-form-field appearance="outline" class="wide"><mat-label>{{ field.label }}</mat-label>
+              <textarea matInput rows="3" maxlength="6000" [required]="field.required" [ngModel]="value(field)" (ngModelChange)="set(field, $event)" [ngModelOptions]="standalone"></textarea>
+            </mat-form-field>
+          }
+          @case ('list') {
+            <mat-form-field appearance="outline"><mat-label>{{ field.label }}</mat-label>
+              <mat-select [multiple]="field.multiple" [required]="field.required" [ngModel]="value(field)" (ngModelChange)="set(field, $event)" [ngModelOptions]="standalone">
+                @if (!field.multiple) { <mat-option [value]="null">Unspecified</mat-option> }
+                @for (option of options(field); track option.id) { <mat-option [value]="option.id">{{ option.label }}{{ option.archived ? ' (archived)' : '' }}</mat-option> }
+              </mat-select>
+            </mat-form-field>
+          }
+          @case ('boolean') {
+            <mat-form-field appearance="outline"><mat-label>{{ field.label }}</mat-label>
+              <mat-select [required]="field.required" [ngModel]="value(field)" (ngModelChange)="set(field, $event)" [ngModelOptions]="standalone">
+                <mat-option [value]="null">Unspecified</mat-option><mat-option [value]="true">Yes</mat-option><mat-option [value]="false">No</mat-option>
+              </mat-select>
+            </mat-form-field>
+          }
+          @case ('amount') {
+            <div class="amount">
+              <mat-form-field appearance="outline"><mat-label>{{ field.label }}</mat-label>
+                <input matInput type="number" step="0.01" [required]="field.required" [ngModel]="amount(field).amount" (ngModelChange)="setAmount(field, $event)" [ngModelOptions]="standalone">
+              </mat-form-field>
+              <mat-form-field appearance="outline"><mat-label>Currency</mat-label>
+                <input matInput maxlength="3" [attr.aria-label]="field.label + ' currency'" [disabled]="amount(field).amount === undefined" [ngModel]="amount(field).currency" (ngModelChange)="setCurrency(field, $event)" [ngModelOptions]="standalone">
+              </mat-form-field>
+            </div>
+          }
+          @case ('file') {
+            <div class="item file">
+              <label [for]="'file-' + field.id">{{ field.label }}{{ field.required ? ' *' : '' }}</label>
+              <input [id]="'file-' + field.id" type="file" [attr.aria-required]="field.required" (change)="chooseFile(field, $event)">
+              @if (files?.[field.id]; as file) { <span>{{ file.name }} · ready to upload</span> }
+              @else if (isFile(value(field))) { <button class="link" type="button" (click)="download.emit(field)">{{ display(field, value(field)) }}</button> }
+              @if (files?.[field.id] || isFile(value(field))) { <button mat-button type="button" (click)="removeFile(field)">Remove file</button> }
+              <small>Maximum 10 MB</small>
+            </div>
+          }
+          @default {
+            <mat-form-field appearance="outline"><mat-label>{{ field.label }}</mat-label>
+              <input matInput [type]="field.type === 'date' ? 'date' : field.type === 'text' ? 'text' : 'number'"
+                [attr.step]="field.type === 'integer' ? '1' : field.type === 'decimal' ? 'any' : null" [attr.maxlength]="field.type === 'text' ? 300 : null"
+                [required]="field.required" [ngModel]="value(field)" (ngModelChange)="set(field, field.type === 'integer' || field.type === 'decimal' ? ($event === '' || $event == null ? null : +$event) : $event)"
+                [ngModelOptions]="standalone">
+            </mat-form-field>
+          }
+        }
+      }
+    }
+  </div>
+}

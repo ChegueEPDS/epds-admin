@@ -27,16 +27,16 @@
     "bcryptjs": "^3.0.3",
     "cookie-parser": "^1.4.7",
     "cors": "^2.8.5",
+    "decimal.js": "10.6.0",
     "dotenv": "^16.4.5",
-    "exceljs": "4.4.0",
     "express": "^4.19.2",
     "express-rate-limit": "^7.4.0",
+    "fast-xml-parser": "5.12.0",
     "jsonwebtoken": "^9.0.2",
     "mongoose": "^8.9.5",
     "multer": "^2.2.0",
     "pdfkit": "^0.19.1",
     "pg": "8.16.3",
-    "undici": "^7.15.0",
-    "yauzl": "3.2.0"
+    "undici": "^7.15.0"
   }
 }

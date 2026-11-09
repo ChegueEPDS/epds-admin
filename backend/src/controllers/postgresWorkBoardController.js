@@ -2,6 +2,9 @@ const crypto = require('crypto');
 const { pipeline } = require('stream/promises');
 const store = require('../repositories/postgres/workBoardRepository');
 const fileStorage = require('../services/fileStorageService');
+const workFields = require('../services/workFields');
+const tenantCurrency = require('../services/tenantCurrency');
+const { WORK_STATUSES } = require('../models/workItem');
 
 const TERMINAL = new Set(['completed_billable','invoiced','paid','closed','cancelled','lost']);
 const CATEGORIES = new Set(['offer','contract_draft','contract','order','performance_certificate','other']);
@@ -26,8 +29,10 @@ function presentDoc(d){return {id:d.id,workItemId:d.workItemId,category:d.catego
 async function run(res,fn){try{await fn();}catch(e){console.error('[work-board-pg]',e);res.status(e.statusCode||500).json({error:e.statusCode?e.message:'Work board operation failed'});}}
 
 exports.listWorks=(req,res)=>run(res,async()=>{const page=Math.max(1,Number(req.query.page)||1),limit=Math.min(100,Math.max(1,Number(req.query.limit)||25));
-  const result=await store.list({tenantId:req.scope.tenantId,status:String(req.query.status||(req.query.active==='true'?'active':'all')),search:clean(req.query.search),unitId:clean(req.query.unitId),page,limit});
-  res.json({works:result.works.map(presentWork),pagination:{page,limit,total:result.total,pages:Math.max(1,Math.ceil(result.total/limit))},summary:result.summary});});
+  const result=await store.list({tenantId:req.scope.tenantId,status:String(req.query.status||(req.query.active==='true'?'active':'all')),search:clean(req.query.search),page,limit});
+  const activeValue = await tenantCurrency.summarizeActiveValue(req.scope.tenantId, result.activeAmounts);
+  res.json({works:result.works.map(presentWork),pagination:{page,limit,total:result.total,pages:Math.max(1,Math.ceil(result.total/limit))},
+    summary: { ...result.summary, totalActiveValue: activeValue.amount, activeValue } });});
 exports.activeOptions=(req,res)=>run(res,async()=>{const result=await store.list({tenantId:req.scope.tenantId,status:'active',limit:250,page:1});
   res.json({works:result.works.map(w=>({id:w.id,workNumber:w.workNumber,name:w.name,customer:w.customer||'',status:w.status,
     subWorks:(w.subWorks||[]).filter(s=>!TERMINAL.has(s.status)).map(s=>({id:s.id,sequenceNumber:s.sequenceNumber,
@@ -36,10 +41,35 @@ exports.getWork=(req,res)=>run(res,async()=>{const w=await store.findWork(req.sc
 exports.createWork=(req,res)=>run(res,async()=>{if(!clean(req.body?.name))throw fail('Work name is required');
   const client=req.body?.clientId?(await store.listClients(req.scope.tenantId)).find(c=>c.id===req.body.clientId):null;
   const users=req.body?.responsibleUserId?await store.listUsers(req.scope.tenantId):[];const user=users.find(u=>u.id===req.body?.responsibleUserId);
-  const w=await store.createWork(req.scope.tenantId,req.userId,{...req.body,name:clean(req.body.name),customer:client?.name||'',responsible:user?`${user.firstName} ${user.lastName}`.trim():'',year:req.body?.year});res.status(201).json({work:presentWork({...w,subWorks:[]})});});
+  const status = req.body.status ?? 'inquiry';
+  if (!WORK_STATUSES.includes(status)) throw fail('Invalid work status');
+  const currency = clean(req.body.currency).toUpperCase() || await tenantCurrency.getDefaultCurrency(req.scope.tenantId);
+  const w = await workFields.saveValues(req, status, {}, (customFields, selections) => store.createWork(req.scope.tenantId, req.userId, {
+    ...req.body, ...selections, status, currency, customFields, name: clean(req.body.name), customer: client?.name || '',
+    responsible: user ? `${user.firstName} ${user.lastName}`.trim() : ''
+  }));
+  res.status(201).json({ work: presentWork({ ...w, subWorks: [] }) });
+});
 exports.updateWork=(req,res)=>run(res,async()=>{const input={...req.body};if(Object.hasOwn(input,'clientId')){const c=(await store.listClients(req.scope.tenantId)).find(x=>x.id===input.clientId);input.customer=c?.name||'';}
   if(Object.hasOwn(input,'responsibleUserId')){const u=(await store.listUsers(req.scope.tenantId)).find(x=>x.id===input.responsibleUserId);input.responsible=u?`${u.firstName} ${u.lastName}`.trim():'';}
-  const w=await store.updateWork(req.scope.tenantId,req.params.id,req.userId,input);if(!w)throw fail('Work not found',404);const full=await store.findWork(req.scope.tenantId,w.id);res.json({work:presentWork(full)});});
+  const tenantId = req.scope.tenantId;
+  const existing = await store.findWork(tenantId, req.params.id);
+  if (!existing) throw fail('Work not found', 404);
+  if (input.fieldRevision !== undefined && input.fieldRevision !== existing.fieldRevision) throw fail('The work changed. Reload and try again.', 409);
+  const status = input.status ?? existing.status;
+  if (!WORK_STATUSES.includes(status)) throw fail('Invalid work status');
+  const updated = await workFields.saveValues(req, status, existing, async (customFields, selections) => {
+    const result = await store.updateWork(tenantId, existing.id, req.userId, { ...input, ...selections, status, customFields }, existing.fieldRevision);
+    if (!result) throw fail('The work changed. Reload and try again.', 409);
+    return result;
+  });
+  res.json({ work: presentWork({ ...updated, subWorks: existing.subWorks }) });
+});
+exports.downloadCustomField = (req, res) => run(res, async () => {
+  const work = await store.findWork(req.scope.tenantId, req.params.id, req.query.includeDeleted === 'true');
+  if (!work) throw fail('Work not found', 404);
+  await workFields.download(req, res, work);
+});
 exports.archiveWork=(req,res)=>run(res,async()=>{if(!await store.archiveWork(req.scope.tenantId,req.params.id,req.userId))throw fail('Work not found',404);res.status(204).end();});
 exports.restoreWork=(req,res)=>run(res,async()=>{const w=await store.restoreWork(req.scope.tenantId,req.params.id,req.userId);if(!w)throw fail('Work not found',404);res.json({work:presentWork(await store.findWork(req.scope.tenantId,w.id))});});
 exports.createSubWork=(req,res)=>run(res,async()=>{if(!clean(req.body?.name))throw fail('Sub-work name is required');const s=await store.createSubWork(req.scope.tenantId,req.params.id,req.userId,req.body);if(!s)throw fail('Work not found',404);const w=await store.findWork(req.scope.tenantId,req.params.id);res.status(201).json({subWork:presentSub(s,w)});});

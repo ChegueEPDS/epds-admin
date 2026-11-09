@@ -198,7 +198,6 @@ async function projectWorks(client) {
     sequence_number: sequenceNumber, work_number: workNumber, name: doc.name,
     client_id: id(doc.clientId), customer: doc.customer || '', responsible_user_id: id(doc.responsibleUserId),
     responsible: doc.responsible || '', contributors: json(doc.contributors, []), status: doc.status || 'inquiry',
-    status_reason: doc.statusReason || '',
     deadline: date(doc.deadline), description: doc.description || '', currency: doc.currency || 'HUF',
     total_amount: Number(doc.totalAmount || 0), cost_amount: Number(doc.costAmount || 0),
     subcontractor: doc.subcontractor || '', payment_deadline_days: Number(doc.paymentDeadlineDays ?? 30),

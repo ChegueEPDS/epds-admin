@@ -104,8 +104,7 @@ async function buildUserContext(user, session = null) {
     domainHealth: featureAccess(tenant?.features?.domainHealth),
     licenses: featureAccess(tenant?.features?.licenses),
     effortTracking: featureAccess(tenant?.features?.effortTracking),
-    workBoard: featureAccess(tenant?.type !== 'client' && tenant?.features?.workBoard),
-    projectTracker: featureAccess(tenant?.type !== 'client' && featureAccess(tenant?.features?.workBoard).enabled && tenant?.features?.projectTracker),
+    workBoard: featureAccess(tenant?.features?.workBoard),
     webhookTester: featureAccess(tenant?.features?.webhookTester)
   };
 

@@ -88,16 +88,3 @@ Large license/APK downloads are streamed with HTTP byte-range support. Work, lic
 Legacy internal daily PDF caching remains separate from authenticated customer downloads and the permanent monthly archive.
 
 After deploying these changes, run `npm run migrate:performance -- --dry-run` in the backend container, inspect the counts, and then run `npm run migrate:performance`. The migration is idempotent: it creates the required indexes, compacts legacy effort sessions in bounded batches, backfills daily rollups, and builds the initial status snapshots.
-
-## Project Tracker and tenant work settings
-
-For a company tenant, enable **Work Board** in Tenants and optionally enable **Project Tracker**. Client tenants have access to neither. Enabling the tracker makes the portfolio available from the existing work records, so work numbers, sub-works, documents and Effort Tracking references carry over. Leave the tracker off for tenants that only use Work Board.
-
-- **Work settings** holds business units and typed custom fields. Fields belong to work, sub-work, client, project group or action and have configurable editor, list and detail placements. Archived definitions retain existing values. Tenant administrators manage settings. Finance users manage dated exchange rates.
-- The tracker separates delivery from billing. Finance and SuperAdmin users record invoices, allocations, payments, credits, write-offs and reconciliation. Owners and backups maintain operational records. Weekly review reminders appear inside the tracker when enabled in work settings.
-- Import uses the original tracker workbook, with a review step for each new or linked scope. Keep the same source name when retrying a workbook. A confirmed source row is identified by its source name and row number. Historical payment claims arrive as opening balances for Finance to reconcile. After enabling the tracker for a tenant with existing Work Board invoices, reconcile its legacy opening balances before relying on the receivables dashboard.
-- The Excel export is a data snapshot. Original currencies and EUR values based on approved rates are shown separately. Portfolios are bounded to 20,000 work records per tenant for a tracker query, and individual import requests can approve 50 rows at a time.
-
-The PostgreSQL schema upgrade is applied automatically at startup. The MongoDB-to-PostgreSQL migration also carries the tracker records forward during the regular pre-cutover projection. Use a staging tenant to verify feature settings, roles and the import preview before enabling this for a production tenant.
-
-The API integration suite runs against a disposable, empty local database named `epds_project_tracker_qa` or `epds_project_tracker_qa_<suffix>`. Set `PROJECT_TRACKER_QA_DATABASE_URL` for PostgreSQL or `PROJECT_TRACKER_QA_MONGO_URL` for MongoDB, then run `node --test test/projectTrackerIntegration.test.js` from `backend`. To exercise the complete template import and retry, also set `PROJECT_TRACKER_QA_WORKBOOK` to the original project tracker workbook.

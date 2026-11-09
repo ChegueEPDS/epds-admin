@@ -1,11 +1,8 @@
 import { CommonModule } from '@angular/common';
-import { Component, OnInit, inject } from '@angular/core';
-import { ActivatedRoute, RouterLink } from '@angular/router';
-import { BoardSettings, ProjectTrackerService, TrackerDetail, WorkFields } from '../project-tracker/project-tracker.service';
-import { displayField } from '../project-tracker/tracker-field-inputs.component';
-import { WorkExtraFieldsComponent } from '../project-tracker/work-extra-fields.component';
+import { Component, OnInit } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { catchError, firstValueFrom, throwError } from 'rxjs';
+import { ActivatedRoute, RouterLink } from '@angular/router';
+import { firstValueFrom } from 'rxjs';
 import { MatButtonModule } from '@angular/material/button';
 import { MatCheckboxModule } from '@angular/material/checkbox';
 import { MatDatepickerModule } from '@angular/material/datepicker';
@@ -17,10 +14,13 @@ import { MatSelectModule } from '@angular/material/select';
 import { MatNativeDateModule } from '@angular/material/core';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { AuthService } from '../services/auth.service';
-import { ClientPayload, SubWorkItem, SubWorkPayload, TenantUserOption, WorkBoardClient, WorkBoardService, WorkDocument, WorkItem, WorkPayload, WorkStatus } from '../services/work-board.service';
+import { ActiveWorkValue, ClientPayload, SubWorkItem, SubWorkPayload, TenantUserOption, WorkBoardClient, WorkBoardService, WorkDocument, WorkItem, WorkPayload, WorkStatus } from '../services/work-board.service';
+import { WorkFieldValuesComponent } from './work-field-values.component';
+import { displayWorkField, isWorkFieldFile, PROJECT_SIZES, REPORT_PAYMENT_STATUSES, WORK_CATALOGS, WorkCatalog, WorkField, WorkFieldCard, WorkFieldFiles, WorkFieldOption, WorkFieldValues, WorkReporting } from './work-fields';
 
 type WorkForm = {
-  name: string; clientId: string; responsibleUserId: string; status: WorkStatus; statusReason: string; deadline: Date | null; description: string;
+  name: string; clientId: string; responsibleUserId: string; status: WorkStatus; deadline: Date | null; description: string;
+  entityId: string; serviceTypeId: string;
   currency: string; totalAmount: number; costAmount: number; subcontractor: string; paymentDeadlineDays: number;
   offerDate: Date | null; completionDate: Date | null; invoiceDate: Date | null; invoicePaymentDeadline: Date | null; invoiceNumber: string;
   contractSigned: boolean; performanceCertificate: boolean;
@@ -34,26 +34,25 @@ type SubWorkForm = {
 @Component({
   selector: 'app-work-board',
   standalone: true,
-  imports: [CommonModule, FormsModule, RouterLink, WorkExtraFieldsComponent, MatButtonModule, MatCheckboxModule, MatDatepickerModule, MatNativeDateModule, MatFormFieldModule, MatIconModule, MatInputModule, MatProgressSpinnerModule, MatSelectModule, MatSnackBarModule],
+  imports: [CommonModule, FormsModule, RouterLink, MatButtonModule, MatCheckboxModule, MatDatepickerModule, MatNativeDateModule, MatFormFieldModule, MatIconModule, MatInputModule, MatProgressSpinnerModule, MatSelectModule, MatSnackBarModule, WorkFieldValuesComponent],
   templateUrl: './work-board.component.html',
   styleUrl: './work-board.component.scss'
 })
 export class WorkBoardComponent implements OnInit {
-  private readonly tracker = inject(ProjectTrackerService);
-  private readonly route = inject(ActivatedRoute);
-  boardSettings?: BoardSettings;
-  trackerDetails?: TrackerDetail;
-  extras = new Map<string, WorkFields>();
-  unitId = '';
-  editingClientId = '';
-  extraSubWorkId = '';
-  createdWorkId = '';
-  readonly displayField = displayField;
-  activeValues: { currency: string; value: number }[] = [];
   works: WorkItem[] = [];
   clients: WorkBoardClient[] = [];
   tenantUsers: TenantUserOption[] = [];
   selectedWork: WorkItem | null = null;
+  customFields: WorkField[] = [];
+  reportingEnabled = false;
+  projectSizeGrouping = false;
+  reportForm: WorkReporting = {};
+  readonly projectSizes = PROJECT_SIZES;
+  readonly reportPaymentStatuses = REPORT_PAYMENT_STATUSES;
+  readonly catalogDefinitions = WORK_CATALOGS;
+  catalogs: Record<WorkCatalog, WorkFieldOption[]> = { entities: [], serviceTypes: [] };
+  fieldChanges: WorkFieldValues = {};
+  fieldFiles: WorkFieldFiles = {};
   expandedWorkIds = new Set<string>();
   detailView = false;
   loading = true;
@@ -66,6 +65,9 @@ export class WorkBoardComponent implements OnInit {
   totalPages = 1;
   activeCount = 0;
   overdueCount = 0;
+  activeValue?: ActiveWorkValue;
+  defaultCurrency = 'HUF';
+  readonly workCurrencies = ['HUF', 'EUR', 'USD'];
   documents: WorkDocument[] = [];
   documentsLoading = false;
   documentUploading = false;
@@ -88,49 +90,30 @@ export class WorkBoardComponent implements OnInit {
   workForm: WorkForm = this.emptyWorkForm();
   subWorkForm: SubWorkForm = this.emptySubWorkForm();
   readonly statuses: { value: WorkStatus; label: string }[] = [
-    { value: 'inquiry', label: 'Inquiry' }, { value: 'offer', label: 'Offer' }, { value: 'in_progress', label: 'In progress' },
+    { value: 'inquiry', label: 'Inquiry' }, { value: 'offer', label: 'Offer' }, { value: 'to_start', label: 'To start' },
+    { value: 'in_progress', label: 'In progress' }, { value: 'on_hold', label: 'On hold' },
     { value: 'completed_billable', label: 'Completed, billable' }, { value: 'invoiced', label: 'Invoiced' },
-    { value: 'paid', label: 'Paid' }, { value: 'closed', label: 'Closed' }, { value: 'cancelled', label: 'Cancelled' },
-    { value: 'to_start', label: 'To start' }, { value: 'on_hold', label: 'On hold' }, { value: 'lost', label: 'Lost' }
+    { value: 'paid', label: 'Paid' }, { value: 'closed', label: 'Closed' }, { value: 'cancelled', label: 'Cancelled' }, { value: 'lost', label: 'Lost' }
   ];
   readonly terminalStatuses = new Set<WorkStatus>(['completed_billable', 'invoiced', 'paid', 'closed', 'cancelled', 'lost']);
   private readonly statusRank: Record<WorkStatus, number> = {
-    inquiry: 0, offer: 1, in_progress: 2, completed_billable: 3,
-    invoiced: 4, paid: 5, closed: 6, cancelled: 6, to_start: 2, on_hold: 2, lost: 1
+    inquiry: 0, offer: 1, to_start: 2, in_progress: 2, on_hold: 2, completed_billable: 3,
+    invoiced: 4, paid: 5, closed: 6, cancelled: 6, lost: 1
   };
   private searchTimer: ReturnType<typeof setTimeout> | null = null;
   private loadRequestId = 0;
   private referencesLoaded = false;
 
-  constructor(private board: WorkBoardService, private snackBar: MatSnackBar, public auth: AuthService) {}
-  ngOnInit(): void { void this.initialize(); }
-
-  async initialize(): Promise<void> {
-    try { this.boardSettings = await firstValueFrom(this.tracker.boardSettings()); }
-    catch (error) { this.error(error, 'Work settings could not be loaded.'); }
-    await this.load();
+  constructor(private board: WorkBoardService, private snackBar: MatSnackBar, public auth: AuthService, private route: ActivatedRoute) {}
+  ngOnInit(): void {
     const id = this.route.snapshot.queryParamMap.get('work');
-    if (id) {
-      try { this.selectWork(await firstValueFrom(this.board.getWork(id).pipe(catchError((error) =>
-        error?.status === 404 ? this.board.getWork(id, true) : throwError(() => error))))); }
-      catch (error) { this.error(error, 'Work could not be opened.'); }
-    } else if (this.route.snapshot.queryParamMap.has('create') && this.auth.canEditFeature('workBoard')) this.startCreateWork();
-  }
-
-  get trackerEnabled(): boolean { return this.auth.canAccessFeature('projectTracker'); }
-  get listFields() { return this.boardSettings?.data.fields.filter((field) => !field.archived && field.target === 'work' && field.locations.includes('boardList')) || []; }
-  get units() { return this.boardSettings?.data.units || []; }
-  canChooseStatus(status: WorkStatus, current: WorkStatus): boolean {
-    if (status === current) return true;
-    return this.trackerEnabled ? !['invoiced','paid','closed'].includes(status) : !['to_start','on_hold','lost'].includes(status);
-  }
-  async loadTrackerDetails(id: string): Promise<void> {
-    this.trackerDetails = undefined;
-    if (!this.trackerEnabled) return;
-    try {
-      const details = await firstValueFrom(this.tracker.detail(id));
-      if (this.selectedWork?.id === id) this.trackerDetails = details;
-    } catch (error) { this.error(error, 'Project details could not be loaded.'); }
+    void this.load().then(async () => {
+      if (!id || this.showWorkForm || this.detailView) return;
+      try {
+        const work = this.works.find((item) => item.id === id) || await firstValueFrom(this.board.getWork(id));
+        if (!this.showWorkForm && !this.detailView) this.selectWork(work);
+      } catch (error) { this.error(error, 'The work could not be opened.'); }
+    });
   }
 
   get filteredWorks(): WorkItem[] { return this.works; }
@@ -141,27 +124,30 @@ export class WorkBoardComponent implements OnInit {
     const requestId = ++this.loadRequestId;
     this.loading = true;
     try {
-      const [workPage, clients, users] = await Promise.all([
-        firstValueFrom(this.board.listWorks({ page: this.page, limit: this.pageSize, search: this.search.trim(), status: this.statusFilter, unitId: this.unitId })),
+      const [workPage, clients, users, settings] = await Promise.all([
+        firstValueFrom(this.board.listWorks({ page: this.page, limit: this.pageSize, search: this.search.trim(), status: this.statusFilter })),
         this.referencesLoaded ? Promise.resolve(this.clients) : firstValueFrom(this.board.listClients()),
-        this.referencesLoaded ? Promise.resolve(this.tenantUsers) : firstValueFrom(this.board.listTenantUsers())
+        this.referencesLoaded ? Promise.resolve(this.tenantUsers) : firstValueFrom(this.board.listTenantUsers()),
+        this.referencesLoaded || !this.auth.isWorkFieldTenant() ? Promise.resolve(null) : firstValueFrom(this.board.fieldSettings())
       ]);
       if (requestId !== this.loadRequestId) return;
       this.works = workPage.works;
-      if ((this.listFields.length || this.units.length) && this.works.length) {
-        const extras = await firstValueFrom(this.tracker.boardListFields(this.works.map((work) => work.id)));
-        if (requestId !== this.loadRequestId) return;
-        this.extras = new Map(extras.map((record) => [record.id, record.data]));
-      } else this.extras.clear();
       this.clients = clients;
       this.tenantUsers = users;
+      if (settings) {
+        this.reportingEnabled = true;
+        this.projectSizeGrouping = settings.projectSizeGrouping === true;
+        this.customFields = settings.fields.filter((field) => !field.archived);
+        this.catalogs = { entities: settings.entities ?? [], serviceTypes: settings.serviceTypes ?? [] };
+      }
       this.referencesLoaded = true;
       this.page = workPage.pagination.page;
       this.totalWorks = workPage.pagination.total;
       this.totalPages = workPage.pagination.pages;
       this.activeCount = workPage.summary.activeCount;
       this.overdueCount = workPage.summary.overdueCount;
-        this.activeValues = workPage.summary.activeValues || [];
+      this.activeValue = workPage.summary.activeValue;
+      this.defaultCurrency = this.activeValue?.currency || 'HUF';
       const id = selectId || this.selectedWork?.id || this.works[0]?.id;
       this.selectedWork = this.works.find((work) => work.id === id) || null;
     } catch (error: any) { if (requestId === this.loadRequestId) this.error(error, 'Works could not be loaded.'); }
@@ -180,7 +166,7 @@ export class WorkBoardComponent implements OnInit {
     void this.load();
   }
   pageSizeChanged(): void { this.page = 1; this.expandedWorkIds = new Set<string>(); void this.load(); }
-  selectWork(work: WorkItem): void { this.extraSubWorkId = ''; this.selectedWork = work; this.cancelForms(); this.detailView = true; void this.loadDocuments(work.id); void this.loadTrackerDetails(work.id); }
+  selectWork(work: WorkItem): void { this.selectedWork = work; this.cancelForms(); this.detailView = true; void this.loadDocuments(work.id); }
   toggleWorkExpansion(work: WorkItem, event?: Event): void {
     event?.stopPropagation();
     const next = new Set(this.expandedWorkIds);
@@ -192,29 +178,52 @@ export class WorkBoardComponent implements OnInit {
   trackWork(_: number, work: WorkItem): string { return work.id; }
   trackSubWork(_: number, subWork: SubWorkItem): string { return subWork.id; }
   backToTable(): void { this.cancelForms(); this.detailView = false; this.documents = []; }
-  startCreateWork(): void { this.workForm = this.emptyWorkForm(); this.editingWork = false; this.detailView = false; this.showClientPanel = false; this.showWorkForm = true; }
+  startCreateWork(): void {
+    this.workForm = this.emptyWorkForm(); this.fieldChanges = {}; this.fieldFiles = {};
+    this.reportForm = {};
+    this.editingWork = false; this.detailView = false; this.showClientPanel = false; this.showWorkForm = true;
+  }
   startEditWork(): void {
     if (!this.selectedWork) return;
     const w = this.selectedWork;
     this.workForm = {
-      name: w.name, clientId: w.clientId || '', responsibleUserId: w.responsibleUserId || '', status: w.status, statusReason: w.statusReason || '', deadline: this.dateValue(w.deadline), description: w.description,
+      name: w.name, clientId: w.clientId || '', responsibleUserId: w.responsibleUserId || '', status: w.status, deadline: this.dateValue(w.deadline), description: w.description,
+      entityId: w.entityId || '', serviceTypeId: w.serviceTypeId || '',
       currency: w.currency, totalAmount: w.totalAmount, costAmount: w.costAmount, subcontractor: w.subcontractor,
       paymentDeadlineDays: w.paymentDeadlineDays, offerDate: this.dateValue(w.offerDate), completionDate: this.dateValue(w.completionDate),
       invoiceDate: this.dateValue(w.invoiceDate), invoicePaymentDeadline: this.dateValue(w.invoicePaymentDeadline), invoiceNumber: w.invoiceNumber,
       contractSigned: w.contractSigned, performanceCertificate: w.performanceCertificate
     };
+    this.fieldChanges = {};
+    this.fieldFiles = {};
+    this.reportForm = { ...w.reporting };
     this.editingWork = true; this.showWorkForm = true;
   }
   async saveWork(): Promise<void> {
     if (!this.workForm.name.trim()) return this.notice('Work name is required.');
+    const active = this.customFields.filter((field) => this.fieldRelevant(field, this.workForm.status));
+    const missing = active.find((field) => {
+      if (!field.required || this.fieldFiles[field.id]) return false;
+      const value = Object.hasOwn(this.fieldChanges, field.id) ? this.fieldChanges[field.id] : this.editorValues[field.id];
+      return value == null || (typeof value === 'string' && !value.trim()) || (Array.isArray(value) && !value.length);
+    });
+    if (missing) return this.notice(`${missing.label} is required.`);
+    if (this.saving) return;
     this.saving = true;
     try {
-      const payload = { ...this.workForm, name: this.workForm.name.trim(), deadline: this.dateOnly(this.workForm.deadline), expectedUpdatedAt: this.editingWork ? this.selectedWork?.updatedAt : undefined } as WorkPayload;
+      const ids = new Set(active.map((field) => field.id));
+      const files = Object.fromEntries(Object.entries(this.fieldFiles).filter(([id]) => ids.has(id)));
+      const reporting = { ...this.reportForm };
+      if (!this.projectSizeGrouping) delete reporting.projectSize;
+      if (reporting.nextAction !== undefined) reporting.nextAction = reporting.nextAction.trim();
+      const payload = { ...this.workForm, name: this.workForm.name.trim(),
+        reporting: this.reportingEnabled ? reporting : undefined,
+        customFields: Object.fromEntries(Object.entries(this.fieldChanges).filter(([id]) => ids.has(id))),
+        fieldRevision: this.editingWork ? this.selectedWork?.fieldRevision : undefined } as WorkPayload;
       const saved = this.editingWork && this.selectedWork
-        ? await firstValueFrom(this.board.updateWork(this.selectedWork.id, payload))
-        : await firstValueFrom(this.board.createWork(payload));
-      if (!this.editingWork) this.createdWorkId = saved.id;
-      this.showWorkForm = false; await this.load(saved.id); this.selectWork(saved); this.notice('Work saved.');
+        ? await firstValueFrom(this.board.updateWork(this.selectedWork.id, payload, files))
+        : await firstValueFrom(this.board.createWork(payload, files));
+      this.showWorkForm = false; await this.load(saved.id); this.selectedWork = saved; this.detailView = true; this.notice('Work saved.');
     } catch (error: any) { this.error(error, 'Work could not be saved.'); }
     finally { this.saving = false; }
   }
@@ -290,10 +299,21 @@ export class WorkBoardComponent implements OnInit {
   async downloadDocument(document: WorkDocument): Promise<void> {
     try {
       const response = await firstValueFrom(this.board.downloadDocument(document.id));
-      const url = URL.createObjectURL(response.body as Blob);
-      const link = window.document.createElement('a'); link.href = url; link.download = document.fileName; link.click();
-      setTimeout(() => URL.revokeObjectURL(url), 1000);
+      if (response.body) this.saveBlob(response.body, document.fileName);
     } catch (error: any) { this.error(error, 'Document could not be downloaded.'); }
+  }
+  async downloadField(work: WorkItem | null, field: WorkField): Promise<void> {
+    const file = work?.customFields?.[field.id];
+    if (!work || !isWorkFieldFile(file)) return;
+    try {
+      const blob = await firstValueFrom(this.board.downloadCustomField(work.id, field.id, Boolean(work.archivedAt)));
+      this.saveBlob(blob, file.name);
+    } catch (error: any) { this.error(error, 'File could not be downloaded.'); }
+  }
+  private saveBlob(blob: Blob, name: string): void {
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a'); link.href = url; link.download = name; link.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
   async deleteDocument(document: WorkDocument): Promise<void> {
     if (!confirm(`Delete ${document.displayName} · ${document.fileName}?`)) return;
@@ -337,6 +357,26 @@ export class WorkBoardComponent implements OnInit {
     finally { this.saving = false; }
   }
   statusLabel(status: WorkStatus): string { return this.statuses.find((item) => item.value === status)?.label || status; }
+  backupLabel(id?: string): string { return this.tenantUsers.find((user) => user.id === id)?.fullName || '—'; }
+  reportPaymentLabel(status?: string): string { return this.reportPaymentStatuses.find((item) => item.id === status)?.label || '—'; }
+  get editorValues(): WorkFieldValues { return (this.editingWork && this.selectedWork?.customFields) || {}; }
+  get visibleCatalogs() { return this.catalogDefinitions.filter((catalog) => this.hasCatalogOptions(catalog.key)); }
+  hasCatalogOptions(catalog: WorkCatalog): boolean { return this.catalogs[catalog].some((entry) => !entry.archived); }
+  catalogOptions(catalog: WorkCatalog, current: string): WorkFieldOption[] {
+    return this.catalogs[catalog].filter((entry) => !entry.archived || entry.id === current);
+  }
+  catalogLabel(catalog: WorkCatalog, id?: string | null): string {
+    return this.catalogs[catalog].find((entry) => entry.id === id)?.label || '—';
+  }
+  get fieldColumns(): WorkField[] { return this.customFields.filter((field) => field.showInList); }
+  cardFields(card: WorkFieldCard): WorkField[] { return this.customFields.filter((field) => field.card === card); }
+  listField(work: WorkItem, field: WorkField): string {
+    return this.fieldRelevant(field, work.status) ? displayWorkField(field, work.customFields?.[field.id]) : '—';
+  }
+  private fieldRelevant(field: WorkField, status: WorkStatus): boolean {
+    const card = field.card;
+    return card === 'basic' || card === 'description' || card === 'documents' || this.showFrom(card, status);
+  }
   showFrom(stage: 'offer' | 'execution' | 'completion' | 'invoice' | 'payment', status: WorkStatus = this.workForm.status): boolean {
     const required = { offer: 1, execution: 2, completion: 3, invoice: 4, payment: 5 }[stage];
     return this.statusRank[status] >= required;
@@ -348,11 +388,7 @@ export class WorkBoardComponent implements OnInit {
   private dateValue(value: string | null): Date | null { return value ? new Date(value) : null; }
   private notice(message: string): void { this.snackBar.open(message, 'OK', { duration: 3000 }); }
   private error(error: any, fallback: string): void { this.snackBar.open(error?.error?.error || fallback, 'OK', { duration: 4500 }); }
-  private dateOnly(value: Date | null): string | null {
-    if (!value || Number.isNaN(value.valueOf())) return null;
-    return [value.getFullYear(), value.getMonth() + 1, value.getDate()].map((part, index) => String(part).padStart(index ? 2 : 4, '0')).join('-');
-  }
-  private emptyWorkForm(): WorkForm { return { name: '', clientId: '', responsibleUserId: '', status: 'inquiry', statusReason: '', deadline: null, description: '', currency: 'HUF', totalAmount: 0, costAmount: 0, subcontractor: '', paymentDeadlineDays: 30, offerDate: null, completionDate: null, invoiceDate: null, invoicePaymentDeadline: null, invoiceNumber: '', contractSigned: false, performanceCertificate: false }; }
+  private emptyWorkForm(): WorkForm { return { name: '', clientId: '', entityId: '', serviceTypeId: '', responsibleUserId: '', status: 'inquiry', deadline: null, description: '', currency: this.defaultCurrency, totalAmount: 0, costAmount: 0, subcontractor: '', paymentDeadlineDays: 30, offerDate: null, completionDate: null, invoiceDate: null, invoicePaymentDeadline: null, invoiceNumber: '', contractSigned: false, performanceCertificate: false }; }
   private emptySubWorkForm(): SubWorkForm { return { name: '', responsibleUserId: '', status: 'inquiry', deadline: null, description: '', plannedHours: 0, amount: 0, percentage: 0, performanceCertificateRequired: false, performanceCertificateSigned: false, invoiceNumber: '', invoiceDate: null, invoicePaymentDeadline: null, paidAmount: 0, paidAt: null }; }
   private emptyClientForm(): ClientPayload { return { taxNumber: '', name: '', country: 'HU', postalCode: '', city: '', address: '', email: '', phone: '' }; }
 }

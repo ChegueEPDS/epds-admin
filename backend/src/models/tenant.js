@@ -20,13 +20,14 @@ const TenantSchema = new mongoose.Schema(
       used: { type: Number, default: 0, min: 0 }
     },
     seatsManaged: { type: String, enum: ['stripe', 'manual'], default: 'stripe' },
+    workFieldSettings: { type: mongoose.Schema.Types.Mixed },
+    defaultCurrency: { type: String, default: 'HUF', match: /^[A-Z]{3}$/ },
     features: {
       mail: { type: FeatureAccessSchema, default: () => ({}) },
       domainHealth: { type: FeatureAccessSchema, default: () => ({}) },
       licenses: { type: FeatureAccessSchema, default: () => ({}) },
       effortTracking: { type: FeatureAccessSchema, default: () => ({}) },
       workBoard: { type: FeatureAccessSchema, default: () => ({}) },
-      projectTracker: { type: FeatureAccessSchema, default: () => ({}) },
       webhookTester: { type: FeatureAccessSchema, default: () => ({}) }
     },
     professionRbacEnabled: { type: Boolean, default: false, index: true }

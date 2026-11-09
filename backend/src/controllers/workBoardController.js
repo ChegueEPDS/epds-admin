@@ -6,9 +6,10 @@ const User = require('../models/user');
 const WorkSequence = require('../models/workSequence');
 const { WorkDocument, WORK_DOCUMENT_CATEGORIES } = require('../models/workDocument');
 const fileStorage = require('../services/fileStorageService');
+const workFields = require('../services/workFields');
+const tenantCurrency = require('../services/tenantCurrency');
 const { pipeline } = require('stream/promises');
 const crypto = require('crypto');
-const trackerRecords = require('../services/projectTrackerStore');
 
 const TERMINAL_STATUSES = new Set(['completed_billable', 'invoiced', 'paid', 'closed', 'cancelled', 'lost']);
 const DOCUMENT_CATEGORY_LABELS = {
@@ -114,8 +115,7 @@ function workPayload(body, existing = {}) {
     responsible: cleanText(body?.responsible ?? existing.responsible),
     contributors: Array.isArray(body?.contributors) ? body.contributors.map(cleanText).filter(Boolean) : (existing.contributors || []),
     status: validateStatus(body?.status ?? existing.status),
-    statusReason: cleanLongText(body?.statusReason ?? existing.statusReason).slice(0, 1000),
-    deadline: Object.hasOwn(body || {}, 'deadline') ? optionalDate(body.deadline) : existing.deadline,
+    deadline: optionalDate(body?.deadline ?? existing.deadline),
     description: cleanLongText(body?.description ?? existing.description),
     currency: cleanText(body?.currency ?? existing.currency ?? 'HUF').toUpperCase() || 'HUF',
     totalAmount: Math.max(0, numberValue(body?.totalAmount, existing.totalAmount || 0)),
@@ -143,7 +143,7 @@ function subWorkPayload(body, work, existing = {}) {
     responsible: cleanText(body?.responsible ?? existing.responsible),
     contributors: Array.isArray(body?.contributors) ? body.contributors.map(cleanText).filter(Boolean) : (existing.contributors || []),
     status: validateStatus(body?.status ?? existing.status),
-    deadline: Object.hasOwn(body || {}, 'deadline') ? optionalDate(body.deadline) : existing.deadline,
+    deadline: optionalDate(body?.deadline ?? existing.deadline),
     completedAt: optionalDate(body?.completedAt ?? existing.completedAt),
     plannedHours: Math.max(0, numberValue(body?.plannedHours, existing.plannedHours || 0)),
     amount: Math.max(0, numberValue(body?.amount, existing.amount || 0)),
@@ -202,14 +202,18 @@ function presentWork(work, subWorks = []) {
     sequenceNumber: work.sequenceNumber,
     name: work.name,
     customer: work.customer || '',
+    entityId: work.entityId || null,
+    serviceTypeId: work.serviceTypeId || null,
     clientId: work.clientId ? String(work.clientId) : null,
     responsible: work.responsible || '',
     responsibleUserId: work.responsibleUserId ? String(work.responsibleUserId) : null,
     contributors: work.contributors || [],
     status: work.status,
-    statusReason: work.statusReason || '',
     deadline: work.deadline || null,
     description: work.description || '',
+    customFields: work.customFields || {},
+    reporting: work.reporting || {},
+    fieldRevision: work.__v || 0,
     currency: work.currency || 'HUF',
     totalAmount,
     costAmount: Number(work.costAmount || 0),
@@ -309,11 +313,6 @@ exports.listWorks = (req, res) => withErrors(res, async () => {
     else if (status !== 'all') query.status = validateStatus(status);
   }
 
-  const unitId = cleanText(req.query?.unitId);
-  if (unitId) {
-    const entries = await trackerRecords.list(req.scope.tenantId, 'work');
-    query._id = { $in: entries.filter((record) => record.data.unitId === unitId).map((record) => record.id) };
-  }
   const search = cleanText(req.query?.search);
   if (search) {
     const pattern = new RegExp(escapeRegex(search), 'i');
@@ -328,9 +327,8 @@ exports.listWorks = (req, res) => withErrors(res, async () => {
     WorkItem.countDocuments({ ...scopeQuery(req.scope), archivedAt: { $exists: false }, status: { $nin: [...TERMINAL_STATUSES] } }),
     WorkItem.countDocuments({ ...scopeQuery(req.scope), archivedAt: { $exists: false }, status: { $nin: [...TERMINAL_STATUSES] }, deadline: { $lt: new Date(new Date().setHours(0, 0, 0, 0)) } }),
     WorkItem.aggregate([
-      { $match: { ...scopeQuery(req.scope), tenantId: new mongoose.Types.ObjectId(req.scope.tenantId), archivedAt: { $exists: false }, status: { $nin: [...TERMINAL_STATUSES] } } },
-      { $group: { _id: '$currency', value: { $sum: '$totalAmount' } } },
-      { $sort: { _id: 1 } }
+      { $match: { tenantId: new mongoose.Types.ObjectId(req.scope.tenantId), archivedAt: { $exists: false }, status: { $nin: [...TERMINAL_STATUSES] } } },
+      { $group: { _id: { $ifNull: ['$currency', 'HUF'] }, value: { $sum: { $toDecimal: '$totalAmount' } } } }
     ])
   ]);
   const subWorkArchiveFilter = status === 'deleted' ? { archivedByWorkAt: { $exists: true } } : { archivedAt: { $exists: false } };
@@ -341,11 +339,12 @@ exports.listWorks = (req, res) => withErrors(res, async () => {
     if (!byWork.has(key)) byWork.set(key, []);
     byWork.get(key).push(item);
   });
+  const totals = await tenantCurrency.summarizeActiveValue(req.scope.tenantId,
+    activeValue.map((row) => ({ currency: row._id, amount: row.value.toString() })));
   res.json({
     works: works.map((work) => presentWork(work, byWork.get(String(work._id)) || [])),
     pagination: { page, limit, total, pages: Math.max(1, Math.ceil(total / limit)) },
-    summary: { activeCount, overdueCount, totalActiveValue: activeValue.reduce((sum, row) => sum + Number(row.value), 0),
-      activeValues: activeValue.map((row) => ({ currency: row._id || 'HUF', value: Number(row.value) })) }
+    summary: { activeCount, overdueCount, totalActiveValue: totals.amount, activeValue: totals }
   });
 });
 
@@ -375,7 +374,8 @@ exports.getWork = (req, res) => withErrors(res, async () => {
 });
 
 exports.createWork = (req, res) => withErrors(res, async () => {
-  const payload = workPayload(req.body);
+  const currency = cleanText(req.body?.currency) || await tenantCurrency.getDefaultCurrency(req.scope.tenantId);
+  const payload = workPayload({ ...req.body, currency });
   const client = await resolveClient(req.body?.clientId, req.scope);
   const responsibleUser = await resolveResponsible(req.body?.responsibleUserId, req.scope);
   const year = Math.max(2000, Math.min(9999, numberValue(req.body?.year, new Date().getFullYear())));
@@ -387,27 +387,18 @@ exports.createWork = (req, res) => withErrors(res, async () => {
     createdBy: req.userId, updatedBy: req.userId
   });
   applyWorkReferences(work, client, responsibleUser);
-  await work.save();
+  await workFields.saveValues(req, payload.status, {}, (values, selections) => {
+    Object.assign(work, selections);
+    work.customFields = values;
+    return work.save();
+  });
   res.status(201).json({ work: presentWork(work, []) });
 });
 
-exports.createTrackerImportWork = async (tenantId, actor, id, input) => {
-  const year = new Date().getFullYear();
-  const latest = await WorkItem.findOne({ tenantId, year }).sort({ sequenceNumber: -1 }).select('sequenceNumber').lean();
-  const sequenceNumber = await allocateSequence(tenantId, `work:${year}`, latest?.sequenceNumber);
-  return WorkItem.create({
-    ...workPayload(input), _id: id, tenantId, year, sequenceNumber, clientId: input.clientId,
-    responsibleUserId: input.responsibleUserId, workNumber: `${String(year).slice(-2)}-${String(sequenceNumber).padStart(4, '0')}`,
-    createdBy: actor, updatedBy: actor
-  });
-};
-
 exports.updateWork = (req, res) => withErrors(res, async () => {
   const work = await scopedWork(req.params.id, req.scope);
-  const expected = req.body?.expectedUpdatedAt;
-  if (expected) {
-    if (typeof expected !== 'string' || work.updatedAt?.toISOString() !== expected) throw httpError('Work changed. Reopen it before saving.', 409);
-    work.$where = { updatedAt: work.updatedAt, archivedAt: { $exists: false } };
+  if (req.body?.fieldRevision !== undefined && req.body.fieldRevision !== (work.__v || 0)) {
+    throw httpError('The work changed. Reload and try again.', 409);
   }
   Object.assign(work, workPayload(req.body, work), { updatedBy: req.userId });
   if (Object.prototype.hasOwnProperty.call(req.body || {}, 'clientId')) {
@@ -420,13 +411,18 @@ exports.updateWork = (req, res) => withErrors(res, async () => {
     work.responsibleUserId = responsibleUser?._id || undefined;
     work.responsible = responsibleUser ? presentUser(responsibleUser).fullName : '';
   }
-  try { await work.save(); }
-  catch (error) {
-    if (expected && error.name === 'DocumentNotFoundError') throw httpError('Work changed. Reopen it before saving.', 409);
-    throw error;
-  }
+  await workFields.saveValues(req, work.status, work, (values, selections) => {
+    Object.assign(work, selections);
+    work.customFields = values;
+    return work.save();
+  });
   const subWorks = await SubWorkItem.find({ ...scopeQuery(req.scope), workItemId: work._id, archivedAt: { $exists: false } }).sort({ sequenceNumber: 1 });
   res.json({ work: presentWork(work, subWorks) });
+});
+
+exports.downloadCustomField = (req, res) => withErrors(res, async () => {
+  const work = await scopedWork(req.params.id, req.scope, { includeArchived: req.query.includeDeleted === 'true' });
+  await workFields.download(req, res, work);
 });
 
 exports.archiveWork = (req, res) => withErrors(res, async () => {

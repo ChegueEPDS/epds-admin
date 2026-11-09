@@ -9,7 +9,6 @@ const { projectCore, verifyCore } = require('./postgres-core-projector');
 const { projectAux, verifyAux } = require('./postgres-aux-projector');
 
 const SCHEMA_FILE = path.join(__dirname, '..', 'postgres', '001_initial_schema.sql');
-const TRACKER_SCHEMA = path.join(__dirname, '..', 'postgres', '003_project_tracker.sql');
 const BATCH_SIZE = Math.max(10, Number(process.env.POSTGRES_MIGRATION_BATCH_SIZE || 250));
 
 function required(name) {
@@ -39,7 +38,6 @@ function createPool() {
 async function applySchema(pool) {
   const sql = fs.readFileSync(SCHEMA_FILE, 'utf8');
   await pool.query(sql);
-  await pool.query(fs.readFileSync(TRACKER_SCHEMA, 'utf8'));
   console.log('[postgres-migration] schema applied');
 }
 
@@ -192,36 +190,6 @@ async function archive(db, pool) {
   }
 }
 
-async function projectTrackerRecords(pool) {
-  const client = await pool.connect();
-  try {
-    await client.query('BEGIN');
-    await client.query(fs.readFileSync(TRACKER_SCHEMA, 'utf8'));
-    const result = await client.query(`SELECT document FROM mongo_source_documents WHERE collection_name='project_tracker_records'`);
-    const seen = [];
-    for (const row of result.rows) {
-      const record = EJSON.deserialize(row.document, { relaxed: true });
-      const { tenant_id: tenantId, kind, record_id: id, version, data } = record;
-      const key = `${tenantId}:${kind}:${id}`;
-      if (record._id !== key || !Number.isInteger(version) || version <= 0 || !data || typeof data !== 'object') {
-        throw new Error('Invalid Project Tracker record in MongoDB archive');
-      }
-      seen.push(key);
-      await client.query(`INSERT INTO project_tracker_records(tenant_id,kind,record_id,version,data)
-        VALUES($1,$2,$3,$4,$5) ON CONFLICT(tenant_id,kind,record_id) DO UPDATE
-        SET version=EXCLUDED.version,data=EXCLUDED.data,updated_at=now()`, [tenantId, kind, id, version, JSON.stringify(data)]);
-    }
-    await client.query(`DELETE FROM project_tracker_records WHERE NOT ((tenant_id || ':' || kind || ':' || record_id)=ANY($1::text[]))`, [seen]);
-    const count = await client.query('SELECT count(*)::integer AS total FROM project_tracker_records');
-    if (count.rows[0].total !== seen.length) throw new Error('Project Tracker projection count mismatch');
-    await client.query('COMMIT');
-    console.log(`[postgres-migration] Project Tracker records verified: ${seen.length}`);
-  } catch (error) {
-    await client.query('ROLLBACK').catch(() => {});
-    throw error;
-  } finally { client.release(); }
-}
-
 async function main() {
   const command = String(process.argv[2] || 'all').toLowerCase();
   const pool = createPool();
@@ -233,7 +201,6 @@ async function main() {
     if (command === 'archive' || command === 'all') await archive(db, pool);
     if (command === 'verify') await verify(db, pool);
     if (command === 'project' || command === 'all') {
-      await pool.query(fs.readFileSync(TRACKER_SCHEMA, 'utf8'));
       const counts = await projectCore(pool);
       console.log('[postgres-migration] core relational projection complete', counts);
       await verifyCore(pool);
@@ -241,7 +208,6 @@ async function main() {
       const auxiliaryCounts = await projectAux(pool);
       console.log('[postgres-migration] auxiliary relational projection complete', auxiliaryCounts);
       await verifyAux(pool);
-      await projectTrackerRecords(pool);
       console.log('[postgres-migration] auxiliary relational projection verified');
     }
   } finally {

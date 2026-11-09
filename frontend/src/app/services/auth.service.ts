@@ -7,7 +7,7 @@ import { environment } from '../../environments/environment';
 import { MsalService } from '@azure/msal-angular';
 import { loginRequest } from './msal.config';
 
-export type TenantFeatureKey = 'mail' | 'domainHealth' | 'licenses' | 'workBoard' | 'projectTracker' | 'effortTracking' | 'webhookTester';
+export type TenantFeatureKey = 'mail' | 'domainHealth' | 'licenses' | 'workBoard' | 'effortTracking' | 'webhookTester';
 
 export type TenantFeatureAccess = {
   enabled: boolean;
@@ -58,11 +58,10 @@ const FEATURE_ROUTES: Record<TenantFeatureKey, string> = {
   licenses: '/licenses',
   effortTracking: '/effort-tracking',
   workBoard: '/work-board',
-  projectTracker: '/project-tracker',
   webhookTester: '/webhook'
 };
 
-const FEATURE_ORDER: TenantFeatureKey[] = ['mail', 'domainHealth', 'licenses', 'workBoard', 'projectTracker', 'effortTracking', 'webhookTester'];
+const FEATURE_ORDER: TenantFeatureKey[] = ['mail', 'domainHealth', 'licenses', 'workBoard', 'effortTracking', 'webhookTester'];
 
 @Injectable({ providedIn: 'root' })
 export class AuthService {
@@ -254,13 +253,20 @@ export class AuthService {
     return this.isSuperAdmin() || Boolean(this.currentUser?.tenantId || this.currentUser?.tenantName);
   }
 
+  isWorkFieldTenant(): boolean {
+    return (this.isSuperAdmin() ? this.getTenantContext()?.type : this.currentUser?.tenantType) !== 'client';
+  }
+
+  canManageWorkFields(): boolean {
+    const role = this.currentUser?.role;
+    const hasTenant = this.isSuperAdmin() ? Boolean(this.getTenantContext()) : Boolean(this.currentUser?.tenantId);
+    return hasTenant && (role === 'Admin' || role === 'SuperAdmin') && this.isWorkFieldTenant() && this.canEditFeature('workBoard');
+  }
+
   canAccessFeature(featureKey: TenantFeatureKey): boolean {
-    if (featureKey === 'projectTracker' && !this.canAccessFeature('workBoard')) return false;
-    if (['projectTracker', 'workBoard'].includes(featureKey) &&
-        (this.isSuperAdmin() ? this.getTenantContext()?.type === 'client' : this.currentUser?.tenantType === 'client')) return false;
     if (this.isSuperAdmin()) {
       const context = this.getTenantContext();
-      return context ? Boolean(context.features?.[featureKey]?.enabled) : !['workBoard', 'projectTracker'].includes(featureKey);
+      return context ? Boolean(context.features?.[featureKey]?.enabled) : true;
     }
     return Boolean(this.currentUser?.tenantFeatures?.[featureKey]?.enabled);
   }
@@ -283,7 +289,6 @@ export class AuthService {
   }
 
   canEditFeature(featureKey: TenantFeatureKey): boolean {
-    if (!this.canAccessFeature(featureKey)) return false;
     if (this.isSuperAdmin()) {
       const context = this.getTenantContext();
       return context ? Boolean(context.features?.[featureKey]?.enabled && context.features?.[featureKey]?.edit) : true;
@@ -293,7 +298,6 @@ export class AuthService {
   }
 
   canDeleteFeature(featureKey: TenantFeatureKey): boolean {
-    if (!this.canAccessFeature(featureKey)) return false;
     if (this.isSuperAdmin()) {
       const context = this.getTenantContext();
       return context ? Boolean(context.features?.[featureKey]?.enabled && context.features?.[featureKey]?.delete) : true;

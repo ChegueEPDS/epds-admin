@@ -9,6 +9,7 @@ export type AdminTenant = {
   name: string;
   displayName?: string;
   type: TenantType;
+  defaultCurrency?: string;
   features: TenantFeatures;
   ownerUserId?: string | null;
   createdAt?: string;
@@ -21,6 +22,7 @@ export type TenantPayload = {
   name: string;
   displayName?: string;
   type: TenantType;
+  defaultCurrency?: string;
   features: TenantFeatures;
 };
 
@@ -128,6 +130,11 @@ export class AdminService {
   listTenants(): Observable<AdminTenant[]> {
     return this.http.get<{ tenants: AdminTenant[] }>(`${this.baseUrl}/tenants`, { withCredentials: true })
       .pipe(map((res) => res.tenants || []));
+  }
+
+  tenantCurrencies(): Observable<string[]> {
+    return this.http.get<{ currencies: string[] }>(`${this.baseUrl}/tenant-currencies`, { withCredentials: true })
+      .pipe(map((res) => res.currencies));
   }
 
   createTenant(payload: TenantPayload): Observable<AdminTenant> {
