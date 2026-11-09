@@ -79,7 +79,7 @@
       </div>
     </section>
 
-    <section class="panel" aria-labelledby="entity-chart-title">
+    <section class="panel wide" aria-labelledby="entity-chart-title">
       <div><h2 id="entity-chart-title">Project stages by entity</h2><p class="muted">Works by organizational unit</p></div>
       <div class="legend">
         @for (stage of d.stages; track stage; let i = $index) { <span [attr.data-series]="i"><i></i>{{ stage }}</span> }
@@ -108,8 +108,6 @@
         } @empty { <p class="muted">No works to show.</p> }
       </div>
     </section>
-
-    <section class="panel"><h2>Data checks</h2><ng-container *ngTemplateOutlet="counts; context: { $implicit: d.checks }"/></section>
 
     <section class="panel wide drilldown" [hidden]="!selection" aria-labelledby="chart-results-title">
       <div class="page-head">
@@ -243,6 +241,8 @@
         <p class="muted">Automatic size uses EUR thresholds of 5,000 and 20,000. A size selected on the work takes precedence.</p>
       </section>
     }
+    <section class="panel"><h2>Data checks</h2><ng-container *ngTemplateOutlet="counts; context: { $implicit: d.checks }"/></section>
+
     <ng-template #counts let-rows>
       <dl class="counts">@for (row of rows; track row.label) { <div><dt>{{ row.label }}</dt><dd>{{ row.count }}</dd></div> }</dl>
     </ng-template>
