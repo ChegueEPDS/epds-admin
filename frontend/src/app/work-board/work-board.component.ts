@@ -1,7 +1,7 @@
 import { CommonModule } from '@angular/common';
 import { Component, OnInit } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { ActivatedRoute, RouterLink } from '@angular/router';
+import { ActivatedRoute } from '@angular/router';
 import { firstValueFrom } from 'rxjs';
 import { MatButtonModule } from '@angular/material/button';
 import { MatCheckboxModule } from '@angular/material/checkbox';
@@ -14,7 +14,7 @@ import { MatSelectModule } from '@angular/material/select';
 import { MatNativeDateModule } from '@angular/material/core';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { AuthService } from '../services/auth.service';
-import { ActiveWorkValue, ClientPayload, SubWorkItem, SubWorkPayload, TenantUserOption, WorkBoardClient, WorkBoardService, WorkDocument, WorkItem, WorkPayload, WorkStatus } from '../services/work-board.service';
+import { ClientPayload, SubWorkItem, SubWorkPayload, TenantUserOption, WorkBoardClient, WorkBoardService, WorkDocument, WorkItem, WorkPayload, WorkStatus } from '../services/work-board.service';
 import { WorkFieldValuesComponent } from './work-field-values.component';
 import { displayWorkField, isWorkFieldFile, PROJECT_SIZES, REPORT_PAYMENT_STATUSES, WORK_CATALOGS, WorkCatalog, WorkField, WorkFieldCard, WorkFieldFiles, WorkFieldOption, WorkFieldValues, WorkReporting } from './work-fields';
 
@@ -34,7 +34,7 @@ type SubWorkForm = {
 @Component({
   selector: 'app-work-board',
   standalone: true,
-  imports: [CommonModule, FormsModule, RouterLink, MatButtonModule, MatCheckboxModule, MatDatepickerModule, MatNativeDateModule, MatFormFieldModule, MatIconModule, MatInputModule, MatProgressSpinnerModule, MatSelectModule, MatSnackBarModule, WorkFieldValuesComponent],
+  imports: [CommonModule, FormsModule, MatButtonModule, MatCheckboxModule, MatDatepickerModule, MatNativeDateModule, MatFormFieldModule, MatIconModule, MatInputModule, MatProgressSpinnerModule, MatSelectModule, MatSnackBarModule, WorkFieldValuesComponent],
   templateUrl: './work-board.component.html',
   styleUrl: './work-board.component.scss'
 })
@@ -63,11 +63,8 @@ export class WorkBoardComponent implements OnInit {
   pageSize = 25;
   totalWorks = 0;
   totalPages = 1;
-  activeCount = 0;
-  overdueCount = 0;
-  activeValue?: ActiveWorkValue;
   defaultCurrency = 'HUF';
-  readonly workCurrencies = ['HUF', 'EUR', 'USD'];
+  readonly workCurrencies = ['HUF', 'EUR', 'USD', 'AED'];
   documents: WorkDocument[] = [];
   documentsLoading = false;
   documentUploading = false;
@@ -144,10 +141,7 @@ export class WorkBoardComponent implements OnInit {
       this.page = workPage.pagination.page;
       this.totalWorks = workPage.pagination.total;
       this.totalPages = workPage.pagination.pages;
-      this.activeCount = workPage.summary.activeCount;
-      this.overdueCount = workPage.summary.overdueCount;
-      this.activeValue = workPage.summary.activeValue;
-      this.defaultCurrency = this.activeValue?.currency || 'HUF';
+      this.defaultCurrency = workPage.summary.activeValue?.currency || 'HUF';
       const id = selectId || this.selectedWork?.id || this.works[0]?.id;
       this.selectedWork = this.works.find((work) => work.id === id) || null;
     } catch (error: any) { if (requestId === this.loadRequestId) this.error(error, 'Works could not be loaded.'); }

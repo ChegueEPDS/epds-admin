@@ -6,9 +6,6 @@
       <p>{{ detailView ? 'Complete operational and financial record.' : 'Works, sub-works, delivery and billing progress in one place.' }}</p>
     </div>
     <div class="page-actions">
-      <a mat-stroked-button routerLink="/work-board/dashboard" *ngIf="!showWorkForm && !detailView && auth.isWorkFieldTenant()">
-        <mat-icon class="material-symbols-outlined">dashboard</mat-icon>Dashboard
-      </a>
       <button mat-stroked-button type="button" *ngIf="detailView || showWorkForm" (click)="backToTable()">
         <mat-icon class="material-symbols-outlined">arrow_back</mat-icon>Back to table
       </button>
@@ -160,21 +157,6 @@
 
   <ng-container *ngIf="!loading && !showWorkForm">
     <ng-container *ngIf="!detailView">
-      <div class="metric-grid compact-metrics">
-        <article><span>Active</span><strong>{{ activeCount }}</strong></article>
-        <article><span>Overdue</span><strong [class.danger]="overdueCount">{{ overdueCount }}</strong></article>
-        <article>
-          <span>Active value</span>
-          @if (activeValue; as value) {
-            <strong>{{ value.amount === null ? '—' : formatMoney(value.amount, value.currency) }}</strong>
-            @if (value.rateDate) { <small>MNB rates · {{ value.rateDate | date:'yyyy.MM.dd.' }}</small> }
-            @if (value.refreshFailed) { <small class="rate-warning">Latest rate refresh failed</small> }
-            @if (value.missingCurrencies.length) {
-              <small class="rate-warning">{{ value.amount === null ? 'No total' : 'Partial total' }} · Rate unavailable for {{ value.missingCurrencies.join(', ') }}</small>
-            }
-          } @else { <strong>—</strong> }
-        </article>
-      </div>
       <div class="table-toolbar">
         <mat-form-field appearance="outline" subscriptSizing="dynamic"><mat-label>Search works</mat-label><mat-icon class="material-symbols-outlined" matPrefix>search</mat-icon><input matInput [(ngModel)]="search" (ngModelChange)="filtersChanged(true)"></mat-form-field>
         <mat-form-field appearance="outline" subscriptSizing="dynamic"><mat-label>Status</mat-label><mat-select [(ngModel)]="statusFilter" (selectionChange)="filtersChanged()"><mat-option value="active">Active</mat-option><mat-option value="all">All</mat-option><mat-option value="deleted">Deleted</mat-option><mat-option *ngFor="let status of statuses" [value]="status.value">{{ status.label }}</mat-option></mat-select></mat-form-field>

@@ -1,30 +1,31 @@
-:host { display: block; min-width: 0; color: var(--brand-ink); }
-main { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; max-width: 1450px; margin: auto; padding: clamp(14px, 3vw, 36px); }
+:host { display: block; min-width: 0; color: var(--brand-ink); container-type: inline-size; }
+main { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; padding: 16px var(--work-board-inset) 24px; }
+.wide { grid-column: 1 / -1; }
 h1, h2, h3, p, dl { margin: 0; }
-h2 { font-size: 1.16rem; }
+h1 { font-size: 1.45rem; }
+h2 { font-size: 1.05rem; }
 h3 { font-size: .95rem; }
-.page-head { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; }
-.eyebrow { color: var(--brand-accent-ink); text-transform: uppercase; letter-spacing: .1em; font-size: .75rem; font-weight: 800; }
+.dashboard-header, .page-head { display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap; gap: 6px 12px; }
+.dashboard-status { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 12px; }
 .muted, .legend { color: var(--brand-muted); font-size: .86rem; }
 .warning, .error { color: var(--brand-warning); }
 .error { color: var(--brand-error); }
-.panel { display: grid; align-content: start; gap: 14px; min-width: 0; padding: clamp(12px, 2.5vw, 22px);
-  background: var(--brand-panel); border: 1px solid var(--brand-border); border-radius: 14px; box-shadow: var(--brand-shadow-sm); }
-.metrics { display: grid; gap: 10px; grid-template-columns: repeat(4, minmax(0, 1fr)); }
-.metrics > div { display: grid; gap: 6px; padding: 12px; background: var(--brand-panel-soft); border-radius: 9px; overflow-wrap: anywhere; }
+.panel { display: grid; align-content: start; gap: 9px; min-width: 0; padding: 12px 14px;
+  background: var(--brand-panel); border: 1px solid var(--brand-border); border-radius: 12px; box-shadow: var(--brand-shadow-sm); }
+.metrics { display: grid; gap: 8px; grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.metrics > div { display: grid; align-content: start; gap: 4px; padding: 8px 10px; background: var(--brand-panel-soft); border-radius: 8px; overflow-wrap: anywhere; }
 .metrics span { color: var(--brand-muted); font-size: .82rem; }
-.metrics strong { font-size: 1.25rem; font-variant-numeric: tabular-nums; }
+.metrics strong { font-size: 1.15rem; font-variant-numeric: tabular-nums; }
 small { display: block; font-size: .75rem; font-weight: 650; }
-.split { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(min(100%, 29rem), 1fr)); }
 .table-wrap { min-width: 0; overflow: auto; }
 table { width: 100%; border-collapse: collapse; text-align: start; font-size: .82rem; }
-th, td { padding: 9px 10px; border-bottom: 1px solid var(--brand-border); }
+th, td { padding: 6px 8px; border-bottom: 1px solid var(--brand-border); }
 th { text-align: start; }
 thead, tfoot { background: var(--brand-panel-soft); }
 td { font-variant-numeric: tabular-nums; }
 .counts > div { display: flex; justify-content: space-between; gap: 10px; padding: 7px 0; border-bottom: 1px solid var(--brand-border); font-size: .84rem; }
 .counts dd { margin: 0; font-variant-numeric: tabular-nums; }
-.legend { display: flex; gap: 16px; }
+.legend { display: flex; flex-wrap: wrap; gap: 5px 12px; }
 .legend span { display: inline-flex; gap: 6px; align-items: center; }
 .legend i { width: 11px; height: 11px; border-radius: 2px; }
 .chart { display: grid; gap: 7px; }
@@ -35,10 +36,10 @@ td { font-variant-numeric: tabular-nums; }
 i.active { background: var(--brand-primary); }
 i.lead { background: var(--brand-muted); }
 .drilldown[hidden] { display: none; }
-.deadline-bars, .entity-stacks { display: grid; gap: 8px; }
+.deadline-bars, .entity-stacks { display: grid; gap: 6px; }
 .deadline-bar, .finance-bar, .stack-segment { font: inherit; color: inherit; cursor: pointer; }
 .deadline-bar, .finance-bar {
-  padding: 9px; border: 1px solid var(--brand-border); border-radius: 8px; background: var(--brand-panel-soft);
+  padding: 6px 8px; border: 1px solid var(--brand-border); border-radius: 8px; background: var(--brand-panel-soft);
 }
 .deadline-bar:hover, .finance-bar:hover, [aria-pressed='true'] {
   border-color: var(--brand-accent-border);
@@ -54,7 +55,7 @@ i.lead { background: var(--brand-muted); }
 .finance-bars { display: grid; gap: 6px; grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .finance-bar { display: grid; align-content: start; gap: 6px; min-width: 0; overflow-wrap: anywhere; font-size: .8rem; }
 .finance-bar strong, .deadline-bar strong, .entity-stack strong { font-variant-numeric: tabular-nums; }
-.finance-plot { display: grid; grid-template-rows: var(--zero) minmax(0, 1fr); position: relative; height: 96px; }
+.finance-plot { display: grid; grid-template-rows: var(--zero) minmax(0, 1fr); position: relative; height: 78px; }
 .finance-plot::after { content: ''; position: absolute; top: var(--zero); inset-inline: 0; border-top: 1px solid var(--brand-border-strong); }
 .finance-plot > span { display: flex; justify-content: center; align-items: flex-end; }
 .finance-plot > .negative { align-items: flex-start; }
@@ -62,7 +63,6 @@ i.lead { background: var(--brand-muted); }
 .finance-bar[data-series='0'] { --series: var(--brand-success); }
 .finance-bar[data-series='1'] { --series: var(--brand-primary); }
 .finance-bar[data-series='2'] { --series: var(--brand-muted); }
-.legend { flex-wrap: wrap; }
 .legend [data-series='0'], .stack-segment[data-series='0'] { --series: var(--brand-muted); --segment-ink: var(--brand-panel); }
 .legend [data-series='1'], .stack-segment[data-series='1'] { --series: var(--brand-primary); --segment-ink: #17201e; }
 .legend [data-series='2'], .stack-segment[data-series='2'] { --series: var(--brand-warning); --segment-ink: var(--brand-panel); }
@@ -85,4 +85,5 @@ i.lead { background: var(--brand-muted); }
 .work-link { color: var(--brand-accent-ink); }
 .table-drill { background: none; border: 0; padding: 0 5px; font: inherit; font-weight: 750; color: var(--brand-accent-ink); cursor: pointer; text-decoration: underline; }
 @media (pointer: coarse) { .stack-track { min-height: 44px; } }
-@media (max-width: 760px) { .metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@container (min-width: 900px) { main { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@container (max-width: 620px) { .metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); } }

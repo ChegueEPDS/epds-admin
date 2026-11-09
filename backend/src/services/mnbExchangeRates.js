@@ -15,6 +15,17 @@ const format = new Intl.DateTimeFormat('en-CA', {
   timeZone: 'Europe/Budapest', year: 'numeric', month: '2-digit', day: '2-digit', weekday: 'short', hour: '2-digit', hourCycle: 'h23'
 });
 const tickMs = 15 * 60 * 1000;
+// The CBUAE midpoint is 3.6725 AED per USD, exactly 1469 / 400.
+// https://centralbank.ae/en/forex-eibor/exchange-rates/
+function withAedRate(snapshot) {
+  const usd = snapshot?.rates?.USD;
+  if (!usd || snapshot.rates.AED) return snapshot;
+  return { ...snapshot, rates: { ...snapshot.rates, AED: {
+    quote: new Decimal(usd.quote).times(400).toFixed(),
+    unit: usd.unit * 1469,
+    source: 'cbuae-usd-peg'
+  } } };
+}
 
 function parseXml(value) {
   if (typeof value !== 'string' || /<!DOCTYPE|<!ENTITY/i.test(value) || XMLValidator.validate(value) !== true) {
@@ -99,13 +110,13 @@ async function latestRates() {
     const { rows: [row] } = await query(`SELECT
       (SELECT data FROM mnb_exchange_rate_snapshots WHERE id <> 'refresh' ORDER BY id DESC LIMIT 1) AS snapshot,
       (SELECT data FROM mnb_exchange_rate_snapshots WHERE id = 'refresh') AS refresh`);
-    return row;
+    return { ...row, snapshot: withAedRate(row.snapshot) };
   }
   const [latest, metadata] = await Promise.all([
     collection().findOne({ _id: { $ne: 'refresh' } }, { sort: { _id: -1 } }),
     collection().findOne({ _id: 'refresh' })
   ]);
-  return { snapshot: latest?.data || null, refresh: metadata?.data || null };
+  return { snapshot: withAedRate(latest?.data || null), refresh: metadata?.data || null };
 }
 
 async function storeRates(snapshot, refresh) {
@@ -165,10 +176,6 @@ function startMnbExchangeRates() {
   timer.unref?.();
 }
 
-function availableCurrencies(snapshot) {
-  return snapshot ? ['HUF', ...Object.keys(snapshot.rates).sort()] : ['HUF', 'EUR', 'USD'];
-}
-
 function convertTotals(rows, currency, { snapshot, refresh }) {
   const rate = (code) => {
     if (code === 'HUF') return new Decimal(1);
@@ -205,4 +212,4 @@ function convertTotals(rows, currency, { snapshot, refresh }) {
   };
 }
 
-module.exports = { parseMnbRates, parseMnbDailyPage, fetchMnbRates, latestRates, startMnbExchangeRates, convertTotals, availableCurrencies, isRefreshDue };
+module.exports = { parseMnbRates, parseMnbDailyPage, fetchMnbRates, latestRates, startMnbExchangeRates, convertTotals, withAedRate, isRefreshDue };

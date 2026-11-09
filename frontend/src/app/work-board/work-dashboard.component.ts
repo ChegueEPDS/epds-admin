@@ -1,60 +1,54 @@
 import { CommonModule } from '@angular/common';
-import { Component, ElementRef, OnInit, ViewChild, inject } from '@angular/core';
+import { Component, ElementRef, OnInit, ViewChild, computed, inject } from '@angular/core';
 import { MatButtonModule } from '@angular/material/button';
-import { MatIconModule } from '@angular/material/icon';
 import { RouterLink } from '@angular/router';
 import { firstValueFrom } from 'rxjs';
-import { DashboardFilter, DashboardWorks, WorkBoardService, WorkDashboard } from '../services/work-board.service';
+import { DashboardFilter, DashboardWorks, WorkBoardService } from '../services/work-board.service';
 
 @Component({
-  imports: [CommonModule, RouterLink, MatButtonModule, MatIconModule],
+  imports: [CommonModule, RouterLink, MatButtonModule],
   templateUrl: './work-dashboard.component.html',
   styleUrl: './work-dashboard.component.scss'
 })
 export class WorkDashboardComponent implements OnInit {
   private readonly board = inject(WorkBoardService);
-  dashboard?: WorkDashboard;
-  chartMax = 1;
-  deadlineMax = 1;
-  entityMax = 1;
-  financePositive = 0;
-  financeNegative = 0;
+  readonly dashboardState = this.board.dashboardState;
+  private readonly dashboard = computed(() => this.dashboardState().report);
+  readonly chartMax = computed(() => this.dashboard()?.owners.reduce((max, owner) => Math.max(max, owner.active, owner.leads), 1) ?? 1);
+  readonly deadlineMax = computed(() => this.dashboard()?.deadlines.reduce((max, item) => Math.max(max, item.count), 1) ?? 1);
+  readonly entityMax = computed(() => this.dashboard()?.entities.reduce((max, entity) => Math.max(max, entity.total), 1) ?? 1);
+  private readonly financeRange = computed(() => {
+    let positive = 0;
+    let negative = 0;
+    for (const metric of this.dashboard()?.finance ?? []) {
+      const amount = metric.value.amount ?? 0;
+      positive = Math.max(positive, amount);
+      negative = Math.max(negative, -amount);
+    }
+    return { positive, negative };
+  });
   selection?: { filter: DashboardFilter; title: string };
   selectedWorks?: DashboardWorks;
   selectionError = '';
   private selectionTrigger?: HTMLElement;
   private request = 0;
   @ViewChild('selectionHeading') private selectionHeading?: ElementRef<HTMLHeadingElement>;
-  error = '';
 
-  ngOnInit(): void { void this.load(); }
+  ngOnInit(): void { this.board.ensureDashboard(); }
 
-  private async load(): Promise<void> {
-    try {
-      this.dashboard = await firstValueFrom(this.board.dashboard());
-      this.chartMax = this.dashboard.owners.reduce((maximum, owner) => Math.max(maximum, owner.active, owner.leads), 1);
-      this.deadlineMax = this.dashboard.deadlines.reduce((maximum, item) => Math.max(maximum, item.count), 1);
-      this.entityMax = this.dashboard.entities.reduce((maximum, entity) => Math.max(maximum, entity.total), 1);
-      for (const metric of this.dashboard.finance) {
-        const amount = metric.value.amount ?? 0;
-        this.financePositive = Math.max(this.financePositive, amount);
-        this.financeNegative = Math.max(this.financeNegative, -amount);
-      }
-    }
-    catch (error) {
-      this.error = (error as { error?: { error?: string } }).error?.error || 'The dashboard could not be loaded.';
-    }
-  }
+  refresh(): void { this.board.refreshDashboard(); }
 
-  get sizeCount(): number { return this.dashboard?.sizes?.reduce((total, size) => total + size.count, 0) || 0; }
+  get sizeCount(): number { return this.dashboard()?.sizes?.reduce((total, size) => total + size.count, 0) || 0; }
 
   get positiveShare(): number {
-    const range = this.financePositive + this.financeNegative;
-    return range ? this.financePositive / range * 100 : 100;
+    const { positive, negative } = this.financeRange();
+    const range = positive + negative;
+    return range ? positive / range * 100 : 100;
   }
 
   barHeight(amount: number | null): number {
-    const max = (amount || 0) < 0 ? this.financeNegative : this.financePositive;
+    const { positive, negative } = this.financeRange();
+    const max = (amount || 0) < 0 ? negative : positive;
     return max ? Math.abs(amount || 0) / max * 100 : 0;
   }
 

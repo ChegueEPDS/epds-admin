@@ -24,7 +24,10 @@
     <mat-form-field appearance="outline">
       <mat-label>Default currency</mat-label>
       <mat-select name="defaultCurrency" [(ngModel)]="defaultCurrency" required>
-        <mat-option *ngFor="let currency of currencies" [value]="currency">{{ currency }}</mat-option>
+        <mat-option *ngFor="let currency of currencies" [value]="currency">{{ currency === 'AED' ? 'AED · UAE dirham' : currency }}</mat-option>
+        @if (!currencies.includes(defaultCurrency)) {
+          <mat-option [value]="defaultCurrency" disabled>{{ defaultCurrency }}</mat-option>
+        }
       </mat-select>
     </mat-form-field>
 

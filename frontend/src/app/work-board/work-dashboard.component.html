@@ -1,22 +1,30 @@
 <main>
-  <header class="page-head">
-    <div><p class="eyebrow">Work Board</p><h1>Project dashboard</h1>
-      @if (dashboard; as d) {
-        <p class="muted">As of {{ d.asOf | date:'yyyy.MM.dd.' }} · {{ d.currency }}
+  @let state = dashboardState();
+  <header class="dashboard-header wide">
+    <h1>Project dashboard</h1>
+    <div class="dashboard-status">
+      @if (state.report; as d) {
+        <p class="muted">Snapshot {{ d.snapshotAt | date:'yyyy.MM.dd. HH:mm' }} · {{ d.currency }}
           @if (d.rateDate) { · MNB rates {{ d.rateDate | date:'yyyy.MM.dd.' }} }
+          @if (d.aedRateDerived) { · AED via the CBUAE USD peg }
         </p>
       }
+      <button mat-stroked-button type="button" [disabled]="state.loading" (click)="refresh()">Refresh</button>
     </div>
-    <a mat-stroked-button routerLink="/work-board"><mat-icon class="material-symbols-outlined">arrow_back</mat-icon>Work Board</a>
   </header>
+  @if (state.loading) {
+    <p class="muted wide" role="status">{{ state.report ? 'Updating the dashboard…' : 'Loading project dashboard…' }}</p>
+  }
+  @if (state.error) {
+    <p class="error wide" role="alert">{{ state.error }} @if (state.report) { Showing the last available snapshot. }</p>
+  }
   <ng-template #money let-value>
     {{ value.amount == null ? '—' : (value.amount | number:(value.currency === 'HUF' ? '1.0-0' : '1.0-2')) }}
     @if (value.missingCurrencies.length) { <small class="warning">Rate unavailable · {{ value.missingCurrencies.join(', ') }}</small> }
   </ng-template>
-  @if (error) { <p class="error" role="alert">{{ error }}</p> }
-  @else if (dashboard; as d) {
-    @if (d.refreshFailed) { <p class="warning" role="status">Latest MNB rate refresh failed. The dashboard uses the last available rates.</p> }
-    <section class="panel" aria-label="At a glance">
+  @if (state.report; as d) {
+    @if (d.refreshFailed) { <p class="warning wide" role="status">Latest MNB rate refresh failed. The dashboard uses the last available rates.</p> }
+    <section class="panel wide" aria-label="At a glance">
       <h2>At a glance</h2>
       <div class="metrics">
         <div><span>Active projects</span><strong>{{ d.summary.active }}</strong></div>
@@ -30,48 +38,46 @@
       </div>
     </section>
 
-    <div class="split">
-      <section class="panel" aria-labelledby="deadline-chart-title">
-        <div><h2 id="deadline-chart-title">Delivery deadlines</h2><p class="muted">Active works</p></div>
-        <div class="deadline-bars">
-          @for (item of d.deadlines; track item.label; let i = $index) {
-            <button class="deadline-bar" type="button" [attr.data-series]="i"
-              [attr.aria-pressed]="selected('deadline', item.label)"
-              (click)="select({ kind: 'deadline', value: item.label }, item.label, $event.currentTarget)">
-              <span>{{ item.label }}</span><strong>{{ item.count }}</strong>
-              <span class="deadline-track" aria-hidden="true"><i [style.width.%]="item.count / deadlineMax * 100"></i></span>
-            </button>
-          }
-        </div>
-      </section>
+    <section class="panel" aria-labelledby="deadline-chart-title">
+      <div><h2 id="deadline-chart-title">Delivery deadlines</h2><p class="muted">Active works</p></div>
+      <div class="deadline-bars">
+        @for (item of d.deadlines; track item.label; let i = $index) {
+          <button class="deadline-bar" type="button" [attr.data-series]="i"
+            [attr.aria-pressed]="selected('deadline', item.label)"
+            (click)="select({ kind: 'deadline', value: item.label }, item.label, $event.currentTarget)">
+            <span>{{ item.label }}</span><strong>{{ item.count }}</strong>
+            <span class="deadline-track" aria-hidden="true"><i [style.width.%]="item.count / deadlineMax() * 100"></i></span>
+          </button>
+        }
+      </div>
+    </section>
 
-      <section class="panel" aria-labelledby="finance-chart-title">
-        <div><h2 id="finance-chart-title">Financial position</h2><p class="muted">Amounts in {{ d.currency }}</p></div>
-        <div class="finance-bars" [style.--zero]="positiveShare + '%'">
-          @for (item of d.finance; track item.key; let i = $index) {
-            <button class="finance-bar" type="button" [attr.data-series]="i"
-              [attr.aria-pressed]="selected('finance', item.key)"
-              (click)="select({ kind: 'finance', value: item.key }, item.label, $event.currentTarget)">
-              <span class="finance-plot" aria-hidden="true">
-                <span class="positive">
-                  @if ((item.value.amount ?? 0) > 0) { <i [style.height.%]="barHeight(item.value.amount)"></i> }
-                </span>
-                <span class="negative">
-                  @if ((item.value.amount ?? 0) < 0) { <i [style.height.%]="barHeight(item.value.amount)"></i> }
-                </span>
+    <section class="panel" aria-labelledby="finance-chart-title">
+      <div><h2 id="finance-chart-title">Financial position</h2><p class="muted">Amounts in {{ d.currency }}</p></div>
+      <div class="finance-bars" [style.--zero]="positiveShare + '%'">
+        @for (item of d.finance; track item.key; let i = $index) {
+          <button class="finance-bar" type="button" [attr.data-series]="i"
+            [attr.aria-pressed]="selected('finance', item.key)"
+            (click)="select({ kind: 'finance', value: item.key }, item.label, $event.currentTarget)">
+            <span class="finance-plot" aria-hidden="true">
+              <span class="positive">
+                @if ((item.value.amount ?? 0) > 0) { <i [style.height.%]="barHeight(item.value.amount)"></i> }
               </span>
-              <span>{{ item.label }}</span>
-              <strong>{{ item.value.amount === null ? '—' : (item.value.amount | number:(d.currency === 'HUF' ? '1.0-0' : '1.0-2')) }}</strong>
-              @if (item.incomplete || item.value.missingCurrencies.length) {
-                <small class="warning">{{ item.value.amount === null ? 'Unavailable' : 'Partial total' }}</small>
-              }
-              @if (item.incomplete) { <small class="warning">Missing data · {{ item.incomplete }}</small> }
-              @if (item.value.missingCurrencies.length) { <small class="warning">Missing FX · {{ item.value.missingCurrencies.join(', ') }}</small> }
-            </button>
-          }
-        </div>
-      </section>
-    </div>
+              <span class="negative">
+                @if ((item.value.amount ?? 0) < 0) { <i [style.height.%]="barHeight(item.value.amount)"></i> }
+              </span>
+            </span>
+            <span>{{ item.label }}</span>
+            <strong>{{ item.value.amount === null ? '—' : (item.value.amount | number:(d.currency === 'HUF' ? '1.0-0' : '1.0-2')) }}</strong>
+            @if (item.incomplete || item.value.missingCurrencies.length) {
+              <small class="warning">{{ item.value.amount === null ? 'Unavailable' : 'Partial total' }}</small>
+            }
+            @if (item.incomplete) { <small class="warning">Missing data · {{ item.incomplete }}</small> }
+            @if (item.value.missingCurrencies.length) { <small class="warning">Missing FX · {{ item.value.missingCurrencies.join(', ') }}</small> }
+          </button>
+        }
+      </div>
+    </section>
 
     <section class="panel" aria-labelledby="entity-chart-title">
       <div><h2 id="entity-chart-title">Project stages by entity</h2><p class="muted">Works by organizational unit</p></div>
@@ -83,7 +89,7 @@
           <div class="entity-stack">
             <span>{{ entity.label }}</span>
             <div class="stack-track">
-              <div class="stack-bar" [style.width.%]="entity.total / entityMax * 100">
+            <div class="stack-bar" [style.width.%]="entity.total / entityMax() * 100">
                 @for (stage of d.stages; track stage; let i = $index) {
                   @if (entity.counts[i]) {
                     <button type="button" class="stack-segment" [attr.data-series]="i" [style.flex-grow]="entity.counts[i]"
@@ -103,7 +109,9 @@
       </div>
     </section>
 
-    <section class="panel drilldown" [hidden]="!selection" aria-labelledby="chart-results-title">
+    <section class="panel"><h2>Data checks</h2><ng-container *ngTemplateOutlet="counts; context: { $implicit: d.checks }"/></section>
+
+    <section class="panel wide drilldown" [hidden]="!selection" aria-labelledby="chart-results-title">
       <div class="page-head">
         <h2 #selectionHeading id="chart-results-title" tabindex="-1">{{ selection?.title }}</h2>
         <button mat-stroked-button type="button" (click)="closeSelection()">Close results</button>
@@ -139,7 +147,7 @@
       } @else { <p role="status">Loading works…</p> }
     </section>
 
-    <section class="panel">
+    <section class="panel wide">
       <h2>Workload by owner</h2>
       <div class="table-wrap" role="region" aria-label="Workload by owner" tabindex="0"><table>
         <thead><tr><th>Owner</th><th>Active</th><th>Leads</th><th>Active value ({{ d.currency }})</th><th>Pipeline ({{ d.currency }})</th>
@@ -161,11 +169,32 @@
       <div class="chart" role="img" aria-label="Grouped bars for active projects and leads. Values are in the workload table above.">
         @for (owner of d.owners; track $index) {
           <div class="chart-row" aria-hidden="true"><span>{{ owner.label }}</span><div>
-            <div class="bar-line"><i class="active" [style.width.%]="owner.active / chartMax * 100"></i><small>{{ owner.active }}</small></div>
-            <div class="bar-line"><i class="lead" [style.width.%]="owner.leads / chartMax * 100"></i><small>{{ owner.leads }}</small></div>
+            <div class="bar-line"><i class="active" [style.width.%]="owner.active / chartMax() * 100"></i><small>{{ owner.active }}</small></div>
+            <div class="bar-line"><i class="lead" [style.width.%]="owner.leads / chartMax() * 100"></i><small>{{ owner.leads }}</small></div>
           </div></div>
         }
       </div>
+    </section>
+
+    <section class="panel wide">
+      <h2>Payments by currency</h2>
+      <p class="muted">Contract, invoiced and paid amounts cover Active and Completed works. Receivable uses recorded invoices and payments.</p>
+      @if (d.paymentGaps) { <p class="warning">{{ d.paymentGaps }} work(s) have missing invoice or payment amounts.</p> }
+      <div class="table-wrap" role="region" aria-label="Payments by currency" tabindex="0"><table>
+        <thead><tr><th>Currency</th><th>Contract</th><th>Invoiced</th><th>Paid</th><th>Receivable</th><th>Not yet invoiced</th>
+          <th>Receivable ({{ d.currency }})</th><th>Not yet invoiced ({{ d.currency }})</th></tr></thead>
+        <tbody>@for (payment of d.payments; track payment.currency) {
+          <tr><th scope="row">{{ payment.currency }}</th><td>{{ (payment.contract | number:'1.0-2') ?? '—' }}</td>
+            <td>{{ (payment.invoiced | number:'1.0-2') ?? '—' }}</td><td>{{ (payment.paid | number:'1.0-2') ?? '—' }}</td>
+            <td>{{ (payment.receivable | number:'1.0-2') ?? '—' }}</td><td>{{ (payment.unbilled | number:'1.0-2') ?? '—' }}</td>
+            <td><ng-container *ngTemplateOutlet="money; context: { $implicit: payment.reportingReceivable }"/></td>
+            <td><ng-container *ngTemplateOutlet="money; context: { $implicit: payment.reportingUnbilled }"/></td></tr>
+        }</tbody>
+        <tfoot><tr><th scope="row" colspan="6">Total ({{ d.currency }})</th>
+          <td><ng-container *ngTemplateOutlet="money; context: { $implicit: d.summary.receivable }"/></td>
+          <td><ng-container *ngTemplateOutlet="money; context: { $implicit: d.summary.unbilled }"/></td>
+        </tr></tfoot>
+      </table></div>
     </section>
 
     <section class="panel">
@@ -190,58 +219,32 @@
     </section>
 
     <section class="panel">
-      <h2>Payments by currency</h2>
-      <p class="muted">Contract, invoiced and paid amounts cover Active and Completed works. Receivable uses recorded invoices and payments.</p>
-      @if (d.paymentGaps) { <p class="warning">{{ d.paymentGaps }} work(s) have missing invoice or payment amounts.</p> }
-      <div class="table-wrap" role="region" aria-label="Payments by currency" tabindex="0"><table>
-        <thead><tr><th>Currency</th><th>Contract</th><th>Invoiced</th><th>Paid</th><th>Receivable</th><th>Not yet invoiced</th>
-          <th>Receivable ({{ d.currency }})</th><th>Not yet invoiced ({{ d.currency }})</th></tr></thead>
-        <tbody>@for (payment of d.payments; track payment.currency) {
-          <tr><th scope="row">{{ payment.currency }}</th><td>{{ (payment.contract | number:'1.0-2') ?? '—' }}</td>
-            <td>{{ (payment.invoiced | number:'1.0-2') ?? '—' }}</td><td>{{ (payment.paid | number:'1.0-2') ?? '—' }}</td>
-            <td>{{ (payment.receivable | number:'1.0-2') ?? '—' }}</td><td>{{ (payment.unbilled | number:'1.0-2') ?? '—' }}</td>
-            <td><ng-container *ngTemplateOutlet="money; context: { $implicit: payment.reportingReceivable }"/></td>
-            <td><ng-container *ngTemplateOutlet="money; context: { $implicit: payment.reportingUnbilled }"/></td></tr>
+      <h2>Service type</h2>
+      <div class="table-wrap" role="region" aria-label="Service type" tabindex="0"><table>
+        <thead><tr><th>Service type</th><th>Active</th><th>Leads</th><th>Completed</th><th>Active + completed ({{ d.currency }})</th></tr></thead>
+        <tbody>@for (service of d.services; track $index) {
+          <tr><th scope="row">{{ service.label }}</th><td>{{ service.active }}</td><td>{{ service.leads }}</td><td>{{ service.completed }}</td>
+            <td><ng-container *ngTemplateOutlet="money; context: { $implicit: service.value }"/></td></tr>
         }</tbody>
-        <tfoot><tr><th scope="row" colspan="6">Total ({{ d.currency }})</th>
-          <td><ng-container *ngTemplateOutlet="money; context: { $implicit: d.summary.receivable }"/></td>
-          <td><ng-container *ngTemplateOutlet="money; context: { $implicit: d.summary.unbilled }"/></td>
-        </tr></tfoot>
       </table></div>
     </section>
 
-    <div class="split">
+    @if (d.sizes; as sizes) {
       <section class="panel">
-        <h2>Service type</h2>
-        <div class="table-wrap" role="region" aria-label="Service type" tabindex="0"><table>
-          <thead><tr><th>Service type</th><th>Active</th><th>Leads</th><th>Completed</th><th>Active + completed ({{ d.currency }})</th></tr></thead>
-          <tbody>@for (service of d.services; track $index) {
-            <tr><th scope="row">{{ service.label }}</th><td>{{ service.active }}</td><td>{{ service.leads }}</td><td>{{ service.completed }}</td>
-              <td><ng-container *ngTemplateOutlet="money; context: { $implicit: service.value }"/></td></tr>
+        <h2>Project size mix · Active + Completed</h2>
+        <div class="table-wrap" role="region" aria-label="Project size mix" tabindex="0"><table>
+          <thead><tr><th>Size</th><th>Projects</th><th>Value ({{ d.currency }})</th><th>Share of value</th><th>Average</th></tr></thead>
+          <tbody>@for (size of sizes; track size.label) {
+            <tr><th scope="row">{{ size.label }}</th><td>{{ size.count }}</td><td><ng-container *ngTemplateOutlet="money; context: { $implicit: size.value }"/></td>
+              <td>{{ (size.share | percent:'1.0-1') ?? '—' }}</td><td>{{ (size.average | number:'1.0-2') ?? '—' }}</td></tr>
           }</tbody>
+          <tfoot><tr><th scope="row">Total</th><td>{{ sizeCount }}</td><td><ng-container *ngTemplateOutlet="money; context: { $implicit: d.totalSizeValue }"/></td><td colspan="2"></td></tr></tfoot>
         </table></div>
+        <p class="muted">Automatic size uses EUR thresholds of 5,000 and 20,000. A size selected on the work takes precedence.</p>
       </section>
-    </div>
-
-    <div class="split">
-      <section class="panel"><h2>Data checks</h2><ng-container *ngTemplateOutlet="counts; context: { $implicit: d.checks }"/></section>
-      @if (d.sizes; as sizes) {
-        <section class="panel">
-          <h2>Project size mix · Active + Completed</h2>
-          <div class="table-wrap" role="region" aria-label="Project size mix" tabindex="0"><table>
-            <thead><tr><th>Size</th><th>Projects</th><th>Value ({{ d.currency }})</th><th>Share of value</th><th>Average</th></tr></thead>
-            <tbody>@for (size of sizes; track size.label) {
-              <tr><th scope="row">{{ size.label }}</th><td>{{ size.count }}</td><td><ng-container *ngTemplateOutlet="money; context: { $implicit: size.value }"/></td>
-                <td>{{ (size.share | percent:'1.0-1') ?? '—' }}</td><td>{{ (size.average | number:'1.0-2') ?? '—' }}</td></tr>
-            }</tbody>
-            <tfoot><tr><th scope="row">Total</th><td>{{ sizeCount }}</td><td><ng-container *ngTemplateOutlet="money; context: { $implicit: d.totalSizeValue }"/></td><td colspan="2"></td></tr></tfoot>
-          </table></div>
-          <p class="muted">Automatic size uses EUR thresholds of 5,000 and 20,000. A size selected on the work takes precedence.</p>
-        </section>
-      }
-    </div>
+    }
     <ng-template #counts let-rows>
       <dl class="counts">@for (row of rows; track row.label) { <div><dt>{{ row.label }}</dt><dd>{{ row.count }}</dd></div> }</dl>
     </ng-template>
-  } @else { <p role="status">Loading project dashboard…</p> }
+  }
 </main>

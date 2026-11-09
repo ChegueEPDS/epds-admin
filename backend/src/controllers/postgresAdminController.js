@@ -20,7 +20,7 @@ async function saveTenant(req, res, next, existing = null) {
     if (!name || !['company', 'client'].includes(type)) return res.status(400).json({ error: 'Valid tenant data is required' });
     let defaultCurrency;
     if (req.body?.defaultCurrency !== undefined) {
-      defaultCurrency = await validateDefaultCurrency(req.body.defaultCurrency, existing?.defaultCurrency);
+      defaultCurrency = validateDefaultCurrency(req.body.defaultCurrency, existing?.defaultCurrency);
       if (!defaultCurrency) return res.status(400).json({ error: 'Select an available default currency.' });
     }
     const duplicate = await tenantRepository.findByName(name);

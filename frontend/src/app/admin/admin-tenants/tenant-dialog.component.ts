@@ -83,9 +83,8 @@ export class TenantDialogComponent {
       this.features = { ...this.features, ...(data.tenant.features || {}) };
       this.applyFeaturePolicy();
     }
-    this.currencies = [...new Set(['HUF', this.defaultCurrency])];
     this.admin.tenantCurrencies().subscribe({
-      next: (currencies) => { this.currencies = [...new Set([...currencies, this.defaultCurrency])]; },
+      next: (currencies) => { this.currencies = currencies; },
       error: () => { this.snackBar.open('The currency list could not be loaded.', 'Close', { duration: 4500 }); }
     });
   }

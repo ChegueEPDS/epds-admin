@@ -161,10 +161,6 @@ app-work-board .client-address:last-of-type { grid-template-columns: repeat(2, m
 app-work-board .match-notice { display: flex; align-items: flex-start; gap: 10px; padding: 12px; border-radius: 12px; background: #dcfce7; color: #047857; }
 app-work-board .match-notice span { display: grid; gap: 3px; }
 app-work-board .match-notice mat-icon { flex: 0 0 auto; }
-app-work-board .compact-metrics { grid-template-columns: repeat(3, max-content); justify-content: start; gap: 8px; margin: 12px 0; }
-app-work-board .compact-metrics article { display: flex; align-items: baseline; gap: 9px; min-width: 0; padding: 8px 12px; border-radius: 9px; box-shadow: none; }
-app-work-board .compact-metrics strong { margin: 0; font-size: 15px; white-space: nowrap; }
-app-work-board .compact-metrics span { font-size: 10px; }
 app-work-board .table-toolbar { display: grid; grid-template-columns: minmax(280px, 1fr) 190px auto; align-items: center; gap: 8px; margin-bottom: 8px; }
 app-work-board .result-count { padding: 0 4px; color: var(--brand-muted); font-size: 12px; font-weight: 700; white-space: nowrap; }
 app-work-board .work-table-wrap { max-height: calc(100vh - 300px); overflow: auto; border: 1px solid var(--brand-border); border-radius: 10px; background: var(--brand-panel); }

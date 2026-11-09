@@ -286,7 +286,7 @@ exports.createTenant = async (req, res) => {
     );
     if (!name) return res.status(400).json({ error: 'Tenant name is required' });
     if (!type) return res.status(400).json({ error: 'Valid tenant type is required' });
-    const currency = req.body?.defaultCurrency === undefined ? DEFAULT_CURRENCY : await validateDefaultCurrency(req.body.defaultCurrency);
+    const currency = req.body?.defaultCurrency === undefined ? DEFAULT_CURRENCY : validateDefaultCurrency(req.body.defaultCurrency);
     if (!currency) return res.status(400).json({ error: 'Select an available default currency.' });
 
     const existing = await Tenant.findOne({ name });
@@ -328,7 +328,7 @@ exports.updateTenant = async (req, res) => {
     tenant.displayName = displayName;
     tenant.type = type;
     if (req.body?.defaultCurrency !== undefined) {
-      const currency = await validateDefaultCurrency(req.body.defaultCurrency, tenant.defaultCurrency);
+      const currency = validateDefaultCurrency(req.body.defaultCurrency, tenant.defaultCurrency);
       if (!currency) return res.status(400).json({ error: 'Select an available default currency.' });
       tenant.defaultCurrency = currency;
     }

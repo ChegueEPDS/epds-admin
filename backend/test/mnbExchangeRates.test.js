@@ -1,6 +1,7 @@
 const assert = require('node:assert/strict');
 const { test } = require('node:test');
-const { parseMnbRates, parseMnbDailyPage, convertTotals, isRefreshDue } = require('../src/services/mnbExchangeRates');
+const { parseMnbRates, parseMnbDailyPage, convertTotals, withAedRate, isRefreshDue } = require('../src/services/mnbExchangeRates');
+const { currencyOptions, validateDefaultCurrency } = require('../src/services/tenantCurrency');
 
 const rates = { EUR: { quote: '363.18', unit: 1 }, JPY: { quote: '205.30', unit: 100 } };
 const snapshot = { date: '2026-11-09', rates };
@@ -38,6 +39,31 @@ test('active amounts use one snapshot, round once and mark missing quotes', () =
   assert.equal(partial.refreshFailed, true);
   assert.equal(convertTotals(inputs.slice(1), 'HUF', {}).amount, null);
   assert.equal(convertTotals([{ currency: 'EUR', amount: '2' }], 'EUR', {}).amount, 2);
+});
+
+test('AED uses the CBUAE peg with the dated MNB USD quote when AED is missing', () => {
+  const original = { ...snapshot, rates: { ...rates, USD: { quote: '324.47', unit: 1 } } };
+  const derived = withAedRate(original);
+  assert.equal(derived.date, original.date);
+  assert.equal(derived.rates.AED.source, 'cbuae-usd-peg');
+  assert.equal(original.rates.AED, undefined);
+  const fx = { snapshot: derived };
+  assert.deepEqual(convertTotals([{ currency: 'USD', amount: '100' }], 'AED', fx), {
+    amount: 367.25, currency: 'AED', rateDate: original.date, missingCurrencies: [], refreshFailed: false
+  });
+  assert.equal(convertTotals([{ currency: 'AED', amount: '367.25' }], 'HUF', fx).amount, 32447);
+  assert.equal(convertTotals([{ currency: 'HUF', amount: '32447' }], 'AED', fx).amount, 367.25);
+  assert.equal(convertTotals([{ currency: 'AED', amount: '367.25' }], 'EUR', fx).amount, 89.34);
+  const direct = { ...original, rates: { ...original.rates, AED: { quote: '88.50', unit: 1 } } };
+  assert.equal(withAedRate(direct), direct);
+  assert.equal(withAedRate(snapshot), snapshot);
+});
+
+test('tenant defaults are independent of rate availability and preserve an existing legacy value', () => {
+  assert.deepEqual(currencyOptions(), ['HUF', 'EUR', 'USD', 'AED']);
+  for (const currency of currencyOptions()) assert.equal(validateDefaultCurrency(currency), currency);
+  assert.equal(validateDefaultCurrency('GBP', 'HUF'), null);
+  assert.equal(validateDefaultCurrency('GBP', 'GBP'), 'GBP');
 });
 
 test('scheduler bootstraps missing data and uses Budapest time for subsequent refreshes', () => {

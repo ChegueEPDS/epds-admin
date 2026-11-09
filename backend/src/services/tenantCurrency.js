@@ -1,8 +1,9 @@
 const Tenant = require('../models/tenant');
 const { databaseEngine, query } = require('../postgres');
-const { latestRates, availableCurrencies, convertTotals } = require('./mnbExchangeRates');
+const { latestRates, convertTotals } = require('./mnbExchangeRates');
 
 const DEFAULT_CURRENCY = 'HUF';
+const defaultCurrencies = ['HUF', 'EUR', 'USD', 'AED'];
 
 async function getDefaultCurrency(tenantId) {
   if (databaseEngine() === 'postgresql') {
@@ -12,25 +13,23 @@ async function getDefaultCurrency(tenantId) {
   return (await Tenant.findById(tenantId).select('defaultCurrency').lean())?.defaultCurrency || DEFAULT_CURRENCY;
 }
 
-async function currencyOptions(current = DEFAULT_CURRENCY) {
-  const { snapshot } = await latestRates();
-  return [...new Set([...availableCurrencies(snapshot), current])];
+function currencyOptions() {
+  return [...defaultCurrencies];
 }
 
-async function validateDefaultCurrency(value, current) {
+function validateDefaultCurrency(value, current) {
   if (typeof value !== 'string' || !/^[A-Z]{3}$/.test(value)) return null;
-  if (value === current || value === DEFAULT_CURRENCY) return value;
-  return (await currencyOptions()).includes(value) ? value : null;
+  return value === current || defaultCurrencies.includes(value) ? value : null;
 }
 
 async function preference(tenantId) {
   const defaultCurrency = await getDefaultCurrency(tenantId);
-  return { defaultCurrency, currencies: await currencyOptions(defaultCurrency) };
+  return { defaultCurrency, currencies: currencyOptions() };
 }
 
 async function setPreference(tenantId, value) {
   const current = await getDefaultCurrency(tenantId);
-  const currency = await validateDefaultCurrency(value, current);
+  const currency = validateDefaultCurrency(value, current);
   if (!currency) throw Object.assign(new Error('Select an available default currency.'), { statusCode: 400 });
   if (currency !== current) {
     if (databaseEngine() === 'postgresql') {
@@ -39,7 +38,7 @@ async function setPreference(tenantId, value) {
       await Tenant.updateOne({ _id: tenantId }, { $set: { defaultCurrency: currency } });
     }
   }
-  return { defaultCurrency: currency, currencies: await currencyOptions(currency) };
+  return { defaultCurrency: currency, currencies: currencyOptions() };
 }
 
 async function summarizeActiveValue(tenantId, amounts) {

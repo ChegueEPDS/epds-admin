@@ -8,6 +8,7 @@ const { WorkDocument, WORK_DOCUMENT_CATEGORIES } = require('../models/workDocume
 const fileStorage = require('../services/fileStorageService');
 const workFields = require('../services/workFields');
 const tenantCurrency = require('../services/tenantCurrency');
+const { markMongoDashboardDirty } = require('../services/workDashboardSnapshots');
 const { pipeline } = require('stream/promises');
 const crypto = require('crypto');
 
@@ -392,6 +393,7 @@ exports.createWork = (req, res) => withErrors(res, async () => {
     work.customFields = values;
     return work.save();
   });
+  await markMongoDashboardDirty(req.scope);
   res.status(201).json({ work: presentWork(work, []) });
 });
 
@@ -416,6 +418,7 @@ exports.updateWork = (req, res) => withErrors(res, async () => {
     work.customFields = values;
     return work.save();
   });
+  await markMongoDashboardDirty(req.scope);
   const subWorks = await SubWorkItem.find({ ...scopeQuery(req.scope), workItemId: work._id, archivedAt: { $exists: false } }).sort({ sequenceNumber: 1 });
   res.json({ work: presentWork(work, subWorks) });
 });
@@ -430,10 +433,12 @@ exports.archiveWork = (req, res) => withErrors(res, async () => {
   work.archivedAt = new Date();
   work.updatedBy = req.userId;
   await work.save();
-  await SubWorkItem.updateMany(
-    { ...scopeQuery(req.scope), workItemId: work._id, archivedAt: { $exists: false } },
-    { $set: { archivedAt: work.archivedAt, archivedByWorkAt: work.archivedAt, updatedBy: req.userId } }
-  );
+  try {
+    await SubWorkItem.updateMany(
+      { ...scopeQuery(req.scope), workItemId: work._id, archivedAt: { $exists: false } },
+      { $set: { archivedAt: work.archivedAt, archivedByWorkAt: work.archivedAt, updatedBy: req.userId } }
+    );
+  } finally { await markMongoDashboardDirty(req.scope); }
   res.status(204).end();
 });
 
@@ -442,10 +447,12 @@ exports.restoreWork = (req, res) => withErrors(res, async () => {
   work.archivedAt = undefined;
   work.updatedBy = req.userId;
   await work.save();
-  await SubWorkItem.updateMany(
-    { ...scopeQuery(req.scope), workItemId: work._id, archivedByWorkAt: { $exists: true } },
-    { $unset: { archivedAt: 1, archivedByWorkAt: 1 }, $set: { updatedBy: req.userId } }
-  );
+  try {
+    await SubWorkItem.updateMany(
+      { ...scopeQuery(req.scope), workItemId: work._id, archivedByWorkAt: { $exists: true } },
+      { $unset: { archivedAt: 1, archivedByWorkAt: 1 }, $set: { updatedBy: req.userId } }
+    );
+  } finally { await markMongoDashboardDirty(req.scope); }
   const subWorks = await SubWorkItem.find({ ...scopeQuery(req.scope), workItemId: work._id, archivedAt: { $exists: false } }).sort({ sequenceNumber: 1 });
   res.json({ work: presentWork(work, subWorks) });
 });
@@ -461,6 +468,7 @@ exports.createSubWork = (req, res) => withErrors(res, async () => {
   });
   applySubWorkResponsible(subWork, await resolveResponsible(req.body?.responsibleUserId, req.scope));
   await subWork.save();
+  await markMongoDashboardDirty(req.scope);
   res.status(201).json({ subWork: presentSubWork(subWork, work) });
 });
 
@@ -474,6 +482,7 @@ exports.updateSubWork = (req, res) => withErrors(res, async () => {
     applySubWorkResponsible(subWork, await resolveResponsible(req.body.responsibleUserId, req.scope));
   }
   await subWork.save();
+  await markMongoDashboardDirty(req.scope);
   res.json({ subWork: presentSubWork(subWork, work) });
 });
 
@@ -484,6 +493,7 @@ exports.archiveSubWork = (req, res) => withErrors(res, async () => {
   subWork.archivedAt = new Date();
   subWork.updatedBy = req.userId;
   await subWork.save();
+  await markMongoDashboardDirty(req.scope);
   res.status(204).end();
 });
 

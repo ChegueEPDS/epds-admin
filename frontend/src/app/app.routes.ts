@@ -1,4 +1,5 @@
-import { Routes } from '@angular/router';
+import { inject } from '@angular/core';
+import { Router, Routes } from '@angular/router';
 import { AuthGuard } from './guards/auth.guard';
 import { LoginComponent } from './login/login.component';
 import { HomeComponent } from './home/home.component';
@@ -7,6 +8,8 @@ import { DomainHealthComponent } from './domain-health/domain-health.component';
 import { LicensesComponent } from './licenses/licenses.component';
 import { EffortTrackingComponent } from './effort-tracking/effort-tracking.component';
 import { WorkBoardComponent } from './work-board/work-board.component';
+import { WorkBoardPageComponent } from './work-board/work-board-page.component';
+import { AuthService } from './services/auth.service';
 import { PublicStatusComponent } from './public-status/public-status.component';
 import { AdminUsersComponent } from './admin/admin-users/admin-users.component';
 import { AdminTenantsComponent } from './admin/admin-tenants/admin-tenants.component';
@@ -28,9 +31,20 @@ export const routes: Routes = [
   { path: 'domain-health', component: DomainHealthComponent, canActivate: [AuthGuard], data: { featureKey: 'domainHealth' } },
   { path: 'licenses', component: LicensesComponent, canActivate: [AuthGuard], data: { featureKey: 'licenses' } },
   { path: 'effort-tracking', component: EffortTrackingComponent, canActivate: [AuthGuard], data: { featureKey: 'effortTracking' } },
-  { path: 'work-board/dashboard', loadComponent: () => import('./work-board/work-dashboard.component').then((m) => m.WorkDashboardComponent),
-    canActivate: [AuthGuard], data: { featureKey: 'workBoard' } },
-  { path: 'work-board', component: WorkBoardComponent, canActivate: [AuthGuard], data: { featureKey: 'workBoard' } },
+  {
+    path: 'work-board',
+    component: WorkBoardPageComponent,
+    canActivate: [AuthGuard],
+    data: { featureKey: 'workBoard' },
+    children: [
+      { path: '', pathMatch: 'full', component: WorkBoardComponent },
+      {
+        path: 'dashboard',
+        canActivate: [() => inject(AuthService).isWorkFieldTenant() || inject(Router).createUrlTree(['/work-board'])],
+        loadComponent: () => import('./work-board/work-dashboard.component').then((m) => m.WorkDashboardComponent)
+      }
+    ]
+  },
   { path: 'settings/work-fields', loadComponent: () => import('./work-board/work-field-settings.component').then((m) => m.WorkFieldSettingsComponent),
     canActivate: [AuthGuard], data: { requiresWorkFieldAdmin: true } },
   { path: 'admin/users', component: AdminUsersComponent, canActivate: [AuthGuard], data: { requiresSuperAdmin: true } },

@@ -3,7 +3,8 @@ const multer = require('multer');
 const controller = require('../controllers/workBoardControllerFacade');
 const workFields = require('../services/workFields');
 const tenantCurrency = require('../services/tenantCurrency');
-const { dashboard, dashboardWorks } = require('../services/workDashboard');
+const { dashboardWorks } = require('../services/workDashboard');
+const { getDashboardSnapshot } = require('../services/workDashboardSnapshots');
 const { requireAuth, requireTenantFeature, requireTenantContext } = require('../middlewares/authMiddleware');
 
 const router = express.Router();
@@ -55,7 +56,7 @@ router.get('/work-board/works', requireTenantFeature('workBoard'), controller.li
 // context rather than Work Board feature access.
 router.get('/work-board/options', controller.activeOptions);
 router.get('/work-board/dashboard', requireTenantFeature('workBoard'), companyOnly,
-  settingsRoute(async (req) => dashboard(req.scope.tenantId, await workFields.settings(req.scope.tenantId))));
+  settingsRoute((req) => getDashboardSnapshot(req.scope.tenantId, req.query.wait === '1')));
 router.get('/work-board/dashboard/works', requireTenantFeature('workBoard'), companyOnly,
   settingsRoute(async (req) => dashboardWorks(req.scope.tenantId, await workFields.settings(req.scope.tenantId), req.query)));
 router.get('/work-board/custom-fields', requireTenantFeature('workBoard'), companyOnly, settingsRoute(async (req) => {

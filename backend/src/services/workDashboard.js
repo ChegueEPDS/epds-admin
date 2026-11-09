@@ -231,6 +231,8 @@ function buildDashboard(works, config, currency, fx, asOf = day(new Date())) {
   const ownerTotal = ownerStats(rows);
   return {
     asOf, currency, rateDate: fx.snapshot?.date || null, refreshFailed: fx.refresh?.failed === true, paymentGaps,
+    aedRateDerived: fx.snapshot?.rates.AED?.source === 'cbuae-usd-peg' &&
+      (currency === 'AED' || rows.some((row) => row.currency === 'AED')),
     summary: { ...ownerTotal, receivable: money(rows, 'receivable'), unbilled: money(rows, 'unbilled') },
     ownerTotal, owners, stages: reportedStages, entities,
     entityTotal: { counts: reportedStages.map((stage) => count(rows, (row) => row.stage === stage)), total: rows.length },
@@ -240,9 +242,12 @@ function buildDashboard(works, config, currency, fx, asOf = day(new Date())) {
   };
 }
 
-async function dashboard(tenantId, config) {
-  const [works, currency, fx] = await Promise.all([reportWorks(tenantId), getDefaultCurrency(tenantId), latestRates()]);
-  return buildDashboard(works, config, currency, fx);
+function dashboardDate() {
+  return day(new Date());
+}
+
+async function dashboard(tenantId, config, currency, fx, asOf) {
+  return buildDashboard(await reportWorks(tenantId), config, currency, fx, asOf);
 }
 
 function dashboardDrilldown(works, config, currency, fx, filter, asOf = day(new Date())) {
@@ -275,4 +280,4 @@ async function dashboardWorks(tenantId, config, filter) {
   return dashboardDrilldown(works, config, currency, fx, filter);
 }
 
-module.exports = { workReporting, dashboard, dashboardWorks, buildDashboard, dashboardDrilldown };
+module.exports = { workReporting, dashboard, dashboardDate, dashboardWorks, buildDashboard, dashboardDrilldown };

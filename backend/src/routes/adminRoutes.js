@@ -12,11 +12,7 @@ router.post('/admin/users', superAdminOnly, controller.createUser);
 router.patch('/admin/users/:id', superAdminOnly, controller.updateUser);
 router.patch('/admin/users/:id/role', superAdminOnly, controller.updateUserRole);
 router.get('/admin/tenants', superAdminOnly, controller.listTenants);
-router.get('/admin/tenant-currencies', superAdminOnly, async (req, res, next) => {
-  try {
-    res.json({ currencies: await currencyOptions() });
-  } catch (error) { next(error); }
-});
+router.get('/admin/tenant-currencies', superAdminOnly, (_req, res) => res.json({ currencies: currencyOptions() }));
 router.post('/admin/tenants', superAdminOnly, controller.createTenant);
 router.patch('/admin/tenants/:id', superAdminOnly, controller.updateTenant);
 router.get('/admin/integrations', superAdminOnly, integrationController.listClients);

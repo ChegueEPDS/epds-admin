@@ -1,8 +1,9 @@
 import { HttpClient } from '@angular/common/http';
-import { Injectable } from '@angular/core';
-import { Observable, map } from 'rxjs';
+import { Injectable, signal } from '@angular/core';
+import { EMPTY, Observable, Subject, catchError, defer, expand, map, merge, switchMap, tap, timer } from 'rxjs';
 import { environment } from '../../environments/environment';
 import { WorkFieldFiles, WorkFieldSettings, WorkFieldValues, WorkReporting, WorkSettingsChange } from '../work-board/work-fields';
+import { AuthService } from './auth.service';
 
 export type WorkStatus = 'inquiry' | 'offer' | 'to_start' | 'in_progress' | 'on_hold' | 'completed_billable' | 'invoiced' | 'paid' | 'closed' | 'cancelled' | 'lost';
 
@@ -49,6 +50,7 @@ export type DashboardWorks = {
 };
 export type WorkDashboard = {
   asOf: string; currency: string; rateDate: string | null; refreshFailed: boolean; paymentGaps: number;
+  aedRateDerived?: boolean;
   summary: DashboardOwner & { receivable: ActiveWorkValue; unbilled: ActiveWorkValue };
   ownerTotal: DashboardOwner; owners: (DashboardOwner & { label: string })[];
   stages: string[]; entities: { id: string; label: string; counts: number[]; total: number }[];
@@ -61,6 +63,9 @@ export type WorkDashboard = {
   sizes: { label: string; count: number; value: ActiveWorkValue; average: number | null; share: number | null }[] | null;
   totalSizeValue: ActiveWorkValue | null;
 };
+type DashboardSnapshot = WorkDashboard & { snapshotAt: string; refreshing: boolean; refreshError?: boolean };
+type DashboardResponse = DashboardSnapshot | { snapshotAt?: never; refreshing: true; refreshError?: never };
+type DashboardState = { report?: DashboardSnapshot; loading: boolean; error: string };
 export type ClientPayload = Omit<WorkBoardClient, 'id'>;
 export type WorkPage = {
   works: WorkItem[];
@@ -78,7 +83,83 @@ export type SubWorkPayload = Partial<Omit<SubWorkItem, 'id' | 'workItemId' | 'se
 @Injectable({ providedIn: 'root' })
 export class WorkBoardService {
   private readonly baseUrl = `${environment.apiBaseUrl}/work-board`;
-  constructor(private http: HttpClient) {}
+  private readonly dashboardCache = signal<DashboardState>({ loading: false, error: '' });
+  readonly dashboardState = this.dashboardCache.asReadonly();
+  private readonly dashboardRequests = new Subject<{ wait: boolean } | null>();
+  private dashboardScope: string | null = null;
+
+  constructor(private http: HttpClient, private auth: AuthService) {
+    this.dashboardRequests.pipe(
+      switchMap((request) => request ? timer(75).pipe(
+        switchMap(() => this.fetchDashboard(request.wait)),
+        expand((result, index) => result.refreshing && index < 5
+          ? timer(300 * 2 ** index).pipe(switchMap(() => this.fetchDashboard(true)))
+          : EMPTY),
+        tap((result) => this.dashboardCache.update((state) => ({
+          report: result.snapshotAt ? result : state.report,
+          loading: result.refreshing,
+          error: result.refreshError ? 'The dashboard could not be refreshed.' : ''
+        }))),
+        catchError((error) => {
+          this.dashboardCache.update((state) => ({
+            ...state, loading: false,
+            error: error?.error?.error || 'The dashboard could not be loaded.'
+          }));
+          return EMPTY;
+        }),
+        tap({ complete: () => {
+          if (this.dashboardCache().loading) {
+            this.dashboardCache.update((state) => ({ ...state, loading: false, error: 'The dashboard is still being calculated.' }));
+          }
+        } })
+      ) : EMPTY)
+    ).subscribe();
+    merge(this.auth.user$, this.auth.tenantContext$).subscribe(() => {
+      const scope = this.currentDashboardScope();
+      if (scope === this.dashboardScope) return;
+      this.dashboardScope = scope;
+      this.dashboardRequests.next(null);
+      this.dashboardCache.set({ loading: false, error: '' });
+    });
+  }
+
+  ensureDashboard(): void {
+    const { report, loading, error } = this.dashboardCache();
+    if (!report && !loading && !error) this.requestDashboard(false);
+  }
+
+  refreshDashboard(): void {
+    this.requestDashboard(true);
+  }
+
+  private requestDashboard(wait: boolean): void {
+    if (!this.dashboardScope) return;
+    this.dashboardCache.update((state) => ({ ...state, loading: true, error: '' }));
+    this.dashboardRequests.next({ wait });
+  }
+
+  private currentDashboardScope(): string | null {
+    const user = this.auth.getCurrentUser();
+    const tenant = this.auth.isSuperAdmin() ? this.auth.getTenantContextId() : user?.tenantId;
+    return user && tenant && this.auth.isWorkFieldTenant() && this.auth.canAccessFeature('workBoard')
+      ? JSON.stringify([user.id || user.userId, tenant])
+      : null;
+  }
+
+  private fetchDashboard(wait: boolean): Observable<DashboardResponse> {
+    return this.http.get<DashboardResponse>(`${this.baseUrl}/dashboard`, {
+      withCredentials: true, params: wait ? { wait: '1' } : {}
+    });
+  }
+
+  private refreshAfterSave<T>(request: Observable<T>): Observable<T> {
+    return defer(() => {
+      const scope = this.dashboardScope;
+      return request.pipe(tap(() => {
+        if (scope && scope === this.dashboardScope) this.refreshDashboard();
+      }));
+    });
+  }
 
   listWorks(options: { page?: number; limit?: number; search?: string; status?: string } = {}): Observable<WorkPage> {
     const params: Record<string, string> = {};
@@ -101,16 +182,13 @@ export class WorkBoardService {
     return this.http.get<{ client: WorkBoardClient | null; linked: boolean }>(`${this.baseUrl}/clients/lookup`, { params: { taxNumber }, withCredentials: true });
   }
   createOrLinkClient(payload: ClientPayload): Observable<{ client: WorkBoardClient; matchedExisting: boolean }> {
-    return this.http.post<{ client: WorkBoardClient; matchedExisting: boolean }>(`${this.baseUrl}/clients`, payload, { withCredentials: true });
+    return this.refreshAfterSave(this.http.post<{ client: WorkBoardClient; matchedExisting: boolean }>(`${this.baseUrl}/clients`, payload, { withCredentials: true }));
   }
   listTenantUsers(): Observable<TenantUserOption[]> {
     return this.http.get<{ users: TenantUserOption[] }>(`${this.baseUrl}/users`, { withCredentials: true }).pipe(map((res) => res.users || []));
   }
   fieldSettings(): Observable<WorkFieldSettings> {
     return this.http.get<WorkFieldSettings>(`${this.baseUrl}/custom-fields`, { withCredentials: true });
-  }
-  dashboard(): Observable<WorkDashboard> {
-    return this.http.get<WorkDashboard>(`${this.baseUrl}/dashboard`, { withCredentials: true });
   }
   dashboardWorks(filter: DashboardFilter, page: number): Observable<DashboardWorks> {
     const params: Record<string, string> = { kind: filter.kind, value: filter.value, page: String(page) };
@@ -121,10 +199,10 @@ export class WorkBoardService {
     return this.http.get<WorkCurrencyPreference>(`${this.baseUrl}/default-currency`, { withCredentials: true });
   }
   saveCurrencyPreference(defaultCurrency: string): Observable<WorkCurrencyPreference> {
-    return this.http.put<WorkCurrencyPreference>(`${this.baseUrl}/default-currency`, { defaultCurrency }, { withCredentials: true });
+    return this.refreshAfterSave(this.http.put<WorkCurrencyPreference>(`${this.baseUrl}/default-currency`, { defaultCurrency }, { withCredentials: true }));
   }
   saveFieldSettings(version: number, change: WorkSettingsChange): Observable<WorkFieldSettings> {
-    return this.http.put<WorkFieldSettings>(`${this.baseUrl}/custom-fields`, { version, ...change }, { withCredentials: true });
+    return this.refreshAfterSave(this.http.put<WorkFieldSettings>(`${this.baseUrl}/custom-fields`, { version, ...change }, { withCredentials: true }));
   }
   downloadCustomField(workId: string, fieldId: string, archived: boolean): Observable<Blob> {
     return this.http.get(`${this.baseUrl}/works/${workId}/custom-fields/${fieldId}/file`, {
@@ -132,10 +210,10 @@ export class WorkBoardService {
     });
   }
   createWork(payload: WorkPayload, files: WorkFieldFiles = {}): Observable<WorkItem> {
-    return this.http.post<{ work: WorkItem }>(`${this.baseUrl}/works`, this.workBody(payload, files), { withCredentials: true }).pipe(map((res) => res.work));
+    return this.refreshAfterSave(this.http.post<{ work: WorkItem }>(`${this.baseUrl}/works`, this.workBody(payload, files), { withCredentials: true })).pipe(map((res) => res.work));
   }
   updateWork(id: string, payload: WorkPayload, files: WorkFieldFiles = {}): Observable<WorkItem> {
-    return this.http.patch<{ work: WorkItem }>(`${this.baseUrl}/works/${id}`, this.workBody(payload, files), { withCredentials: true }).pipe(map((res) => res.work));
+    return this.refreshAfterSave(this.http.patch<{ work: WorkItem }>(`${this.baseUrl}/works/${id}`, this.workBody(payload, files), { withCredentials: true })).pipe(map((res) => res.work));
   }
   private workBody(payload: WorkPayload, files: WorkFieldFiles): WorkPayload | FormData {
     if (!Object.keys(files).length) return payload;
@@ -145,19 +223,19 @@ export class WorkBoardService {
     return body;
   }
   archiveWork(id: string): Observable<void> {
-    return this.http.delete<void>(`${this.baseUrl}/works/${id}`, { withCredentials: true });
+    return this.refreshAfterSave(this.http.delete<void>(`${this.baseUrl}/works/${id}`, { withCredentials: true }));
   }
   restoreWork(id: string): Observable<WorkItem> {
-    return this.http.post<{ work: WorkItem }>(`${this.baseUrl}/works/${id}/restore`, {}, { withCredentials: true }).pipe(map((res) => res.work));
+    return this.refreshAfterSave(this.http.post<{ work: WorkItem }>(`${this.baseUrl}/works/${id}/restore`, {}, { withCredentials: true })).pipe(map((res) => res.work));
   }
   createSubWork(workId: string, payload: SubWorkPayload): Observable<SubWorkItem> {
-    return this.http.post<{ subWork: SubWorkItem }>(`${this.baseUrl}/works/${workId}/sub-works`, payload, { withCredentials: true }).pipe(map((res) => res.subWork));
+    return this.refreshAfterSave(this.http.post<{ subWork: SubWorkItem }>(`${this.baseUrl}/works/${workId}/sub-works`, payload, { withCredentials: true })).pipe(map((res) => res.subWork));
   }
   updateSubWork(id: string, payload: SubWorkPayload): Observable<SubWorkItem> {
-    return this.http.patch<{ subWork: SubWorkItem }>(`${this.baseUrl}/sub-works/${id}`, payload, { withCredentials: true }).pipe(map((res) => res.subWork));
+    return this.refreshAfterSave(this.http.patch<{ subWork: SubWorkItem }>(`${this.baseUrl}/sub-works/${id}`, payload, { withCredentials: true })).pipe(map((res) => res.subWork));
   }
   archiveSubWork(id: string): Observable<void> {
-    return this.http.delete<void>(`${this.baseUrl}/sub-works/${id}`, { withCredentials: true });
+    return this.refreshAfterSave(this.http.delete<void>(`${this.baseUrl}/sub-works/${id}`, { withCredentials: true }));
   }
   listDocuments(workId: string): Observable<WorkDocument[]> {
     return this.http.get<{ documents: WorkDocument[] }>(`${this.baseUrl}/works/${workId}/documents`, { withCredentials: true }).pipe(map((res) => res.documents || []));
@@ -167,12 +245,12 @@ export class WorkBoardService {
     body.append('file', file);
     body.append('category', category);
     if (customName) body.append('customName', customName);
-    return this.http.post<{ document: WorkDocument }>(`${this.baseUrl}/works/${workId}/documents`, body, { withCredentials: true }).pipe(map((res) => res.document));
+    return this.refreshAfterSave(this.http.post<{ document: WorkDocument }>(`${this.baseUrl}/works/${workId}/documents`, body, { withCredentials: true })).pipe(map((res) => res.document));
   }
   downloadDocument(documentId: string) {
     return this.http.get(`${this.baseUrl}/documents/${documentId}/file`, { responseType: 'blob', observe: 'response', withCredentials: true });
   }
   deleteDocument(documentId: string): Observable<void> {
-    return this.http.delete<void>(`${this.baseUrl}/documents/${documentId}`, { withCredentials: true });
+    return this.refreshAfterSave(this.http.delete<void>(`${this.baseUrl}/documents/${documentId}`, { withCredentials: true }));
   }
 }
