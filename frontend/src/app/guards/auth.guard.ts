@@ -24,6 +24,10 @@ export class AuthGuard implements CanActivate {
           if (route.data?.['requiresSuperAdmin'] && !this.auth.isSuperAdmin()) {
             return this.router.createUrlTree(['/home']);
           }
+          if (route.data?.['requiresWorkFieldAdmin'] && !this.auth.canManageWorkFields() &&
+              !(this.auth.isSuperAdmin() && !this.auth.getTenantContext() && this.auth.getTenantContextId())) {
+            return this.router.createUrlTree(['/home']);
+          }
           const featureKey = route.data?.['featureKey'];
           if (featureKey && !this.auth.canAccessFeature(featureKey)) {
             return this.router.createUrlTree(['/home']);

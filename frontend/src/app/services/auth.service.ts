@@ -253,6 +253,16 @@ export class AuthService {
     return this.isSuperAdmin() || Boolean(this.currentUser?.tenantId || this.currentUser?.tenantName);
   }
 
+  isWorkFieldTenant(): boolean {
+    return (this.isSuperAdmin() ? this.getTenantContext()?.type : this.currentUser?.tenantType) !== 'client';
+  }
+
+  canManageWorkFields(): boolean {
+    const role = this.currentUser?.role;
+    const hasTenant = this.isSuperAdmin() ? Boolean(this.getTenantContext()) : Boolean(this.currentUser?.tenantId);
+    return hasTenant && (role === 'Admin' || role === 'SuperAdmin') && this.isWorkFieldTenant() && this.canEditFeature('workBoard');
+  }
+
   canAccessFeature(featureKey: TenantFeatureKey): boolean {
     if (this.isSuperAdmin()) {
       const context = this.getTenantContext();

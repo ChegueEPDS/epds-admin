@@ -1,6 +1,7 @@
 const express = require('express');
 const controller = require('../controllers/adminControllerFacade');
 const integrationController = require('../controllers/integrationAdminController');
+const { currencyOptions } = require('../services/tenantCurrency');
 const { requireAuth, requireSuperAdmin } = require('../middlewares/authMiddleware');
 
 const router = express.Router();
@@ -11,6 +12,11 @@ router.post('/admin/users', superAdminOnly, controller.createUser);
 router.patch('/admin/users/:id', superAdminOnly, controller.updateUser);
 router.patch('/admin/users/:id/role', superAdminOnly, controller.updateUserRole);
 router.get('/admin/tenants', superAdminOnly, controller.listTenants);
+router.get('/admin/tenant-currencies', superAdminOnly, async (req, res, next) => {
+  try {
+    res.json({ currencies: await currencyOptions() });
+  } catch (error) { next(error); }
+});
 router.post('/admin/tenants', superAdminOnly, controller.createTenant);
 router.patch('/admin/tenants/:id', superAdminOnly, controller.updateTenant);
 router.get('/admin/integrations', superAdminOnly, integrationController.listClients);

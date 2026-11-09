@@ -3,12 +3,15 @@ const mongoose = require('mongoose');
 const WORK_STATUSES = [
   'inquiry',
   'offer',
+  'to_start',
   'in_progress',
+  'on_hold',
   'completed_billable',
   'invoiced',
   'paid',
   'closed',
-  'cancelled'
+  'cancelled',
+  'lost'
 ];
 
 const WorkItemSchema = new mongoose.Schema(
@@ -20,12 +23,16 @@ const WorkItemSchema = new mongoose.Schema(
     name: { type: String, required: true, trim: true },
     clientId: { type: mongoose.Schema.Types.ObjectId, ref: 'ClientCompany', index: true },
     customer: { type: String, trim: true, default: '' },
+    entityId: { type: String, default: null },
+    serviceTypeId: { type: String, default: null },
     responsibleUserId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', index: true },
     responsible: { type: String, trim: true, default: '' },
     contributors: [{ type: String, trim: true }],
     status: { type: String, enum: WORK_STATUSES, default: 'inquiry', index: true },
     deadline: { type: Date },
     description: { type: String, trim: true, default: '' },
+    customFields: { type: mongoose.Schema.Types.Mixed, default: () => ({}) },
+    reporting: { type: mongoose.Schema.Types.Mixed, default: () => ({}) },
     currency: { type: String, trim: true, uppercase: true, default: 'HUF' },
     totalAmount: { type: Number, min: 0, default: 0 },
     costAmount: { type: Number, min: 0, default: 0 },
@@ -42,7 +49,7 @@ const WorkItemSchema = new mongoose.Schema(
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     updatedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' }
   },
-  { timestamps: true }
+  { timestamps: true, optimisticConcurrency: true }
 );
 
 WorkItemSchema.index({ tenantId: 1, year: 1, sequenceNumber: 1 }, { unique: true });

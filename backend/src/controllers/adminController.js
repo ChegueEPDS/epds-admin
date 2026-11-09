@@ -4,6 +4,7 @@ const Tenant = require('../models/tenant');
 const DomainMonitor = require('../models/domainMonitor');
 const LicenseCustomer = require('../models/licenseCustomer');
 const { ASSIGNABLE_ROLES, SUPERADMIN_EMAIL } = require('../services/userSeedService');
+const { DEFAULT_CURRENCY, validateDefaultCurrency } = require('../services/tenantCurrency');
 
 const INTERNAL_LICENSE_TENANTS = ['epds', 'developer', 'epds-admin'];
 
@@ -128,6 +129,7 @@ function presentTenant(tenant) {
     name: tenant.name,
     displayName: tenant.displayName || tenant.name,
     type: tenant.type,
+    defaultCurrency: tenant.defaultCurrency || DEFAULT_CURRENCY,
     features: normalizeTenantFeatures(tenant.features || {}),
     ownerUserId: tenant.ownerUserId ? String(tenant.ownerUserId) : null,
     createdAt: tenant.createdAt,
@@ -284,6 +286,8 @@ exports.createTenant = async (req, res) => {
     );
     if (!name) return res.status(400).json({ error: 'Tenant name is required' });
     if (!type) return res.status(400).json({ error: 'Valid tenant type is required' });
+    const currency = req.body?.defaultCurrency === undefined ? DEFAULT_CURRENCY : await validateDefaultCurrency(req.body.defaultCurrency);
+    if (!currency) return res.status(400).json({ error: 'Select an available default currency.' });
 
     const existing = await Tenant.findOne({ name });
     if (existing) return res.status(409).json({ error: 'Tenant already exists' });
@@ -292,6 +296,7 @@ exports.createTenant = async (req, res) => {
       name,
       displayName,
       type,
+      defaultCurrency: currency,
       features,
       seats: { max: 0, used: 0 },
       seatsManaged: 'manual'
@@ -322,6 +327,11 @@ exports.updateTenant = async (req, res) => {
     tenant.name = name;
     tenant.displayName = displayName;
     tenant.type = type;
+    if (req.body?.defaultCurrency !== undefined) {
+      const currency = await validateDefaultCurrency(req.body.defaultCurrency, tenant.defaultCurrency);
+      if (!currency) return res.status(400).json({ error: 'Select an available default currency.' });
+      tenant.defaultCurrency = currency;
+    }
     tenant.features = features;
     await tenant.save();
     await syncTenantReferences(tenant);

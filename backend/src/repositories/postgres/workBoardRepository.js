@@ -2,7 +2,7 @@ const mongoose = require('mongoose');
 const { query, withTransaction } = require('../../postgres');
 
 const id = () => String(new mongoose.Types.ObjectId());
-const TERMINAL = ['completed_billable', 'invoiced', 'paid', 'closed', 'cancelled'];
+const TERMINAL = ['completed_billable', 'invoiced', 'paid', 'closed', 'cancelled', 'lost'];
 
 function work(row) {
   if (!row) return null;
@@ -10,8 +10,11 @@ function work(row) {
     _id: row.id, id: row.id, tenantId: row.tenant_id, year: row.year,
     sequenceNumber: row.sequence_number, workNumber: row.work_number, name: row.name,
     clientId: row.client_id, customer: row.customer, responsibleUserId: row.responsible_user_id,
+    entityId: row.entity_id || null, serviceTypeId: row.service_type_id || null,
     responsible: row.responsible, contributors: row.contributors || [], status: row.status,
     deadline: row.deadline, description: row.description, currency: row.currency,
+    customFields: row.custom_fields || {}, fieldRevision: row.field_revision || 0,
+    reporting: row.reporting || {},
     totalAmount: Number(row.total_amount), costAmount: Number(row.cost_amount),
     subcontractor: row.subcontractor, paymentDeadlineDays: row.payment_deadline_days,
     offerDate: row.offer_date, completionDate: row.completion_date, invoiceDate: row.invoice_date,
@@ -80,14 +83,14 @@ async function list({ tenantId, status = 'active', search = '', page = 1, limit 
   const children = await listSubWorks(tenantId, works.map((item) => item.id), status === 'deleted');
   const byWork = new Map();
   children.forEach((item) => byWork.set(item.workItemId, [...(byWork.get(item.workItemId) || []), item]));
-  const summary = await query(`SELECT
-    count(*) FILTER (WHERE archived_at IS NULL AND status<>ALL($2::text[]))::int AS active_count,
-    count(*) FILTER (WHERE archived_at IS NULL AND status<>ALL($2::text[]) AND deadline<CURRENT_DATE)::int AS overdue_count,
-    coalesce(sum(total_amount) FILTER (WHERE archived_at IS NULL AND status<>ALL($2::text[])),0) AS active_value
-    FROM work_items WHERE tenant_id=$1`, [tenantId, TERMINAL]);
+  const summary = await query(`SELECT currency, count(*)::int AS active_count,
+    count(*) FILTER (WHERE deadline<CURRENT_DATE)::int AS overdue_count, sum(total_amount) AS active_value
+    FROM work_items WHERE tenant_id=$1 AND archived_at IS NULL AND status<>ALL($2::text[]) GROUP BY currency`, [tenantId, TERMINAL]);
   return { works: works.map((item) => ({ ...item, subWorks: byWork.get(item.id) || [] })),
-    total: count.rows[0].count, summary: { activeCount: summary.rows[0].active_count,
-      overdueCount: summary.rows[0].overdue_count, totalActiveValue: Number(summary.rows[0].active_value) } };
+    total: count.rows[0].count, summary: {
+      activeCount: summary.rows.reduce((sum, row) => sum + row.active_count, 0),
+      overdueCount: summary.rows.reduce((sum, row) => sum + row.overdue_count, 0)
+    }, activeAmounts: summary.rows.map((row) => ({ currency: row.currency, amount: row.active_value })) };
 }
 
 async function findWork(tenantId, workId, includeDeleted = false) {
@@ -116,21 +119,23 @@ async function createWork(tenantId, actorId, input) {
       (id,tenant_id,year,sequence_number,work_number,name,client_id,customer,responsible_user_id,responsible,
        contributors,status,deadline,description,currency,total_amount,cost_amount,subcontractor,payment_deadline_days,
        offer_date,completion_date,invoice_date,invoice_payment_deadline,invoice_number,contract_signed,
-       performance_certificate,created_by,updated_by,created_at,updated_at)
-      VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11::jsonb,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$27,now(),now()) RETURNING *`,
+       performance_certificate,created_by,updated_by,created_at,updated_at,custom_fields,entity_id,service_type_id,reporting)
+      VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11::jsonb,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$27,now(),now(),$28::jsonb,$29,$30,$31::jsonb) RETURNING *`,
     [workId, tenantId, year, sequence, input.workNumber || `${String(year).slice(-2)}-${String(sequence).padStart(4, '0')}`,
       input.name, input.clientId || null, input.customer || '', input.responsibleUserId || null, input.responsible || '',
       JSON.stringify(input.contributors || []), input.status || 'inquiry', input.deadline || null, input.description || '',
       input.currency || 'HUF', Number(input.totalAmount || 0), Number(input.costAmount || 0), input.subcontractor || '',
       Number(input.paymentDeadlineDays ?? 30), input.offerDate || null, input.completionDate || null,
       input.invoiceDate || null, input.invoicePaymentDeadline || null, input.invoiceNumber || '',
-      Boolean(input.contractSigned), Boolean(input.performanceCertificate), actorId]);
+      Boolean(input.contractSigned), Boolean(input.performanceCertificate), actorId, JSON.stringify(input.customFields || {}),
+      input.entityId || null, input.serviceTypeId || null, JSON.stringify(input.reporting || {})]);
     return work(result.rows[0]);
   }, { isolationLevel: 'SERIALIZABLE' });
 }
 
 const WORK_MUTABLE = new Map([
   ['name','name'],['clientId','client_id'],['customer','customer'],['responsibleUserId','responsible_user_id'],
+  ['entityId','entity_id'],['serviceTypeId','service_type_id'],
   ['responsible','responsible'],['status','status'],['deadline','deadline'],['description','description'],
   ['currency','currency'],['totalAmount','total_amount'],['costAmount','cost_amount'],['subcontractor','subcontractor'],
   ['paymentDeadlineDays','payment_deadline_days'],['offerDate','offer_date'],['completionDate','completion_date'],
@@ -138,16 +143,26 @@ const WORK_MUTABLE = new Map([
   ['contractSigned','contract_signed'],['performanceCertificate','performance_certificate']
 ]);
 
-async function updateWork(tenantId, workId, actorId, input) {
+async function updateWork(tenantId, workId, actorId, input, expectedRevision) {
   const sets = []; const params = [workId, tenantId];
   for (const [key, column] of WORK_MUTABLE) if (Object.hasOwn(input, key)) {
     params.push(input[key] === '' && ['clientId','responsibleUserId'].includes(key) ? null : input[key]);
     sets.push(`${column}=$${params.length}`);
   }
   if (Object.hasOwn(input, 'contributors')) { params.push(JSON.stringify(input.contributors || [])); sets.push(`contributors=$${params.length}::jsonb`); }
+  if (Object.hasOwn(input, 'reporting')) { params.push(JSON.stringify(input.reporting)); sets.push(`reporting=$${params.length}::jsonb`); }
+  if (Object.hasOwn(input, 'customFields')) {
+    params.push(JSON.stringify(input.customFields));
+    sets.push(`custom_fields=$${params.length}::jsonb`, 'field_revision=field_revision+1');
+  }
   if (!sets.length) return findWork(tenantId, workId);
   params.push(actorId); sets.push(`updated_by=$${params.length}`, 'updated_at=now()');
-  const result = await query(`UPDATE work_items SET ${sets.join(',')} WHERE id=$1 AND tenant_id=$2 AND archived_at IS NULL RETURNING *`, params);
+  let revision = '';
+  if (expectedRevision !== undefined) {
+    params.push(expectedRevision);
+    revision = ` AND field_revision=$${params.length}`;
+  }
+  const result = await query(`UPDATE work_items SET ${sets.join(',')} WHERE id=$1 AND tenant_id=$2 AND archived_at IS NULL${revision} RETURNING *`, params);
   return work(result.rows[0]);
 }
 

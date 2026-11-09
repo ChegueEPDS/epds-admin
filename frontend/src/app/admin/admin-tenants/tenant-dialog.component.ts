@@ -44,6 +44,9 @@ export class TenantDialogComponent {
   saving = signal(false);
   name = '';
   displayName = '';
+  defaultCurrency = 'HUF';
+  currencies = ['HUF'];
+  private initialCurrency = 'HUF';
   type: TenantType = 'company';
   types: { value: TenantType; label: string }[] = [
     { value: 'company', label: 'Company' },
@@ -76,9 +79,15 @@ export class TenantDialogComponent {
       this.name = data.tenant.name || '';
       this.displayName = data.tenant.displayName || data.tenant.name || '';
       this.type = data.tenant.type || 'company';
+      this.defaultCurrency = this.initialCurrency = data.tenant.defaultCurrency || 'HUF';
       this.features = { ...this.features, ...(data.tenant.features || {}) };
       this.applyFeaturePolicy();
     }
+    this.currencies = [...new Set(['HUF', this.defaultCurrency])];
+    this.admin.tenantCurrencies().subscribe({
+      next: (currencies) => { this.currencies = [...new Set([...currencies, this.defaultCurrency])]; },
+      error: () => { this.snackBar.open('The currency list could not be loaded.', 'Close', { duration: 4500 }); }
+    });
   }
 
   get isEditMode(): boolean {
@@ -133,7 +142,8 @@ export class TenantDialogComponent {
     if (this.saving()) return;
     this.saving.set(true);
     this.applyFeaturePolicy();
-    const payload = { name: this.name, displayName: this.displayName, type: this.type, features: this.features };
+    const payload = { name: this.name, displayName: this.displayName, type: this.type, features: this.features,
+      ...(this.defaultCurrency !== this.initialCurrency ? { defaultCurrency: this.defaultCurrency } : {}) };
     const request = this.data.tenant
       ? this.admin.updateTenant(this.data.tenant.id, payload)
       : this.admin.createTenant(payload);

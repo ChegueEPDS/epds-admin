@@ -6,10 +6,12 @@ const User = require('../models/user');
 const WorkSequence = require('../models/workSequence');
 const { WorkDocument, WORK_DOCUMENT_CATEGORIES } = require('../models/workDocument');
 const fileStorage = require('../services/fileStorageService');
+const workFields = require('../services/workFields');
+const tenantCurrency = require('../services/tenantCurrency');
 const { pipeline } = require('stream/promises');
 const crypto = require('crypto');
 
-const TERMINAL_STATUSES = new Set(['completed_billable', 'invoiced', 'paid', 'closed', 'cancelled']);
+const TERMINAL_STATUSES = new Set(['completed_billable', 'invoiced', 'paid', 'closed', 'cancelled', 'lost']);
 const DOCUMENT_CATEGORY_LABELS = {
   offer: 'Ajánlat', contract_draft: 'Szerződéstervezet', contract: 'Szerződés', order: 'Megrendelés',
   performance_certificate: 'Teljesítésigazolás', other: 'Egyéb'
@@ -200,6 +202,8 @@ function presentWork(work, subWorks = []) {
     sequenceNumber: work.sequenceNumber,
     name: work.name,
     customer: work.customer || '',
+    entityId: work.entityId || null,
+    serviceTypeId: work.serviceTypeId || null,
     clientId: work.clientId ? String(work.clientId) : null,
     responsible: work.responsible || '',
     responsibleUserId: work.responsibleUserId ? String(work.responsibleUserId) : null,
@@ -207,6 +211,9 @@ function presentWork(work, subWorks = []) {
     status: work.status,
     deadline: work.deadline || null,
     description: work.description || '',
+    customFields: work.customFields || {},
+    reporting: work.reporting || {},
+    fieldRevision: work.__v || 0,
     currency: work.currency || 'HUF',
     totalAmount,
     costAmount: Number(work.costAmount || 0),
@@ -320,8 +327,8 @@ exports.listWorks = (req, res) => withErrors(res, async () => {
     WorkItem.countDocuments({ ...scopeQuery(req.scope), archivedAt: { $exists: false }, status: { $nin: [...TERMINAL_STATUSES] } }),
     WorkItem.countDocuments({ ...scopeQuery(req.scope), archivedAt: { $exists: false }, status: { $nin: [...TERMINAL_STATUSES] }, deadline: { $lt: new Date(new Date().setHours(0, 0, 0, 0)) } }),
     WorkItem.aggregate([
-      { $match: { ...scopeQuery(req.scope), archivedAt: { $exists: false }, status: { $nin: [...TERMINAL_STATUSES] } } },
-      { $group: { _id: null, value: { $sum: '$totalAmount' } } }
+      { $match: { tenantId: new mongoose.Types.ObjectId(req.scope.tenantId), archivedAt: { $exists: false }, status: { $nin: [...TERMINAL_STATUSES] } } },
+      { $group: { _id: { $ifNull: ['$currency', 'HUF'] }, value: { $sum: { $toDecimal: '$totalAmount' } } } }
     ])
   ]);
   const subWorkArchiveFilter = status === 'deleted' ? { archivedByWorkAt: { $exists: true } } : { archivedAt: { $exists: false } };
@@ -332,10 +339,12 @@ exports.listWorks = (req, res) => withErrors(res, async () => {
     if (!byWork.has(key)) byWork.set(key, []);
     byWork.get(key).push(item);
   });
+  const totals = await tenantCurrency.summarizeActiveValue(req.scope.tenantId,
+    activeValue.map((row) => ({ currency: row._id, amount: row.value.toString() })));
   res.json({
     works: works.map((work) => presentWork(work, byWork.get(String(work._id)) || [])),
     pagination: { page, limit, total, pages: Math.max(1, Math.ceil(total / limit)) },
-    summary: { activeCount, overdueCount, totalActiveValue: Number(activeValue[0]?.value || 0) }
+    summary: { activeCount, overdueCount, totalActiveValue: totals.amount, activeValue: totals }
   });
 });
 
@@ -365,24 +374,32 @@ exports.getWork = (req, res) => withErrors(res, async () => {
 });
 
 exports.createWork = (req, res) => withErrors(res, async () => {
-  const payload = workPayload(req.body);
+  const currency = cleanText(req.body?.currency) || await tenantCurrency.getDefaultCurrency(req.scope.tenantId);
+  const payload = workPayload({ ...req.body, currency });
   const client = await resolveClient(req.body?.clientId, req.scope);
   const responsibleUser = await resolveResponsible(req.body?.responsibleUserId, req.scope);
   const year = Math.max(2000, Math.min(9999, numberValue(req.body?.year, new Date().getFullYear())));
   const latest = await WorkItem.findOne({ ...scopeQuery(req.scope), year }).sort({ sequenceNumber: -1 }).select('sequenceNumber').lean();
   const sequenceNumber = await allocateSequence(req.scope.tenantId, `work:${year}`, latest?.sequenceNumber);
-  const work = await WorkItem.create({
+  const work = new WorkItem({
     ...payload, ...scopeQuery(req.scope), year, sequenceNumber,
     workNumber: `${String(year).slice(-2)}-${String(sequenceNumber).padStart(4, '0')}`,
     createdBy: req.userId, updatedBy: req.userId
   });
   applyWorkReferences(work, client, responsibleUser);
-  await work.save();
+  await workFields.saveValues(req, payload.status, {}, (values, selections) => {
+    Object.assign(work, selections);
+    work.customFields = values;
+    return work.save();
+  });
   res.status(201).json({ work: presentWork(work, []) });
 });
 
 exports.updateWork = (req, res) => withErrors(res, async () => {
   const work = await scopedWork(req.params.id, req.scope);
+  if (req.body?.fieldRevision !== undefined && req.body.fieldRevision !== (work.__v || 0)) {
+    throw httpError('The work changed. Reload and try again.', 409);
+  }
   Object.assign(work, workPayload(req.body, work), { updatedBy: req.userId });
   if (Object.prototype.hasOwnProperty.call(req.body || {}, 'clientId')) {
     const client = await resolveClient(req.body.clientId, req.scope);
@@ -394,9 +411,18 @@ exports.updateWork = (req, res) => withErrors(res, async () => {
     work.responsibleUserId = responsibleUser?._id || undefined;
     work.responsible = responsibleUser ? presentUser(responsibleUser).fullName : '';
   }
-  await work.save();
+  await workFields.saveValues(req, work.status, work, (values, selections) => {
+    Object.assign(work, selections);
+    work.customFields = values;
+    return work.save();
+  });
   const subWorks = await SubWorkItem.find({ ...scopeQuery(req.scope), workItemId: work._id, archivedAt: { $exists: false } }).sort({ sequenceNumber: 1 });
   res.json({ work: presentWork(work, subWorks) });
+});
+
+exports.downloadCustomField = (req, res) => withErrors(res, async () => {
+  const work = await scopedWork(req.params.id, req.scope, { includeArchived: req.query.includeDeleted === 'true' });
+  await workFields.download(req, res, work);
 });
 
 exports.archiveWork = (req, res) => withErrors(res, async () => {

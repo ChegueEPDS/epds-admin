@@ -20,6 +20,8 @@ const TenantSchema = new mongoose.Schema(
       used: { type: Number, default: 0, min: 0 }
     },
     seatsManaged: { type: String, enum: ['stripe', 'manual'], default: 'stripe' },
+    workFieldSettings: { type: mongoose.Schema.Types.Mixed },
+    defaultCurrency: { type: String, default: 'HUF', match: /^[A-Z]{3}$/ },
     features: {
       mail: { type: FeatureAccessSchema, default: () => ({}) },
       domainHealth: { type: FeatureAccessSchema, default: () => ({}) },

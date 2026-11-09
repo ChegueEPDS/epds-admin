@@ -20,6 +20,7 @@ const domainHealthRoutes = require('./routes/domainHealthRoutes');
 const licenseRoutes = require('./routes/licenseRoutes');
 const effortRoutes = require('./routes/effortRoutes');
 const workBoardRoutes = require('./routes/workBoardRoutes');
+const { startMnbExchangeRates } = require('./services/mnbExchangeRates');
 const integrationApiRoutes = require('./routes/integrationApiRoutes');
 const webhookTestRoutes = require('./routes/webhookTestRoutes');
 const { startDomainHealthMonitor } = require('./services/domainMonitorService');
@@ -123,6 +124,7 @@ if (require.main === module) {
       startDomainStatusPdfMaintenance();
       startWebhookWorker();
       startLicenseExpiryScheduler();
+      startMnbExchangeRates();
       app.listen(port, () => console.log(`[app] EPDS Admin API listening on ${port}`));
     })
     .catch((err) => {

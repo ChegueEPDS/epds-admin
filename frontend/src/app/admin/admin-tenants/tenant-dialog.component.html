@@ -21,6 +21,13 @@
       </mat-select>
     </mat-form-field>
 
+    <mat-form-field appearance="outline">
+      <mat-label>Default currency</mat-label>
+      <mat-select name="defaultCurrency" [(ngModel)]="defaultCurrency" required>
+        <mat-option *ngFor="let currency of currencies" [value]="currency">{{ currency }}</mat-option>
+      </mat-select>
+    </mat-form-field>
+
     <section class="feature-list">
       <h3>Features</h3>
       <div class="feature-row header-row" aria-hidden="true">

@@ -4,7 +4,7 @@ const { WorkItem } = require('../models/workItem');
 const SubWorkItem = require('../models/subWorkItem');
 const { mapWithConcurrency } = require('../services/scheduledJobLeaseService');
 
-const TERMINAL_WORK_STATUSES = ['completed_billable', 'invoiced', 'paid', 'closed', 'cancelled'];
+const TERMINAL_WORK_STATUSES = ['completed_billable', 'invoiced', 'paid', 'closed', 'cancelled', 'lost'];
 
 function scopeQuery(scope) {
   if (!scope?.tenantId) throw httpError('Tenant context is required', 403);

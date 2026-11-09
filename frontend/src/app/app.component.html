@@ -117,6 +117,14 @@
           Webhook Tester
         </a>
 
+        <ng-container *ngIf="auth.canManageWorkFields()">
+          <div class="mobile-menu-divider"></div>
+          <div class="mobile-menu-label" (click)="$event.stopPropagation()">Settings</div>
+          <a mat-menu-item routerLink="/settings/work-fields" routerLinkActive="active-menu-item">
+            <mat-icon class="material-symbols-outlined">tune</mat-icon>
+            Work settings
+          </a>
+        </ng-container>
         <ng-container *ngIf="mobileUser.role === 'SuperAdmin'">
           <div class="mobile-menu-divider"></div>
           <div class="mobile-menu-label" (click)="$event.stopPropagation()">Administration</div>
@@ -161,22 +169,28 @@
     </button>
 
     <ng-container *ngIf="auth.user$ | async as user">
-      <button mat-icon-button class="desktop-action" *ngIf="user.role === 'SuperAdmin'" [matMenuTriggerFor]="settingsMenu" aria-label="Settings">
+      <button mat-icon-button class="desktop-action" *ngIf="user.role === 'SuperAdmin' || auth.canManageWorkFields()" [matMenuTriggerFor]="settingsMenu" aria-label="Settings">
         <mat-icon class="material-symbols-outlined">settings</mat-icon>
       </button>
       <mat-menu #settingsMenu="matMenu">
-        <a mat-menu-item routerLink="/admin/users">
-          <mat-icon class="material-symbols-outlined">group</mat-icon>
-          Users
+        <a mat-menu-item routerLink="/settings/work-fields" *ngIf="auth.canManageWorkFields()">
+          <mat-icon class="material-symbols-outlined">tune</mat-icon>
+          Work settings
         </a>
-        <a mat-menu-item routerLink="/admin/tenants">
-          <mat-icon class="material-symbols-outlined">business</mat-icon>
-          Tenants
-        </a>
-        <a mat-menu-item routerLink="/admin/integrations">
-          <mat-icon class="material-symbols-outlined">api</mat-icon>
-          License integrations
-        </a>
+        <ng-container *ngIf="user.role === 'SuperAdmin'">
+          <a mat-menu-item routerLink="/admin/users">
+            <mat-icon class="material-symbols-outlined">group</mat-icon>
+            Users
+          </a>
+          <a mat-menu-item routerLink="/admin/tenants">
+            <mat-icon class="material-symbols-outlined">business</mat-icon>
+            Tenants
+          </a>
+          <a mat-menu-item routerLink="/admin/integrations">
+            <mat-icon class="material-symbols-outlined">api</mat-icon>
+            License integrations
+          </a>
+        </ng-container>
       </mat-menu>
     </ng-container>
 
