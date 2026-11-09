@@ -1,0 +1,84 @@
+<main class="tracker-page">
+  <header class="page-head">
+    <div><p class="eyebrow">TENANT SETTINGS</p><h1>Work settings</h1><p>Business units, field definitions and Project Tracker preferences.</p></div>
+    <nav><a routerLink="/work-board">Work Board</a>@if (record?.tracker) { <a routerLink="/project-tracker">Project Tracker</a> }</nav>
+  </header>
+  @if (error) { <p class="feedback error" role="alert">{{ error }}</p> }
+  @if (notice) { <p class="feedback" role="status">{{ notice }}</p> }
+  @if (settings; as s) {
+    @if (record?.canConfigure) {
+      <section class="panel"><div class="section-head"><h2>Business units</h2><button (click)="addCatalog(s.units)">Add unit</button></div>
+        @for (item of s.units; track item; let i = $index) {
+          <div class="catalog-row"><label>Name <input [(ngModel)]="item.name" maxlength="120"></label><label>Code <input [(ngModel)]="item.code" maxlength="32"></label>
+            <button (click)="removeCatalog(s.units, i)">{{ item.archived ? 'Restore' : item.id ? 'Archive' : 'Remove' }}</button></div>
+        } @empty { <p>No units defined.</p> }
+      </section>
+      <section class="panel"><div class="section-head"><h2>Custom fields</h2><button (click)="addField()">Add field</button></div>
+        @for (field of s.fields; track field; let i = $index) {
+          <div class="settings-card">
+            <div class="form-grid">
+              <label>Field name <input [(ngModel)]="field.label" maxlength="120"></label>
+              <label>Applies to <select [(ngModel)]="field.target" [disabled]="!!field.id" (ngModelChange)="field.locations = []">@for (target of targets; track target) { <option [value]="target">{{ target }}</option> }</select></label>
+              <label>Type <select [(ngModel)]="field.type" [disabled]="!!field.id">@for (type of types; track type) { <option [value]="type">{{ type }}</option> }</select></label>
+              <label class="checkbox"><input type="checkbox" [(ngModel)]="field.required"> Flag if missing</label>
+            </div>
+            <fieldset><legend>Show in</legend><p class="muted">A matching editor is added automatically when only display locations are selected.</p><div class="check-list">
+              @for (location of locations(field); track location) {
+                <label class="checkbox"><input type="checkbox" [checked]="field.locations.includes(location)" (change)="toggle(field, location, $any($event.target).checked)">{{ locationLabels[location] }}</label>
+              }
+            </div></fieldset>
+            @if (field.type === 'select' || field.type === 'multiSelect') {
+              @for (option of field.options; track option; let n = $index) {
+                <div class="catalog-row"><label>Option <input [(ngModel)]="option.name"></label><button (click)="removeCatalog(field.options, n)">{{ option.archived ? 'Restore' : option.id ? 'Archive' : 'Remove' }}</button></div>
+              }
+              <button (click)="addCatalog(field.options)">Add option</button>
+            }
+            <button (click)="removeField(field, i)">{{ field.archived ? 'Restore field' : field.id ? 'Archive field' : 'Remove field' }}</button>
+          </div>
+        } @empty { <p>No custom fields defined.</p> }
+      </section>
+      @if (record?.tracker) {
+        <section class="panel"><div class="section-head"><h2>Service types</h2><button (click)="addCatalog(s.services)">Add service</button></div>
+          @for (item of s.services; track item; let i = $index) {
+            <div class="catalog-row"><label>Service <input [(ngModel)]="item.name"></label><button (click)="removeCatalog(s.services, i)">{{ item.archived ? 'Restore' : item.id ? 'Archive' : 'Remove' }}</button></div>
+          }
+        </section>
+        <section class="panel"><h2>Review and reporting</h2><div class="form-grid">
+          <label>Time zone <input [(ngModel)]="s.timezone"></label>
+          <label>Review day <select [(ngModel)]="s.reviewDay">@for (day of days; track day; let i = $index) { <option [ngValue]="i">{{ day }}</option> }</select></label>
+          <label>Due soon window (days) <input type="number" min="1" max="90" [(ngModel)]="s.dueDays"></label>
+          <label>Review overdue after (days) <input type="number" min="1" max="90" [(ngModel)]="s.staleDays"></label>
+          <label>Small project below (EUR) <input type="number" [(ngModel)]="s.smallLimit"></label>
+          <label>Medium project below (EUR) <input type="number" [(ngModel)]="s.mediumLimit"></label>
+          <label class="checkbox"><input type="checkbox" [(ngModel)]="s.reminders"> Show weekly review reminders</label>
+        </div>
+        @if (s.stageByStatus; as mapping) {
+          <h3>Reporting stage by work status</h3>
+          <div class="form-grid">
+            @for (item of mapping | keyvalue; track item.key) {
+              <label>{{ item.key.replaceAll('_',' ') }} <select [(ngModel)]="mapping[item.key]">
+                @for (stage of stages; track stage) { <option [value]="stage">{{ stage }}</option> }
+              </select></label>
+            }
+          </div>
+        }
+        </section>
+      }
+      <button class="primary" [disabled]="busy" (click)="save()">Save tenant settings</button>
+    }
+    @if (record?.tracker) {
+      <section class="panel">
+        <div class="section-head"><h2>Approved exchange rates</h2>@if (record?.canFinance) { <button (click)="addRate(s.rates)">Add rate</button> }</div>
+        <p>Enter the number of currency units per EUR and the date the rate takes effect.</p>
+        @for (rate of s.rates; track rate; let i = $index) {
+          <div class="form-grid"><label>Currency <input [(ngModel)]="rate.currency" maxlength="3" [disabled]="!record?.canFinance" (ngModelChange)="rate.currency = rate.currency.toUpperCase()"></label>
+            <label>Effective date <input type="date" [(ngModel)]="rate.effective" [disabled]="!record?.canFinance"></label>
+            <label>Units per EUR <input type="number" min="0.000001" step="any" [(ngModel)]="rate.unitsPerEur" [disabled]="!record?.canFinance"></label>
+            @if (record?.canFinance) { <button (click)="s.rates.splice(i, 1)">Remove rate</button> }
+          </div>
+        } @empty { <p>No exchange rates recorded. EUR values are available immediately.</p> }
+        @if (record?.canFinance) { <button class="primary" [disabled]="busy" (click)="save(true)">Save exchange rates</button> }
+      </section>
+    }
+  }
+</main>

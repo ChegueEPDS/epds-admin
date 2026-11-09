@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const projectTrackerStore = require('./services/projectTrackerStore');
 const { databaseEngine, checkPostgresHealth } = require('./postgres');
 const { ensureDomainCustomerSchema } = require('./services/domainSchemaMigrationService');
 const { assertPostgresRuntimeReady } = require('./repositories/repositoryRegistry');
@@ -10,6 +11,7 @@ async function connectDb() {
     const health = await checkPostgresHealth(5000);
     if (!health.ok) throw new Error(`PostgreSQL connection failed: ${health.error || health.stateLabel}`);
     await ensureDomainCustomerSchema();
+    await projectTrackerStore.initialize();
     console.log('[db] PostgreSQL connected');
     return;
   }
@@ -18,6 +20,7 @@ async function connectDb() {
 
   mongoose.set('strictQuery', true);
   await mongoose.connect(uri);
+  await projectTrackerStore.initialize();
   console.log('[db] connected');
 }
 

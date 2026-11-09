@@ -79,7 +79,14 @@ function requireTenantFeature(featureKey, permission = 'enabled') {
     if (!req.scope?.tenantId) {
       return res.status(403).json({ error: 'Tenant feature access required' });
     }
-    const feature = req.scope?.tenantFeatures?.[featureKey] || req.user?.tenantFeatures?.[featureKey];
+    const features = req.scope.tenantFeatures || {};
+    if (['workBoard', 'projectTracker'].includes(featureKey) && req.scope.tenantType === 'client') {
+      return res.status(403).json({ error: 'Tenant feature is disabled' });
+    }
+    if (featureKey === 'projectTracker' && !features.workBoard?.enabled) {
+      return res.status(403).json({ error: 'Work Board is required' });
+    }
+    const feature = features[featureKey];
     if (!feature?.enabled) {
       return res.status(403).json({ error: 'Tenant feature is disabled' });
     }

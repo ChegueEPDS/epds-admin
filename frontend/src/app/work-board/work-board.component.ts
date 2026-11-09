@@ -1,7 +1,11 @@
 import { CommonModule } from '@angular/common';
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, inject } from '@angular/core';
+import { ActivatedRoute, RouterLink } from '@angular/router';
+import { BoardSettings, ProjectTrackerService, TrackerDetail, WorkFields } from '../project-tracker/project-tracker.service';
+import { displayField } from '../project-tracker/tracker-field-inputs.component';
+import { WorkExtraFieldsComponent } from '../project-tracker/work-extra-fields.component';
 import { FormsModule } from '@angular/forms';
-import { firstValueFrom } from 'rxjs';
+import { catchError, firstValueFrom, throwError } from 'rxjs';
 import { MatButtonModule } from '@angular/material/button';
 import { MatCheckboxModule } from '@angular/material/checkbox';
 import { MatDatepickerModule } from '@angular/material/datepicker';
@@ -16,7 +20,7 @@ import { AuthService } from '../services/auth.service';
 import { ClientPayload, SubWorkItem, SubWorkPayload, TenantUserOption, WorkBoardClient, WorkBoardService, WorkDocument, WorkItem, WorkPayload, WorkStatus } from '../services/work-board.service';
 
 type WorkForm = {
-  name: string; clientId: string; responsibleUserId: string; status: WorkStatus; deadline: Date | null; description: string;
+  name: string; clientId: string; responsibleUserId: string; status: WorkStatus; statusReason: string; deadline: Date | null; description: string;
   currency: string; totalAmount: number; costAmount: number; subcontractor: string; paymentDeadlineDays: number;
   offerDate: Date | null; completionDate: Date | null; invoiceDate: Date | null; invoicePaymentDeadline: Date | null; invoiceNumber: string;
   contractSigned: boolean; performanceCertificate: boolean;
@@ -30,11 +34,22 @@ type SubWorkForm = {
 @Component({
   selector: 'app-work-board',
   standalone: true,
-  imports: [CommonModule, FormsModule, MatButtonModule, MatCheckboxModule, MatDatepickerModule, MatNativeDateModule, MatFormFieldModule, MatIconModule, MatInputModule, MatProgressSpinnerModule, MatSelectModule, MatSnackBarModule],
+  imports: [CommonModule, FormsModule, RouterLink, WorkExtraFieldsComponent, MatButtonModule, MatCheckboxModule, MatDatepickerModule, MatNativeDateModule, MatFormFieldModule, MatIconModule, MatInputModule, MatProgressSpinnerModule, MatSelectModule, MatSnackBarModule],
   templateUrl: './work-board.component.html',
   styleUrl: './work-board.component.scss'
 })
 export class WorkBoardComponent implements OnInit {
+  private readonly tracker = inject(ProjectTrackerService);
+  private readonly route = inject(ActivatedRoute);
+  boardSettings?: BoardSettings;
+  trackerDetails?: TrackerDetail;
+  extras = new Map<string, WorkFields>();
+  unitId = '';
+  editingClientId = '';
+  extraSubWorkId = '';
+  createdWorkId = '';
+  readonly displayField = displayField;
+  activeValues: { currency: string; value: number }[] = [];
   works: WorkItem[] = [];
   clients: WorkBoardClient[] = [];
   tenantUsers: TenantUserOption[] = [];
@@ -51,7 +66,6 @@ export class WorkBoardComponent implements OnInit {
   totalPages = 1;
   activeCount = 0;
   overdueCount = 0;
-  totalActiveValue = 0;
   documents: WorkDocument[] = [];
   documentsLoading = false;
   documentUploading = false;
@@ -76,19 +90,48 @@ export class WorkBoardComponent implements OnInit {
   readonly statuses: { value: WorkStatus; label: string }[] = [
     { value: 'inquiry', label: 'Inquiry' }, { value: 'offer', label: 'Offer' }, { value: 'in_progress', label: 'In progress' },
     { value: 'completed_billable', label: 'Completed, billable' }, { value: 'invoiced', label: 'Invoiced' },
-    { value: 'paid', label: 'Paid' }, { value: 'closed', label: 'Closed' }, { value: 'cancelled', label: 'Cancelled' }
+    { value: 'paid', label: 'Paid' }, { value: 'closed', label: 'Closed' }, { value: 'cancelled', label: 'Cancelled' },
+    { value: 'to_start', label: 'To start' }, { value: 'on_hold', label: 'On hold' }, { value: 'lost', label: 'Lost' }
   ];
-  readonly terminalStatuses = new Set<WorkStatus>(['completed_billable', 'invoiced', 'paid', 'closed', 'cancelled']);
+  readonly terminalStatuses = new Set<WorkStatus>(['completed_billable', 'invoiced', 'paid', 'closed', 'cancelled', 'lost']);
   private readonly statusRank: Record<WorkStatus, number> = {
     inquiry: 0, offer: 1, in_progress: 2, completed_billable: 3,
-    invoiced: 4, paid: 5, closed: 6, cancelled: 6
+    invoiced: 4, paid: 5, closed: 6, cancelled: 6, to_start: 2, on_hold: 2, lost: 1
   };
   private searchTimer: ReturnType<typeof setTimeout> | null = null;
   private loadRequestId = 0;
   private referencesLoaded = false;
 
   constructor(private board: WorkBoardService, private snackBar: MatSnackBar, public auth: AuthService) {}
-  ngOnInit(): void { void this.load(); }
+  ngOnInit(): void { void this.initialize(); }
+
+  async initialize(): Promise<void> {
+    try { this.boardSettings = await firstValueFrom(this.tracker.boardSettings()); }
+    catch (error) { this.error(error, 'Work settings could not be loaded.'); }
+    await this.load();
+    const id = this.route.snapshot.queryParamMap.get('work');
+    if (id) {
+      try { this.selectWork(await firstValueFrom(this.board.getWork(id).pipe(catchError((error) =>
+        error?.status === 404 ? this.board.getWork(id, true) : throwError(() => error))))); }
+      catch (error) { this.error(error, 'Work could not be opened.'); }
+    } else if (this.route.snapshot.queryParamMap.has('create') && this.auth.canEditFeature('workBoard')) this.startCreateWork();
+  }
+
+  get trackerEnabled(): boolean { return this.auth.canAccessFeature('projectTracker'); }
+  get listFields() { return this.boardSettings?.data.fields.filter((field) => !field.archived && field.target === 'work' && field.locations.includes('boardList')) || []; }
+  get units() { return this.boardSettings?.data.units || []; }
+  canChooseStatus(status: WorkStatus, current: WorkStatus): boolean {
+    if (status === current) return true;
+    return this.trackerEnabled ? !['invoiced','paid','closed'].includes(status) : !['to_start','on_hold','lost'].includes(status);
+  }
+  async loadTrackerDetails(id: string): Promise<void> {
+    this.trackerDetails = undefined;
+    if (!this.trackerEnabled) return;
+    try {
+      const details = await firstValueFrom(this.tracker.detail(id));
+      if (this.selectedWork?.id === id) this.trackerDetails = details;
+    } catch (error) { this.error(error, 'Project details could not be loaded.'); }
+  }
 
   get filteredWorks(): WorkItem[] { return this.works; }
   get pageStart(): number { return this.totalWorks ? (this.page - 1) * this.pageSize + 1 : 0; }
@@ -99,12 +142,17 @@ export class WorkBoardComponent implements OnInit {
     this.loading = true;
     try {
       const [workPage, clients, users] = await Promise.all([
-        firstValueFrom(this.board.listWorks({ page: this.page, limit: this.pageSize, search: this.search.trim(), status: this.statusFilter })),
+        firstValueFrom(this.board.listWorks({ page: this.page, limit: this.pageSize, search: this.search.trim(), status: this.statusFilter, unitId: this.unitId })),
         this.referencesLoaded ? Promise.resolve(this.clients) : firstValueFrom(this.board.listClients()),
         this.referencesLoaded ? Promise.resolve(this.tenantUsers) : firstValueFrom(this.board.listTenantUsers())
       ]);
       if (requestId !== this.loadRequestId) return;
       this.works = workPage.works;
+      if ((this.listFields.length || this.units.length) && this.works.length) {
+        const extras = await firstValueFrom(this.tracker.boardListFields(this.works.map((work) => work.id)));
+        if (requestId !== this.loadRequestId) return;
+        this.extras = new Map(extras.map((record) => [record.id, record.data]));
+      } else this.extras.clear();
       this.clients = clients;
       this.tenantUsers = users;
       this.referencesLoaded = true;
@@ -113,7 +161,7 @@ export class WorkBoardComponent implements OnInit {
       this.totalPages = workPage.pagination.pages;
       this.activeCount = workPage.summary.activeCount;
       this.overdueCount = workPage.summary.overdueCount;
-      this.totalActiveValue = workPage.summary.totalActiveValue;
+        this.activeValues = workPage.summary.activeValues || [];
       const id = selectId || this.selectedWork?.id || this.works[0]?.id;
       this.selectedWork = this.works.find((work) => work.id === id) || null;
     } catch (error: any) { if (requestId === this.loadRequestId) this.error(error, 'Works could not be loaded.'); }
@@ -132,7 +180,7 @@ export class WorkBoardComponent implements OnInit {
     void this.load();
   }
   pageSizeChanged(): void { this.page = 1; this.expandedWorkIds = new Set<string>(); void this.load(); }
-  selectWork(work: WorkItem): void { this.selectedWork = work; this.cancelForms(); this.detailView = true; void this.loadDocuments(work.id); }
+  selectWork(work: WorkItem): void { this.extraSubWorkId = ''; this.selectedWork = work; this.cancelForms(); this.detailView = true; void this.loadDocuments(work.id); void this.loadTrackerDetails(work.id); }
   toggleWorkExpansion(work: WorkItem, event?: Event): void {
     event?.stopPropagation();
     const next = new Set(this.expandedWorkIds);
@@ -149,7 +197,7 @@ export class WorkBoardComponent implements OnInit {
     if (!this.selectedWork) return;
     const w = this.selectedWork;
     this.workForm = {
-      name: w.name, clientId: w.clientId || '', responsibleUserId: w.responsibleUserId || '', status: w.status, deadline: this.dateValue(w.deadline), description: w.description,
+      name: w.name, clientId: w.clientId || '', responsibleUserId: w.responsibleUserId || '', status: w.status, statusReason: w.statusReason || '', deadline: this.dateValue(w.deadline), description: w.description,
       currency: w.currency, totalAmount: w.totalAmount, costAmount: w.costAmount, subcontractor: w.subcontractor,
       paymentDeadlineDays: w.paymentDeadlineDays, offerDate: this.dateValue(w.offerDate), completionDate: this.dateValue(w.completionDate),
       invoiceDate: this.dateValue(w.invoiceDate), invoicePaymentDeadline: this.dateValue(w.invoicePaymentDeadline), invoiceNumber: w.invoiceNumber,
@@ -161,11 +209,12 @@ export class WorkBoardComponent implements OnInit {
     if (!this.workForm.name.trim()) return this.notice('Work name is required.');
     this.saving = true;
     try {
-      const payload = { ...this.workForm, name: this.workForm.name.trim() } as WorkPayload;
+      const payload = { ...this.workForm, name: this.workForm.name.trim(), deadline: this.dateOnly(this.workForm.deadline), expectedUpdatedAt: this.editingWork ? this.selectedWork?.updatedAt : undefined } as WorkPayload;
       const saved = this.editingWork && this.selectedWork
         ? await firstValueFrom(this.board.updateWork(this.selectedWork.id, payload))
         : await firstValueFrom(this.board.createWork(payload));
-      this.showWorkForm = false; await this.load(saved.id); this.selectedWork = saved; this.detailView = true; this.notice('Work saved.');
+      if (!this.editingWork) this.createdWorkId = saved.id;
+      this.showWorkForm = false; await this.load(saved.id); this.selectWork(saved); this.notice('Work saved.');
     } catch (error: any) { this.error(error, 'Work could not be saved.'); }
     finally { this.saving = false; }
   }
@@ -299,7 +348,11 @@ export class WorkBoardComponent implements OnInit {
   private dateValue(value: string | null): Date | null { return value ? new Date(value) : null; }
   private notice(message: string): void { this.snackBar.open(message, 'OK', { duration: 3000 }); }
   private error(error: any, fallback: string): void { this.snackBar.open(error?.error?.error || fallback, 'OK', { duration: 4500 }); }
-  private emptyWorkForm(): WorkForm { return { name: '', clientId: '', responsibleUserId: '', status: 'inquiry', deadline: null, description: '', currency: 'HUF', totalAmount: 0, costAmount: 0, subcontractor: '', paymentDeadlineDays: 30, offerDate: null, completionDate: null, invoiceDate: null, invoicePaymentDeadline: null, invoiceNumber: '', contractSigned: false, performanceCertificate: false }; }
+  private dateOnly(value: Date | null): string | null {
+    if (!value || Number.isNaN(value.valueOf())) return null;
+    return [value.getFullYear(), value.getMonth() + 1, value.getDate()].map((part, index) => String(part).padStart(index ? 2 : 4, '0')).join('-');
+  }
+  private emptyWorkForm(): WorkForm { return { name: '', clientId: '', responsibleUserId: '', status: 'inquiry', statusReason: '', deadline: null, description: '', currency: 'HUF', totalAmount: 0, costAmount: 0, subcontractor: '', paymentDeadlineDays: 30, offerDate: null, completionDate: null, invoiceDate: null, invoicePaymentDeadline: null, invoiceNumber: '', contractSigned: false, performanceCertificate: false }; }
   private emptySubWorkForm(): SubWorkForm { return { name: '', responsibleUserId: '', status: 'inquiry', deadline: null, description: '', plannedHours: 0, amount: 0, percentage: 0, performanceCertificateRequired: false, performanceCertificateSigned: false, invoiceNumber: '', invoiceDate: null, invoicePaymentDeadline: null, paidAmount: 0, paidAt: null }; }
   private emptyClientForm(): ClientPayload { return { taxNumber: '', name: '', country: 'HU', postalCode: '', city: '', address: '', email: '', phone: '' }; }
 }

@@ -6,6 +6,8 @@
       <p>{{ detailView ? 'Complete operational and financial record.' : 'Works, sub-works, delivery and billing progress in one place.' }}</p>
     </div>
     <div class="page-actions">
+      <a mat-stroked-button routerLink="/work-settings" *ngIf="!detailView && !showWorkForm && (boardSettings?.canConfigure || boardSettings?.canFinance)">Work settings</a>
+      <a mat-stroked-button routerLink="/project-tracker" [queryParams]="selectedWork && detailView ? { work: selectedWork.id } : {}" *ngIf="trackerEnabled">Project Tracker</a>
       <button mat-stroked-button type="button" *ngIf="detailView || showWorkForm" (click)="backToTable()">
         <mat-icon class="material-symbols-outlined">arrow_back</mat-icon>Back to table
       </button>
@@ -20,8 +22,12 @@
     <div class="editor-title"><div><span>TENANT CLIENT LIST</span><h2>Clients</h2></div><button mat-icon-button type="button" (click)="openClientPanel()"><mat-icon class="material-symbols-outlined">close</mat-icon></button></div>
     <div class="client-layout">
       <div class="client-list">
-        <article *ngFor="let client of clients"><div><strong>{{ client.name }}</strong><span>{{ client.taxNumber }}</span></div><small>{{ client.postalCode }} {{ client.city }} {{ client.address }}</small></article>
+        <article *ngFor="let client of clients"><div><strong>{{ client.name }}</strong><span>{{ client.taxNumber }}</span></div><small>{{ client.postalCode }} {{ client.city }} {{ client.address }}</small><button mat-button type="button" (click)="editingClientId = editingClientId === client.id ? '' : client.id" *ngIf="boardSettings?.data?.fields?.length">Tenant fields</button></article>
         <div class="empty" *ngIf="!clients.length">No clients linked to this tenant.</div>
+      </div>
+      <div *ngIf="editingClientId">
+        <app-work-extra-fields kind="client" [id]="editingClientId" location="clientDetails" [settings]="boardSettings"/>
+        <app-work-extra-fields *ngIf="auth.canEditFeature('workBoard')" kind="client" [id]="editingClientId" location="clientEditor" [settings]="boardSettings" [editable]="true"/>
       </div>
       <form class="client-form" (ngSubmit)="saveClient()">
         <div class="tax-lookup"><mat-form-field appearance="outline"><mat-label>Tax number</mat-label><input matInput name="clientTaxNumber" [(ngModel)]="clientForm.taxNumber" required></mat-form-field><button mat-stroked-button type="button" (click)="lookupClient()"><mat-icon class="material-symbols-outlined">search</mat-icon>Check</button></div>
@@ -46,7 +52,8 @@
         <mat-form-field appearance="outline"><mat-label>Name</mat-label><input matInput name="workName" [(ngModel)]="workForm.name" required></mat-form-field>
         <mat-form-field appearance="outline"><mat-label>Client</mat-label><mat-select name="workClient" [(ngModel)]="workForm.clientId"><mat-option value="">No client</mat-option><mat-option *ngFor="let client of clients" [value]="client.id">{{ client.name }}</mat-option></mat-select></mat-form-field>
         <mat-form-field appearance="outline"><mat-label>Responsible</mat-label><mat-select name="workResponsible" [(ngModel)]="workForm.responsibleUserId"><mat-option value="">No responsible</mat-option><mat-option *ngFor="let user of tenantUsers" [value]="user.id">{{ user.fullName }}</mat-option></mat-select></mat-form-field>
-        <mat-form-field appearance="outline"><mat-label>Status</mat-label><mat-select name="workStatus" [(ngModel)]="workForm.status"><mat-option *ngFor="let status of statuses" [value]="status.value">{{ status.label }}</mat-option></mat-select></mat-form-field>
+        <mat-form-field appearance="outline"><mat-label>Status</mat-label><mat-select name="workStatus" [(ngModel)]="workForm.status"><mat-option *ngFor="let status of statuses" [value]="status.value" [disabled]="!canChooseStatus(status.value, workForm.status)">{{ status.label }}</mat-option></mat-select></mat-form-field>
+        <mat-form-field appearance="outline" class="wide" *ngIf="trackerEnabled && ['lost','cancelled'].includes(workForm.status)"><mat-label>Status reason</mat-label><input matInput name="statusReason" [(ngModel)]="workForm.statusReason" maxlength="1000"></mat-form-field>
         <mat-form-field appearance="outline" class="wide"><mat-label>Description</mat-label><textarea matInput rows="3" name="workDescription" [(ngModel)]="workForm.description"></textarea></mat-form-field>
       </div>
     </section>
@@ -55,7 +62,7 @@
       <div class="group-heading"><span>02</span><div><h2>Offer and schedule</h2><p>Commercial value and agreed deadlines.</p></div></div>
       <div class="form-grid">
         <mat-form-field appearance="outline"><mat-label>Total value</mat-label><input matInput type="number" min="0" name="workTotal" [(ngModel)]="workForm.totalAmount"></mat-form-field>
-        <mat-form-field appearance="outline"><mat-label>Currency</mat-label><mat-select name="workCurrency" [(ngModel)]="workForm.currency"><mat-option value="HUF">HUF</mat-option><mat-option value="EUR">EUR</mat-option><mat-option value="USD">USD</mat-option></mat-select></mat-form-field>
+        <mat-form-field appearance="outline"><mat-label>Currency</mat-label><mat-select name="workCurrency" [(ngModel)]="workForm.currency"><mat-option value="HUF">HUF</mat-option><mat-option value="EUR">EUR</mat-option><mat-option value="USD">USD</mat-option><mat-option value="AED">AED</mat-option><mat-option *ngIf="!['HUF','EUR','USD','AED'].includes(workForm.currency)" [value]="workForm.currency">{{ workForm.currency }}</mat-option></mat-select></mat-form-field>
         <mat-form-field appearance="outline"><mat-label>Offer date</mat-label><input matInput name="workOfferDate" [(ngModel)]="workForm.offerDate" [matDatepicker]="workOfferDatePicker"><mat-datepicker-toggle matIconSuffix [for]="workOfferDatePicker"></mat-datepicker-toggle><mat-datepicker #workOfferDatePicker></mat-datepicker></mat-form-field>
         <mat-form-field appearance="outline"><mat-label>Deadline</mat-label><input matInput name="workDeadline" [(ngModel)]="workForm.deadline" [matDatepicker]="workDeadlinePicker"><mat-datepicker-toggle matIconSuffix [for]="workDeadlinePicker"></mat-datepicker-toggle><mat-datepicker #workDeadlinePicker></mat-datepicker></mat-form-field>
         <mat-form-field appearance="outline"><mat-label>Payment deadline</mat-label><input matInput type="number" min="0" name="workPaymentDays" [(ngModel)]="workForm.paymentDeadlineDays"><span matTextSuffix>days</span></mat-form-field>
@@ -79,7 +86,7 @@
       </div>
     </section>
 
-    <section class="form-group" *ngIf="showFrom('invoice')">
+    <section class="form-group" *ngIf="!trackerEnabled && showFrom('invoice')">
       <div class="group-heading"><span>05</span><div><h2>Invoicing</h2><p>Issued invoice and payment due date.</p></div></div>
       <div class="form-grid">
         <mat-form-field appearance="outline"><mat-label>Invoice number</mat-label><input matInput name="workInvoiceNumber" [(ngModel)]="workForm.invoiceNumber"></mat-form-field>
@@ -87,6 +94,7 @@
         <mat-form-field appearance="outline"><mat-label>Invoice payment deadline</mat-label><input matInput name="workInvoiceDeadline" [(ngModel)]="workForm.invoicePaymentDeadline" [matDatepicker]="workInvoiceDeadlinePicker"><mat-datepicker-toggle matIconSuffix [for]="workInvoiceDeadlinePicker"></mat-datepicker-toggle><mat-datepicker #workInvoiceDeadlinePicker></mat-datepicker></mat-form-field>
       </div>
     </section>
+    <app-work-extra-fields *ngIf="editingWork && selectedWork" [id]="selectedWork.id" location="boardEditor" [settings]="boardSettings" [editable]="true"/>
     <div class="sticky-actions"><button mat-button type="button" (click)="cancelWorkEditor()">Cancel</button><button mat-flat-button color="primary" type="submit" [disabled]="saving">Save work</button></div>
   </form>
 
@@ -97,16 +105,17 @@
       <div class="metric-grid compact-metrics">
         <article><span>Active</span><strong>{{ activeCount }}</strong></article>
         <article><span>Overdue</span><strong [class.danger]="overdueCount">{{ overdueCount }}</strong></article>
-        <article><span>Active value</span><strong>{{ formatMoney(totalActiveValue) }}</strong></article>
+        <article><span>Active value</span><strong *ngFor="let amount of activeValues">{{ formatMoney(amount.value, amount.currency) }}</strong><strong *ngIf="!activeValues.length">—</strong></article>
       </div>
       <div class="table-toolbar">
         <mat-form-field appearance="outline" subscriptSizing="dynamic"><mat-label>Search works</mat-label><mat-icon class="material-symbols-outlined" matPrefix>search</mat-icon><input matInput [(ngModel)]="search" (ngModelChange)="filtersChanged(true)"></mat-form-field>
         <mat-form-field appearance="outline" subscriptSizing="dynamic"><mat-label>Status</mat-label><mat-select [(ngModel)]="statusFilter" (selectionChange)="filtersChanged()"><mat-option value="active">Active</mat-option><mat-option value="all">All</mat-option><mat-option value="deleted">Deleted</mat-option><mat-option *ngFor="let status of statuses" [value]="status.value">{{ status.label }}</mat-option></mat-select></mat-form-field>
+        <mat-form-field *ngIf="units.length" appearance="outline" subscriptSizing="dynamic"><mat-label>Business unit</mat-label><mat-select [(ngModel)]="unitId" (selectionChange)="filtersChanged()"><mat-option value="">All units</mat-option><mat-option *ngFor="let unit of units" [value]="unit.id">{{ unit.name }}</mat-option></mat-select></mat-form-field>
         <span class="result-count">{{ totalWorks }} work{{ totalWorks === 1 ? '' : 's' }}</span>
       </div>
       <div class="work-table-wrap">
         <table class="work-table">
-          <thead><tr><th>Work no.</th><th>Client / work</th><th>Responsible</th><th>Status</th><th>Deadline</th><th class="numeric">Value</th><th class="numeric">Sub-works</th><th aria-label="Actions"></th></tr></thead>
+          <thead><tr><th>Work no.</th><th>Client / work</th><th>Responsible</th><th>Status</th><th>Deadline</th><th class="numeric">Value</th><th class="numeric">Sub-works</th><th *ngFor="let field of listFields">{{ field.label }}</th><th aria-label="Actions"></th></tr></thead>
           <tbody>
             <ng-container *ngFor="let work of filteredWorks; trackBy: trackWork">
               <tr class="work-main-row" [class.expanded]="isWorkExpanded(work)" [class.deleted]="work.archivedAt" (dblclick)="selectWork(work)" title="Double-click to open work details">
@@ -130,10 +139,11 @@
                 <td [class.overdue]="isOverdue(work.deadline)">{{ work.deadline ? (work.deadline | date:'yyyy.MM.dd') : '—' }}</td>
                 <td class="numeric">{{ showFrom('offer', work.status) ? formatMoney(work.totalAmount, work.currency) : '—' }}</td>
                 <td class="numeric"><strong>{{ work.subWorkCount }}</strong><small *ngIf="work.totalAmount">{{ work.allocatedPercentage | number:'1.0-1' }}%</small></td>
+                <td *ngFor="let field of listFields">{{ displayField(field, extras.get(work.id)?.custom?.[field.id], boardSettings?.users || []) || '—' }}</td>
                 <td><button mat-icon-button type="button" (click)="$event.stopPropagation(); selectWork(work)" [attr.aria-label]="'Open ' + work.workNumber + ' details'"><mat-icon class="material-symbols-outlined">arrow_forward</mat-icon></button></td>
               </tr>
               <tr class="work-expanded-row" *ngIf="isWorkExpanded(work)">
-                <td colspan="8">
+                <td [attr.colspan]="8 + listFields.length">
                   <section class="inline-subworks" [id]="'subworks-' + work.id" [attr.aria-label]="work.workNumber + ' sub-works'">
                     <header class="inline-subworks-head">
                       <div>
@@ -275,6 +285,14 @@
         </section>
       </div>
 
+      <app-work-extra-fields [id]="work.id" location="boardDetails" [settings]="boardSettings"/>
+      <app-work-extra-fields *ngIf="createdWorkId === work.id && auth.canEditFeature('workBoard')" [id]="work.id" location="boardEditor" [settings]="boardSettings" [editable]="true"/>
+      <section class="detail-group" *ngIf="trackerDetails as project">
+        <div class="record-section-title"><h3>Project Tracker billing</h3></div>
+        <p>{{ project.work.payment.status }} · Invoiced {{ formatMoney(project.work.payment.invoiced, work.currency) }} · Paid {{ formatMoney(project.work.payment.paid, work.currency) }}
+          <span *ngIf="project.work.payment.receivable !== null"> · Receivable {{ formatMoney(project.work.payment.receivable, work.currency) }}</span></p>
+        <a mat-button routerLink="/project-tracker" [queryParams]="{ work: work.id }">Open project billing</a>
+      </section>
       <div class="allocation-card" *ngIf="showFrom('offer', work.status)" [class.over-allocated]="work.remainingAmount < 0">
         <div class="allocation-head"><div><span>Sub-work allocation</span><strong>{{ work.allocatedPercentage | number:'1.0-2' }}%</strong></div><div class="money"><strong>{{ formatMoney(work.allocatedAmount, work.currency) }}</strong><span> / {{ formatMoney(work.totalAmount, work.currency) }}</span></div></div>
         <div class="progress"><span [style.width.%]="work.allocatedPercentage > 100 ? 100 : work.allocatedPercentage"></span></div>
@@ -284,13 +302,17 @@
       <section class="sub-section">
         <div class="section-title"><div><h3>Sub-works</h3><p>Execution steps and separately billable milestones.</p></div><button mat-stroked-button type="button" *ngIf="!work.archivedAt && auth.canEditFeature('workBoard')" (click)="startCreateSubWork()"><mat-icon class="material-symbols-outlined">add</mat-icon>Add sub-work</button></div>
 
+        <div *ngIf="extraSubWorkId">
+          <app-work-extra-fields kind="subWork" [id]="extraSubWorkId" location="subWorkDetails" [settings]="boardSettings"/>
+          <app-work-extra-fields *ngIf="auth.canEditFeature('workBoard') && !work.archivedAt" kind="subWork" [id]="extraSubWorkId" location="subWorkEditor" [settings]="boardSettings" [editable]="true"/>
+        </div>
         <form class="grouped-editor nested" *ngIf="showSubWorkForm" (ngSubmit)="saveSubWork()">
           <section class="form-group">
             <div class="group-heading"><span>01</span><div><h3>Basic information</h3></div></div>
             <div class="form-grid">
               <mat-form-field appearance="outline"><mat-label>Name</mat-label><input matInput name="subName" [(ngModel)]="subWorkForm.name" required></mat-form-field>
               <mat-form-field appearance="outline"><mat-label>Responsible</mat-label><mat-select name="subResponsible" [(ngModel)]="subWorkForm.responsibleUserId"><mat-option value="">No responsible</mat-option><mat-option *ngFor="let user of tenantUsers" [value]="user.id">{{ user.fullName }}</mat-option></mat-select></mat-form-field>
-              <mat-form-field appearance="outline"><mat-label>Status</mat-label><mat-select name="subStatus" [(ngModel)]="subWorkForm.status"><mat-option *ngFor="let status of statuses" [value]="status.value">{{ status.label }}</mat-option></mat-select></mat-form-field>
+              <mat-form-field appearance="outline"><mat-label>Status</mat-label><mat-select name="subStatus" [(ngModel)]="subWorkForm.status"><mat-option *ngFor="let status of statuses" [value]="status.value" [disabled]="!canChooseStatus(status.value, subWorkForm.status)">{{ status.label }}</mat-option></mat-select></mat-form-field>
               <mat-form-field appearance="outline" class="wide"><mat-label>Description</mat-label><textarea matInput rows="3" name="subDescription" [(ngModel)]="subWorkForm.description"></textarea></mat-form-field>
             </div>
           </section>
@@ -307,7 +329,7 @@
             <div class="group-heading"><span>03</span><div><h3>Completion</h3></div></div>
             <div class="check-row"><mat-checkbox name="subTigRequired" [(ngModel)]="subWorkForm.performanceCertificateRequired">Performance certificate required</mat-checkbox><mat-checkbox name="subTigSigned" [(ngModel)]="subWorkForm.performanceCertificateSigned">Certificate signed</mat-checkbox></div>
           </section>
-          <section class="form-group" *ngIf="showFrom('invoice', subWorkForm.status)">
+          <section class="form-group" *ngIf="!trackerEnabled && showFrom('invoice', subWorkForm.status)">
             <div class="group-heading"><span>04</span><div><h3>Invoicing</h3></div></div>
             <div class="form-grid">
               <mat-form-field appearance="outline"><mat-label>Invoice number</mat-label><input matInput name="subInvoice" [(ngModel)]="subWorkForm.invoiceNumber"></mat-form-field>
@@ -315,14 +337,15 @@
               <mat-form-field appearance="outline"><mat-label>Payment deadline</mat-label><input matInput name="subInvoiceDeadline" [(ngModel)]="subWorkForm.invoicePaymentDeadline" [matDatepicker]="subInvoiceDeadlinePicker"><mat-datepicker-toggle matIconSuffix [for]="subInvoiceDeadlinePicker"></mat-datepicker-toggle><mat-datepicker #subInvoiceDeadlinePicker></mat-datepicker></mat-form-field>
             </div>
           </section>
-          <section class="form-group" *ngIf="showFrom('payment', subWorkForm.status)">
+          <section class="form-group" *ngIf="!trackerEnabled && showFrom('payment', subWorkForm.status)">
             <div class="group-heading"><span>05</span><div><h3>Payment</h3></div></div>
             <div class="form-grid">
               <mat-form-field appearance="outline"><mat-label>Paid amount</mat-label><input matInput type="number" min="0" name="subPaid" [(ngModel)]="subWorkForm.paidAmount"><span matTextSuffix>{{ work.currency }}</span></mat-form-field>
               <mat-form-field appearance="outline"><mat-label>Paid at</mat-label><input matInput name="subPaidAt" [(ngModel)]="subWorkForm.paidAt" [matDatepicker]="subPaidAtPicker"><mat-datepicker-toggle matIconSuffix [for]="subPaidAtPicker"></mat-datepicker-toggle><mat-datepicker #subPaidAtPicker></mat-datepicker></mat-form-field>
             </div>
           </section>
-          <div class="sticky-actions"><button mat-button type="button" (click)="cancelForms()">Cancel</button><button mat-flat-button color="primary" type="submit" [disabled]="saving">Save sub-work</button></div>
+          <app-work-extra-fields *ngIf="editingWork && selectedWork" [id]="selectedWork.id" location="boardEditor" [settings]="boardSettings" [editable]="true"/>
+    <div class="sticky-actions"><button mat-button type="button" (click)="cancelForms()">Cancel</button><button mat-flat-button color="primary" type="submit" [disabled]="saving">Save sub-work</button></div>
         </form>
 
         <div class="detail-subwork-table-wrap" *ngIf="work.subWorks.length; else noSubWorks">
@@ -337,7 +360,7 @@
               <td class="numeric">{{ showFrom('offer', sub.status) ? formatMoney(sub.amount, work.currency) : '—' }}</td>
               <td class="numeric">{{ showFrom('offer', sub.status) ? ((sub.percentage | number:'1.0-2') + '%') : '—' }}</td>
               <td>{{ showFrom('invoice', sub.status) && sub.invoiceNumber ? sub.invoiceNumber : '—' }}</td>
-              <td class="row-actions"><ng-container *ngIf="!work.archivedAt && auth.canEditFeature('workBoard')"><button mat-icon-button type="button" (click)="startEditSubWork(sub)" aria-label="Edit sub-work"><mat-icon class="material-symbols-outlined">edit</mat-icon></button><button mat-icon-button type="button" *ngIf="auth.canDeleteFeature('workBoard')" (click)="archiveSubWork(sub)" aria-label="Archive sub-work"><mat-icon class="material-symbols-outlined">archive</mat-icon></button></ng-container></td>
+              <td class="row-actions"><button mat-icon-button type="button" *ngIf="boardSettings?.data?.fields?.length" (click)="extraSubWorkId = extraSubWorkId === sub.id ? '' : sub.id" aria-label="Sub-work tenant fields"><mat-icon>tune</mat-icon></button><ng-container *ngIf="!work.archivedAt && auth.canEditFeature('workBoard')"><button mat-icon-button type="button" (click)="startEditSubWork(sub)" aria-label="Edit sub-work"><mat-icon class="material-symbols-outlined">edit</mat-icon></button><button mat-icon-button type="button" *ngIf="auth.canDeleteFeature('workBoard')" (click)="archiveSubWork(sub)" aria-label="Archive sub-work"><mat-icon class="material-symbols-outlined">archive</mat-icon></button></ng-container></td>
             </tr></tbody>
           </table>
         </div>

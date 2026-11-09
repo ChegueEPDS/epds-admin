@@ -26,6 +26,7 @@ const TenantSchema = new mongoose.Schema(
       licenses: { type: FeatureAccessSchema, default: () => ({}) },
       effortTracking: { type: FeatureAccessSchema, default: () => ({}) },
       workBoard: { type: FeatureAccessSchema, default: () => ({}) },
+      projectTracker: { type: FeatureAccessSchema, default: () => ({}) },
       webhookTester: { type: FeatureAccessSchema, default: () => ({}) }
     },
     professionRbacEnabled: { type: Boolean, default: false, index: true }

@@ -3,7 +3,7 @@ import { Injectable } from '@angular/core';
 import { Observable, map } from 'rxjs';
 import { environment } from '../../environments/environment';
 
-export type WorkStatus = 'inquiry' | 'offer' | 'in_progress' | 'completed_billable' | 'invoiced' | 'paid' | 'closed' | 'cancelled';
+export type WorkStatus = 'inquiry' | 'offer' | 'in_progress' | 'to_start' | 'on_hold' | 'lost' | 'completed_billable' | 'invoiced' | 'paid' | 'closed' | 'cancelled';
 
 export type SubWorkItem = {
   id: string; workItemId: string; sequenceNumber: number; subWorkNumber: string; name: string; description: string;
@@ -15,7 +15,7 @@ export type SubWorkItem = {
 
 export type WorkItem = {
   id: string; workNumber: string; year: number; sequenceNumber: number; name: string; clientId: string | null; customer: string; responsibleUserId: string | null; responsible: string;
-  contributors: string[]; status: WorkStatus; deadline: string | null; description: string; currency: string;
+  contributors: string[]; status: WorkStatus; statusReason?: string; deadline: string | null; description: string; currency: string;
   totalAmount: number; costAmount: number; marginPercent: number; allocatedAmount: number; allocatedPercentage: number;
   remainingAmount: number; paidAmount: number; subcontractor: string; paymentDeadlineDays: number; offerDate: string | null;
   completionDate: string | null; invoiceDate: string | null; invoicePaymentDeadline: string | null; invoiceNumber: string;
@@ -34,7 +34,7 @@ export type ClientPayload = Omit<WorkBoardClient, 'id'>;
 export type WorkPage = {
   works: WorkItem[];
   pagination: { page: number; limit: number; total: number; pages: number };
-  summary: { activeCount: number; overdueCount: number; totalActiveValue: number };
+  summary: { activeCount: number; overdueCount: number; totalActiveValue: number; activeValues?: { currency: string; value: number }[] };
 };
 export type WorkDocument = {
   id: string; workItemId: string; category: string; categoryLabel: string; displayName: string; fileName: string;
@@ -49,13 +49,17 @@ export class WorkBoardService {
   private readonly baseUrl = `${environment.apiBaseUrl}/work-board`;
   constructor(private http: HttpClient) {}
 
-  listWorks(options: { page?: number; limit?: number; search?: string; status?: string } = {}): Observable<WorkPage> {
+  listWorks(options: { page?: number; limit?: number; search?: string; status?: string; unitId?: string } = {}): Observable<WorkPage> {
     const params: Record<string, string> = {};
     if (options.page) params['page'] = String(options.page);
     if (options.limit) params['limit'] = String(options.limit);
     if (options.search) params['search'] = options.search;
     if (options.status) params['status'] = options.status;
+    if (options.unitId) params['unitId'] = options.unitId;
     return this.http.get<WorkPage>(`${this.baseUrl}/works`, { params, withCredentials: true });
+  }
+  getWork(id: string, archived = false): Observable<WorkItem> {
+    return this.http.get<{ work: WorkItem }>(`${this.baseUrl}/works/${id}`, { withCredentials: true, params: { includeDeleted: archived } }).pipe(map((res) => res.work));
   }
   listActiveOptions(): Observable<WorkOption[]> {
     return this.http.get<{ works: WorkOption[] }>(`${this.baseUrl}/options`, { withCredentials: true }).pipe(map((res) => res.works || []));

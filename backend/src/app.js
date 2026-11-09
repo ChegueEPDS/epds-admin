@@ -20,6 +20,7 @@ const domainHealthRoutes = require('./routes/domainHealthRoutes');
 const licenseRoutes = require('./routes/licenseRoutes');
 const effortRoutes = require('./routes/effortRoutes');
 const workBoardRoutes = require('./routes/workBoardRoutes');
+const { router: projectTrackerRoutes } = require('./routes/projectTrackerRoutes');
 const integrationApiRoutes = require('./routes/integrationApiRoutes');
 const webhookTestRoutes = require('./routes/webhookTestRoutes');
 const { startDomainHealthMonitor } = require('./services/domainMonitorService');
@@ -92,6 +93,7 @@ app.use('/api', domainHealthRoutes);
 app.use('/api', licenseRoutes);
 app.use('/api', effortRoutes);
 app.use('/api', workBoardRoutes);
+app.use('/api', projectTrackerRoutes);
 app.use('/api', integrationApiRoutes);
 
 app.use((err, req, res, next) => {

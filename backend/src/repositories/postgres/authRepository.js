@@ -7,6 +7,7 @@ const DEFAULT_FEATURES = {
   licenses: { enabled: false, edit: false, delete: false },
   effortTracking: { enabled: false, edit: false, delete: false },
   workBoard: { enabled: false, edit: false, delete: false },
+  projectTracker: { enabled: false, edit: false, delete: false },
   webhookTester: { enabled: false, edit: false, delete: false }
 };
 

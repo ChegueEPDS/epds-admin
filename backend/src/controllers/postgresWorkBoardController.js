@@ -3,7 +3,7 @@ const { pipeline } = require('stream/promises');
 const store = require('../repositories/postgres/workBoardRepository');
 const fileStorage = require('../services/fileStorageService');
 
-const TERMINAL = new Set(['completed_billable','invoiced','paid','closed','cancelled']);
+const TERMINAL = new Set(['completed_billable','invoiced','paid','closed','cancelled','lost']);
 const CATEGORIES = new Set(['offer','contract_draft','contract','order','performance_certificate','other']);
 const LABELS = {offer:'Ajánlat',contract_draft:'Szerződéstervezet',contract:'Szerződés',order:'Megrendelés',performance_certificate:'Teljesítésigazolás',other:'Egyéb'};
 const clean = (v) => String(v || '').trim().replace(/\s+/g,' ');
@@ -26,7 +26,7 @@ function presentDoc(d){return {id:d.id,workItemId:d.workItemId,category:d.catego
 async function run(res,fn){try{await fn();}catch(e){console.error('[work-board-pg]',e);res.status(e.statusCode||500).json({error:e.statusCode?e.message:'Work board operation failed'});}}
 
 exports.listWorks=(req,res)=>run(res,async()=>{const page=Math.max(1,Number(req.query.page)||1),limit=Math.min(100,Math.max(1,Number(req.query.limit)||25));
-  const result=await store.list({tenantId:req.scope.tenantId,status:String(req.query.status||(req.query.active==='true'?'active':'all')),search:clean(req.query.search),page,limit});
+  const result=await store.list({tenantId:req.scope.tenantId,status:String(req.query.status||(req.query.active==='true'?'active':'all')),search:clean(req.query.search),unitId:clean(req.query.unitId),page,limit});
   res.json({works:result.works.map(presentWork),pagination:{page,limit,total:result.total,pages:Math.max(1,Math.ceil(result.total/limit))},summary:result.summary});});
 exports.activeOptions=(req,res)=>run(res,async()=>{const result=await store.list({tenantId:req.scope.tenantId,status:'active',limit:250,page:1});
   res.json({works:result.works.map(w=>({id:w.id,workNumber:w.workNumber,name:w.name,customer:w.customer||'',status:w.status,

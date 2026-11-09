@@ -43,6 +43,7 @@ function normalizeTenantFeatures(input = {}) {
     licenses: normalizeFeature(input.licenses),
     effortTracking: normalizeFeature(input.effortTracking),
     workBoard: normalizeFeature(input.workBoard),
+    projectTracker: normalizeFeature(input.workBoard && normalizeFeature(input.workBoard).enabled && input.projectTracker),
     webhookTester: normalizeFeature(input.webhookTester)
   };
 }
@@ -64,6 +65,7 @@ function applyTenantFeaturePolicy(name, type, features) {
       licenses: normalized.licenses || { enabled: false, edit: false, delete: false },
       effortTracking: { enabled: false, edit: false, delete: false },
       workBoard: { enabled: false, edit: false, delete: false },
+      projectTracker: { enabled: false, edit: false, delete: false },
       webhookTester: { enabled: false, edit: false, delete: false }
     };
   }
@@ -86,6 +88,7 @@ function defaultTenantFeatures(type = 'company') {
     licenses: { enabled: false, edit: false, delete: false },
     effortTracking: { enabled: false, edit: false, delete: false },
     workBoard: { enabled: false, edit: false, delete: false },
+    projectTracker: { enabled: false, edit: false, delete: false },
     webhookTester: { enabled: false, edit: false, delete: false }
   };
 }

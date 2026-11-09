@@ -25,6 +25,9 @@
         <mat-icon class="material-symbols-outlined">timer</mat-icon>
         EFFORT TRACKING
       </a>
+      <a mat-button routerLink="/project-tracker" routerLinkActive="active-link" *ngIf="auth.canAccessFeature('projectTracker')">
+        <mat-icon class="material-symbols-outlined">assignment</mat-icon> PROJECT TRACKER
+      </a>
       <a mat-button routerLink="/work-board" routerLinkActive="active-link" *ngIf="auth.canAccessFeature('workBoard')">
         <mat-icon class="material-symbols-outlined">view_list</mat-icon>
         WORK BOARD
@@ -98,6 +101,9 @@
         <a mat-menu-item routerLink="/effort-tracking" routerLinkActive="active-menu-item" *ngIf="auth.canAccessFeature('effortTracking')">
           <mat-icon class="material-symbols-outlined">timer</mat-icon>
           Effort Tracking
+        </a>
+        <a mat-menu-item routerLink="/project-tracker" routerLinkActive="active-link" *ngIf="auth.canAccessFeature('projectTracker')">
+          <mat-icon class="material-symbols-outlined">assignment</mat-icon> Project Tracker
         </a>
         <a mat-menu-item routerLink="/work-board" routerLinkActive="active-menu-item" *ngIf="auth.canAccessFeature('workBoard')">
           <mat-icon class="material-symbols-outlined">view_list</mat-icon>

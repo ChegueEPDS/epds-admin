@@ -55,6 +55,7 @@ export class TenantDialogComponent {
     licenses: { enabled: false, edit: false, delete: false },
     effortTracking: { enabled: false, edit: false, delete: false },
     workBoard: { enabled: false, edit: false, delete: false },
+    projectTracker: { enabled: false, edit: false, delete: false },
     webhookTester: { enabled: false, edit: false, delete: false }
   };
   featureOptions: TenantFeatureOption[] = [
@@ -63,6 +64,7 @@ export class TenantDialogComponent {
     { key: 'licenses', label: 'Licenses' },
     { key: 'effortTracking', label: 'Effort Tracking' },
     { key: 'workBoard', label: 'Work Board' },
+    { key: 'projectTracker', label: 'Project Tracker' },
     { key: 'webhookTester', label: 'Webhook Tester', permissions: false }
   ];
 
@@ -114,7 +116,8 @@ export class TenantDialogComponent {
   }
 
   isFeatureDisabled(feature: TenantFeatureOption): boolean {
-    return this.type === 'client' && feature.key !== 'licenses' && feature.key !== 'domainHealth';
+    return (this.type === 'client' && feature.key !== 'licenses' && feature.key !== 'domainHealth') ||
+      (feature.key === 'projectTracker' && !this.features.workBoard.enabled);
   }
 
   hasPermissionControls(feature: TenantFeatureOption): boolean {
