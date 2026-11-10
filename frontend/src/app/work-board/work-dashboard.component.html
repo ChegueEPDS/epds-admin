@@ -123,7 +123,7 @@
               @if (selection?.filter?.kind === 'finance') { <th>Amount in original currency</th> }
             </tr></thead>
             <tbody>@for (work of result.works; track work.id) {
-              <tr><th scope="row"><a class="work-link" routerLink="/work-board" [queryParams]="{ work: work.id }">{{ work.workNumber }} · {{ work.name }}</a></th>
+              <tr><th scope="row"><a class="work-link" routerLink="/project-tracker" [queryParams]="{ work: work.id }">{{ work.workNumber }} · {{ work.name }}</a></th>
                 <td>{{ work.responsible || '—' }}</td><td>{{ work.stage }}</td><td>{{ (work.deadline | date:'yyyy.MM.dd.') ?? '—' }}</td>
                 @if (selection?.filter?.kind === 'finance') {
                   <td>{{ work.amount === null ? '—' : ((work.amount | number:'1.0-2') + ' ' + work.currency) }}

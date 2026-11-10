@@ -15,7 +15,7 @@ import { WORK_CATALOGS, WORK_FIELD_CARDS, WORK_FIELD_TYPES, WorkCatalog, WorkFie
   styles: [`
     :host { display: block; color: var(--brand-ink); }
     main { max-width: 1080px; margin: auto; padding: clamp(16px, 4vw, 36px); display: grid; gap: 18px; }
-    h1, h2, h3, p { margin: 0; }
+    h2, h3, p { margin: 0; }
     .muted { color: var(--brand-muted); }
     header { display: grid; gap: 5px; }
     .panel { display: grid; gap: 14px; min-width: 0; padding: clamp(12px, 3vw, 24px);

@@ -1,9 +1,8 @@
 <section class="board-page" [class.editor-mode]="showWorkForm">
   <header class="page-header">
     <div>
-      <p class="eyebrow">OPERATIONS</p>
-      <h1>{{ showWorkForm ? (editingWork ? 'Edit work' : 'New work') : (detailView ? 'Work details' : 'Work board') }}</h1>
-      <p>{{ detailView ? 'Complete operational and financial record.' : 'Works, sub-works, delivery and billing progress in one place.' }}</p>
+      <h1>{{ showWorkForm ? (editingWork ? 'Edit work' : 'New work') : (detailView ? 'Work details' : 'Work table') }}</h1>
+      <p *ngIf="detailView">Complete operational and financial record.</p>
     </div>
     <div class="page-actions">
       <button mat-stroked-button type="button" *ngIf="detailView || showWorkForm" (click)="backToTable()">

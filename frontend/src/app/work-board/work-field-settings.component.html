@@ -1,7 +1,7 @@
 <main>
   <header>
     <p class="muted">Tenant settings</p>
-    <h1>Work settings</h1>
+    <h1>Project Tracker settings</h1>
     <p class="muted">Manage organizational units, service types and custom fields for this tenant.</p>
   </header>
   @if (error) { <p class="error" role="alert">{{ error }}</p> }
@@ -9,7 +9,7 @@
   @if (currencyPreference; as preference) {
     <section class="panel">
       <h2>Currency</h2>
-      <p class="muted">Used for Work Board totals and as the initial currency for new works.</p>
+      <p class="muted">Used for Project Tracker totals and as the initial currency for new works.</p>
       <form class="actions" (ngSubmit)="saveCurrency()">
         <mat-form-field appearance="outline" subscriptSizing="dynamic">
           <mat-label>Default currency</mat-label>
@@ -57,7 +57,7 @@
       }
       <div class="actions">
         <mat-checkbox name="required" [(ngModel)]="field.required">Required when its card applies</mat-checkbox>
-        <mat-checkbox name="showInList" [(ngModel)]="field.showInList">Show as a Work Board column</mat-checkbox>
+        <mat-checkbox name="showInList" [(ngModel)]="field.showInList">Show as a Work table column</mat-checkbox>
       </div>
       <div class="actions">
         <button mat-flat-button color="primary" type="submit" [disabled]="busy || !field.label.trim()">Save field</button>
@@ -108,7 +108,7 @@
       <div class="row"><h2>Custom fields</h2><button mat-stroked-button type="button" (click)="newField()" [disabled]="busy || !!draft || !!catalogDraft || config.fields.length >= 50">New field</button></div>
       @for (field of config.fields; track field.id) {
         <div class="row field-row">
-          <div><strong>{{ field.label }}</strong><p class="muted">{{ typeLabel(field) }} · {{ cardLabel(field) }}{{ field.required ? ' · Required' : '' }}{{ field.showInList ? ' · Work Board column' : '' }}{{ field.archived ? ' · Archived' : '' }}</p></div>
+          <div><strong>{{ field.label }}</strong><p class="muted">{{ typeLabel(field) }} · {{ cardLabel(field) }}{{ field.required ? ' · Required' : '' }}{{ field.showInList ? ' · Work table column' : '' }}{{ field.archived ? ' · Archived' : '' }}</p></div>
           <div class="actions">
             <button mat-button type="button" (click)="edit(field)" [disabled]="busy || !!draft || !!catalogDraft">Edit</button>
             <button mat-button type="button" (click)="toggleArchived(field)" [disabled]="busy || !!draft || !!catalogDraft">{{ field.archived ? 'Restore' : 'Archive' }}</button>

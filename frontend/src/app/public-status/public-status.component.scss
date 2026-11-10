@@ -30,12 +30,6 @@
   color: var(--brand-accent-ink);
 }
 
-.status-hero h1 {
-  margin: 0;
-  font: 650 clamp(38px, 5vw, 64px)/0.98 'Newsreader', Georgia, serif;
-  letter-spacing: -0.035em;
-}
-
 .hero-copy {
   max-width: 760px;
   margin: 12px 0 0;
@@ -406,10 +400,6 @@
     margin-bottom: 14px;
     padding-bottom: 10px;
     border-bottom: 1px solid rgba(17, 24, 39, 0.12);
-  }
-
-  .status-hero h1 {
-    font-size: 28px;
   }
 
   .hero-copy {

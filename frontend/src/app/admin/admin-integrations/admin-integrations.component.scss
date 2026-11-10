@@ -2,7 +2,7 @@
 .header-actions { display: flex; align-items: center; gap: 10px; }
 .page-header { display: flex; align-items: flex-end; justify-content: space-between; gap: 24px; }
 .eyebrow { color: var(--brand-accent-ink); font-size: 12px; font-weight: 800; letter-spacing: .14em; }
-h1 { margin: 6px 0 5px; font: 650 clamp(32px, 4vw, 48px)/1 'Newsreader', Georgia, serif; letter-spacing: -.035em; }
+h1 { margin: 6px 0 5px; }
 .page-header p { max-width: 720px; margin: 0; color: var(--brand-muted); }
 .page-header button mat-icon { margin-right: 7px; }
 .contract-strip { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px; margin: 28px 0 20px; overflow: hidden; border: 1px solid var(--brand-border); border-radius: 14px; background: var(--brand-border); }

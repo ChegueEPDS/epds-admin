@@ -26,7 +26,7 @@ function presentClient(c){return c?{id:String(c.id||c._id),taxNumber:c.tax_numbe
   postalCode:c.postal_code||c.postalCode||'',city:c.city||'',address:c.address||'',email:c.email||'',phone:c.phone||''}:null;}
 function presentDoc(d){return {id:d.id,workItemId:d.workItemId,category:d.category,categoryLabel:LABELS[d.category]||d.category,
   displayName:d.displayName,fileName:d.fileName,contentType:d.contentType,size:d.size,uploadedByName:d.uploadedByName||'',uploadedAt:d.createdAt};}
-async function run(res,fn){try{await fn();}catch(e){console.error('[work-board-pg]',e);res.status(e.statusCode||500).json({error:e.statusCode?e.message:'Work board operation failed'});}}
+async function run(res,fn){try{await fn();}catch(e){console.error('[work-board-pg]',e);res.status(e.statusCode||500).json({error:e.statusCode?e.message:'Project Tracker operation failed'});}}
 
 exports.listWorks=(req,res)=>run(res,async()=>{const page=Math.max(1,Number(req.query.page)||1),limit=Math.min(100,Math.max(1,Number(req.query.limit)||25));
   const result=await store.list({tenantId:req.scope.tenantId,status:String(req.query.status||(req.query.active==='true'?'active':'all')),search:clean(req.query.search),page,limit});

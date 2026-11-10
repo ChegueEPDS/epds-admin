@@ -53,7 +53,7 @@ router.post('/work-board/clients', requireTenantFeature('workBoard', 'edit'), co
 router.get('/work-board/users', requireTenantFeature('workBoard'), controller.listTenantUsers);
 router.get('/work-board/works', requireTenantFeature('workBoard'), controller.listWorks);
 // Effort Tracking also consumes this endpoint, so it only requires a tenant
-// context rather than Work Board feature access.
+// context rather than Project Tracker feature access.
 router.get('/work-board/options', controller.activeOptions);
 router.get('/work-board/dashboard', requireTenantFeature('workBoard'), companyOnly,
   settingsRoute((req) => getDashboardSnapshot(req.scope.tenantId, req.query.wait === '1')));

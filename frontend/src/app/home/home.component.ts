@@ -54,9 +54,9 @@ export class HomeComponent implements OnInit, OnDestroy {
       featureKey: 'licenses'
     },
     {
-      title: 'Work Board',
+      title: 'Project Tracker',
       icon: 'view_list',
-      route: '/work-board',
+      route: '/project-tracker',
       description: 'Works, sub-works, deadlines and billing milestones.',
       featureKey: 'workBoard'
     },

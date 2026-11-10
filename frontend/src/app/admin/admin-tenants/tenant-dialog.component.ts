@@ -65,7 +65,7 @@ export class TenantDialogComponent {
     { key: 'domainHealth', label: 'Domain Health' },
     { key: 'licenses', label: 'Licenses' },
     { key: 'effortTracking', label: 'Effort Tracking' },
-    { key: 'workBoard', label: 'Work Board' },
+    { key: 'workBoard', label: 'Project Tracker' },
     { key: 'webhookTester', label: 'Webhook Tester', permissions: false }
   ];
 

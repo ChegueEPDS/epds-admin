@@ -57,7 +57,7 @@ const FEATURE_ROUTES: Record<TenantFeatureKey, string> = {
   domainHealth: '/domain-health',
   licenses: '/licenses',
   effortTracking: '/effort-tracking',
-  workBoard: '/work-board',
+  workBoard: '/project-tracker',
   webhookTester: '/webhook'
 };
 

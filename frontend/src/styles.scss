@@ -129,6 +129,14 @@ body {
     linear-gradient(135deg, #0d1312 0%, #111916 58%, #15140f 100%);
 }
 
+h1 {
+  margin: 0;
+  color: var(--brand-ink);
+  font: 700 clamp(1.625rem, 1.3rem + 1vw, 2.125rem)/1.18 'Manrope', sans-serif;
+  letter-spacing: -0.035em;
+  overflow-wrap: anywhere;
+}
+
 .material-symbols-outlined {
   font-family: 'Material Symbols Outlined';
   font-weight: normal;
@@ -222,9 +230,7 @@ app-work-board .grouped-editor,
 app-work-board .work-detail-sheet { display: grid; gap: 16px; }
 app-work-board .board-page.editor-mode { padding-top: 18px; }
 app-work-board .editor-mode .page-header { margin-bottom: 10px; }
-app-work-board .editor-mode .page-header h1 { font-size: 28px; line-height: 1.15; }
 app-work-board .editor-mode .page-header > div > p:last-child { margin-top: 3px; font-size: 13px; }
-app-work-board .editor-mode .eyebrow { margin-bottom: 3px; font-size: 10px; }
 app-work-board .grouped-editor:not(.nested) { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
 app-work-board .grouped-editor:not(.nested) > .form-group { min-width: 0; padding: 14px 16px; border-radius: 10px; box-shadow: none; }
 app-work-board .grouped-editor:not(.nested) > .form-group:first-child { grid-column: 1 / -1; }
@@ -373,13 +379,6 @@ app-work-board .work-detail-sheet .detail-header { position: sticky; top: 74px; 
   justify-content: space-between;
   gap: 16px;
   margin-bottom: 20px;
-}
-
-.page-title h1 {
-  margin: 0;
-  font: 650 clamp(28px, 3vw, 38px)/1.08 'Newsreader', Georgia, serif;
-  letter-spacing: -0.025em;
-  line-height: 1.2;
 }
 
 .page-title p {

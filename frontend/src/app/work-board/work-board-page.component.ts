@@ -8,12 +8,12 @@ import { AuthService } from '../services/auth.service';
   imports: [MatIconModule, MatTabsModule, RouterLink, RouterLinkActive, RouterOutlet],
   template: `
     @if (auth.isWorkFieldTenant()) {
-      <nav mat-tab-nav-bar [tabPanel]="panel" [mat-stretch-tabs]="true" aria-label="Work board views">
-        <a mat-tab-link routerLink="/work-board/dashboard" routerLinkActive #dashboard="routerLinkActive"
+      <nav mat-tab-nav-bar [tabPanel]="panel" [mat-stretch-tabs]="true" aria-label="Project Tracker views">
+        <a mat-tab-link routerLink="/project-tracker/dashboard" routerLinkActive #dashboard="routerLinkActive"
           [active]="dashboard.isActive">
           <mat-icon class="material-symbols-outlined" aria-hidden="true">dashboard</mat-icon>Dashboard
         </a>
-        <a mat-tab-link routerLink="/work-board" routerLinkActive #table="routerLinkActive"
+        <a mat-tab-link routerLink="/project-tracker" routerLinkActive #table="routerLinkActive"
           [routerLinkActiveOptions]="{ paths: 'exact', queryParams: 'ignored', matrixParams: 'ignored', fragment: 'ignored' }"
           [active]="table.isActive">
           <mat-icon class="material-symbols-outlined" aria-hidden="true">table_rows</mat-icon>Table

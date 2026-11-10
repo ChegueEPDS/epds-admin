@@ -10,7 +10,6 @@
 .hero-actions { display: flex; flex: 0 0 auto; align-items: center; gap: 10px; }
 .docs-link mat-icon { margin-right: 7px; }
 .eyebrow { margin: 0 0 8px; color: var(--brand-accent-ink); font: 800 12px/1.2 'Manrope', sans-serif; letter-spacing: 0.18em; }
-h1 { margin: 0; font: 650 clamp(38px, 6vw, 74px)/0.95 'Newsreader', Georgia, serif; letter-spacing: -0.045em; }
 .lead { max-width: 620px; margin: 18px 0 0; color: var(--brand-muted); font-size: 17px; }
 .pulse { display: flex; align-items: center; gap: 10px; padding: 10px 16px; color: var(--brand-success); border: 1px solid var(--brand-success-border); border-radius: 999px; background: var(--brand-success-soft); font-size: 12px; font-weight: 800; line-height: 1; text-transform: uppercase; letter-spacing: 0.1em; }
 .pulse span { width: 8px; height: 8px; border-radius: 50%; background: currentColor; box-shadow: 0 0 0 5px var(--brand-success-ring); animation: breathe 1.8s infinite; }

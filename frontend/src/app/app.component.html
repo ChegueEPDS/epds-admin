@@ -25,9 +25,9 @@
         <mat-icon class="material-symbols-outlined">timer</mat-icon>
         EFFORT TRACKING
       </a>
-      <a mat-button routerLink="/work-board" routerLinkActive="active-link" *ngIf="auth.canAccessFeature('workBoard')">
+      <a mat-button routerLink="/project-tracker" routerLinkActive="active-link" *ngIf="auth.canAccessFeature('workBoard')">
         <mat-icon class="material-symbols-outlined">view_list</mat-icon>
-        WORK BOARD
+        PROJECT TRACKER
       </a>
       <a
         mat-button
@@ -99,9 +99,9 @@
           <mat-icon class="material-symbols-outlined">timer</mat-icon>
           Effort Tracking
         </a>
-        <a mat-menu-item routerLink="/work-board" routerLinkActive="active-menu-item" *ngIf="auth.canAccessFeature('workBoard')">
+        <a mat-menu-item routerLink="/project-tracker" routerLinkActive="active-menu-item" *ngIf="auth.canAccessFeature('workBoard')">
           <mat-icon class="material-symbols-outlined">view_list</mat-icon>
-          Work Board
+          Project Tracker
         </a>
         <a
           mat-menu-item
@@ -122,7 +122,7 @@
           <div class="mobile-menu-label" (click)="$event.stopPropagation()">Settings</div>
           <a mat-menu-item routerLink="/settings/work-fields" routerLinkActive="active-menu-item">
             <mat-icon class="material-symbols-outlined">tune</mat-icon>
-            Work settings
+            Project Tracker settings
           </a>
         </ng-container>
         <ng-container *ngIf="mobileUser.role === 'SuperAdmin'">
@@ -175,7 +175,7 @@
       <mat-menu #settingsMenu="matMenu">
         <a mat-menu-item routerLink="/settings/work-fields" *ngIf="auth.canManageWorkFields()">
           <mat-icon class="material-symbols-outlined">tune</mat-icon>
-          Work settings
+          Project Tracker settings
         </a>
         <ng-container *ngIf="user.role === 'SuperAdmin'">
           <a mat-menu-item routerLink="/admin/users">

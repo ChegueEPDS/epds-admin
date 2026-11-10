@@ -32,7 +32,19 @@ export const routes: Routes = [
   { path: 'licenses', component: LicensesComponent, canActivate: [AuthGuard], data: { featureKey: 'licenses' } },
   { path: 'effort-tracking', component: EffortTrackingComponent, canActivate: [AuthGuard], data: { featureKey: 'effortTracking' } },
   {
+    path: 'work-board/dashboard',
+    pathMatch: 'full',
+    redirectTo: ({ queryParams, fragment }) =>
+      inject(Router).createUrlTree(['/project-tracker/dashboard'], { queryParams, fragment: fragment ?? undefined })
+  },
+  {
     path: 'work-board',
+    pathMatch: 'full',
+    redirectTo: ({ queryParams, fragment }) =>
+      inject(Router).createUrlTree(['/project-tracker'], { queryParams, fragment: fragment ?? undefined })
+  },
+  {
+    path: 'project-tracker',
     component: WorkBoardPageComponent,
     canActivate: [AuthGuard],
     data: { featureKey: 'workBoard' },
@@ -40,7 +52,7 @@ export const routes: Routes = [
       { path: '', pathMatch: 'full', component: WorkBoardComponent },
       {
         path: 'dashboard',
-        canActivate: [() => inject(AuthService).isWorkFieldTenant() || inject(Router).createUrlTree(['/work-board'])],
+        canActivate: [() => inject(AuthService).isWorkFieldTenant() || inject(Router).createUrlTree(['/project-tracker'])],
         loadComponent: () => import('./work-board/work-dashboard.component').then((m) => m.WorkDashboardComponent)
       }
     ]

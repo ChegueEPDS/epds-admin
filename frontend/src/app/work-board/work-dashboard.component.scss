@@ -1,8 +1,7 @@
 :host { display: block; min-width: 0; color: var(--brand-ink); container-type: inline-size; }
 main { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; padding: 16px var(--work-board-inset) 24px; }
 .wide { grid-column: 1 / -1; }
-h1, h2, h3, p, dl { margin: 0; }
-h1 { font-size: 1.45rem; }
+h2, h3, p, dl { margin: 0; }
 h2 { font-size: 1.05rem; }
 h3 { font-size: .95rem; }
 .dashboard-header, .page-head { display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap; gap: 6px 12px; }
