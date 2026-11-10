@@ -13,7 +13,7 @@ validation. MongoDB is retained read-only for rollback after cutover.
 
 ## Order of operations
 
-1. Apply `001_initial_schema.sql` to an empty PostgreSQL database.
+1. Run `npm run postgres:schema` against an empty PostgreSQL database.
 2. Take a timestamped MongoDB dump before the copy.
 3. Run the idempotent MongoDB-to-PostgreSQL importer while the application is
    still using MongoDB. The archive keeps canonical Extended JSON and verifies

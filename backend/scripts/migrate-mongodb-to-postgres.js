@@ -8,7 +8,7 @@ const crypto = require('crypto');
 const { projectCore, verifyCore } = require('./postgres-core-projector');
 const { projectAux, verifyAux } = require('./postgres-aux-projector');
 
-const SCHEMA_FILE = path.join(__dirname, '..', 'postgres', '001_initial_schema.sql');
+const SCHEMA_DIR = path.join(__dirname, '..', 'postgres');
 const BATCH_SIZE = Math.max(10, Number(process.env.POSTGRES_MIGRATION_BATCH_SIZE || 250));
 
 function required(name) {
@@ -36,7 +36,9 @@ function createPool() {
 }
 
 async function applySchema(pool) {
-  const sql = fs.readFileSync(SCHEMA_FILE, 'utf8');
+  const sql = ['001_initial_schema.sql', '009_effort_board.sql']
+    .map((file) => fs.readFileSync(path.join(SCHEMA_DIR, file), 'utf8'))
+    .join('\n');
   await pool.query(sql);
   console.log('[postgres-migration] schema applied');
 }
