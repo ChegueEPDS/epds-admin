@@ -6,7 +6,6 @@ import { HomeComponent } from './home/home.component';
 import { MailboxComponent } from './mailbox/mailbox.component';
 import { DomainHealthComponent } from './domain-health/domain-health.component';
 import { LicensesComponent } from './licenses/licenses.component';
-import { EffortTrackingComponent } from './effort-tracking/effort-tracking.component';
 import { WorkBoardComponent } from './work-board/work-board.component';
 import { WorkBoardPageComponent } from './work-board/work-board-page.component';
 import { AuthService } from './services/auth.service';
@@ -30,7 +29,12 @@ export const routes: Routes = [
   { path: 'mail', component: MailboxComponent, canActivate: [AuthGuard], data: { featureKey: 'mail' } },
   { path: 'domain-health', component: DomainHealthComponent, canActivate: [AuthGuard], data: { featureKey: 'domainHealth' } },
   { path: 'licenses', component: LicensesComponent, canActivate: [AuthGuard], data: { featureKey: 'licenses' } },
-  { path: 'effort-tracking', component: EffortTrackingComponent, canActivate: [AuthGuard], data: { featureKey: 'effortTracking' } },
+  {
+    path: 'effort-tracking',
+    loadComponent: () => import('./effort-tracking/effort-tracking.component').then((m) => m.EffortTrackingComponent),
+    canActivate: [AuthGuard],
+    data: { featureKey: 'effortTracking' }
+  },
   {
     path: 'work-board/dashboard',
     pathMatch: 'full',

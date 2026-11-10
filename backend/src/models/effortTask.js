@@ -26,6 +26,15 @@ const EffortTaskSchema = new mongoose.Schema(
     assigneeName: { type: String, default: '' },
     estimateMs: { type: Number, min: 0 },
     netAdjustmentMs: { type: Number, default: 0 },
+    netCorrections: [{
+      _id: false,
+      userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+      userName: String,
+      at: Date,
+      reason: String,
+      previousMs: Number,
+      netMs: Number
+    }],
     timerPaused: { type: Boolean, default: false },
     sessions: [EffortSessionSchema],
     archivedNetMs: { type: Number, min: 0, default: 0 },

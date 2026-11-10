@@ -1,63 +1,153 @@
 const mongoose = require('mongoose');
-const { query, withTransaction } = require('../../postgres');
-
 const newId = () => String(new mongoose.Types.ObjectId());
+const projectAccess = 'tenant_id=$1 AND ((NOT shared AND created_by=$2) OR (shared AND $3))';
 
 function project(row) {
   if (!row) return null;
-  return { _id:row.id,id:row.id,tenantId:row.tenant_id,name:row.name,normalizedName:row.normalized_name,
-    customer:row.customer,comment:row.comment,workItemId:row.work_item_id,workItemSnapshot:row.work_item_snapshot||{},
-    status:row.status,closedAt:row.closed_at,closedNetMs:Number(row.closed_net_ms),closedGrossMs:Number(row.closed_gross_ms),
-    createdBy:row.created_by,updatedBy:row.updated_by,closedBy:row.closed_by,createdAt:row.created_at,updatedAt:row.updated_at };
-}
-function task(row, sessions=[]) {
-  if (!row) return null;
-  return { _id:row.id,id:row.id,projectId:row.project_id,tenantId:row.tenant_id,name:row.name,note:row.note,
-    subWorkItemId:row.sub_work_item_id,subWorkItemSnapshot:row.sub_work_item_snapshot||{},status:row.status,sessions,
-    archivedNetMs:Number(row.archived_net_ms),archivedSessionCount:Number(row.archived_session_count),firstStartedAt:row.first_started_at,
-    activeTimer:row.active_timer_started_at?{userId:row.active_timer_user_id,startedAt:row.active_timer_started_at}:undefined,
-    closedAt:row.closed_at,closedNetMs:Number(row.closed_net_ms),closedGrossMs:Number(row.closed_gross_ms),
-    createdBy:row.created_by,updatedBy:row.updated_by,closedBy:row.closed_by,createdAt:row.created_at,updatedAt:row.updated_at };
+  return {
+    _id: row.id, tenantId: row.tenant_id, name: row.name, normalizedName: row.normalized_name,
+    customer: row.customer, comment: row.comment, workItemId: row.work_item_id,
+    workItemSnapshot: row.work_item_snapshot, shared: row.shared, status: row.status,
+    closedAt: row.closed_at, closedNetMs: Number(row.closed_net_ms), closedGrossMs: Number(row.closed_gross_ms),
+    createdBy: row.created_by, updatedBy: row.updated_by, closedBy: row.closed_by,
+    createdAt: row.created_at, updatedAt: row.updated_at
+  };
 }
 
-async function sessionsFor(client, taskIds) {
-  if (!taskIds.length) return new Map();
-  const result=await client.query(`SELECT * FROM effort_sessions WHERE task_id=ANY($1::varchar[]) ORDER BY task_id,position`,[taskIds]);
-  const map=new Map();for(const r of result.rows){const list=map.get(r.task_id)||[];list.push({userId:r.user_id,startedAt:r.started_at,stoppedAt:r.stopped_at,durationMs:Number(r.duration_ms)});map.set(r.task_id,list);}return map;
+function task(row, sessions = []) {
+  return {
+    _id: row.id, projectId: row.project_id, tenantId: row.tenant_id, name: row.name, note: row.note,
+    subWorkItemId: row.sub_work_item_id, subWorkItemSnapshot: row.sub_work_item_snapshot, status: row.status,
+    assigneeId: row.assignee_id, assigneeName: row.assignee_name,
+    estimateMs: row.estimate_ms === null ? null : Number(row.estimate_ms),
+    netAdjustmentMs: Number(row.net_adjustment_ms), netCorrections: row.net_corrections, timerPaused: row.timer_paused,
+    sessions, persistedSessions: sessions.length, archivedNetMs: Number(row.archived_net_ms),
+    archivedSessionCount: row.archived_session_count, firstStartedAt: row.first_started_at,
+    activeTimer: row.active_timer_started_at ? { userId: row.active_timer_user_id, startedAt: row.active_timer_started_at } : undefined,
+    closedAt: row.closed_at, closedNetMs: Number(row.closed_net_ms), closedGrossMs: Number(row.closed_gross_ms),
+    createdBy: row.created_by, updatedBy: row.updated_by, closedBy: row.closed_by,
+    createdAt: row.created_at, updatedAt: row.updated_at
+  };
 }
-async function listProjects(tenantId,userId,limit=100){const result=await query(`SELECT * FROM effort_projects WHERE tenant_id=$1 AND created_by=$2 ORDER BY status,updated_at DESC LIMIT $3`,[tenantId,userId,limit]);return result.rows.map(project);}
-async function findProject(tenantId,userId,projectId,client=null){const executor=client||{query};const result=await executor.query('SELECT * FROM effort_projects WHERE id=$1 AND tenant_id=$2 AND created_by=$3',[projectId,tenantId,userId]);return project(result.rows[0]);}
-async function listTasks(tenantId,userId,projectIds,client=null){if(!projectIds.length)return[];const executor=client||{query};const result=await executor.query(`SELECT * FROM effort_tasks WHERE tenant_id=$1 AND created_by=$2 AND project_id=ANY($3::varchar[]) ORDER BY status,updated_at DESC`,[tenantId,userId,projectIds]);const sm=await sessionsFor(executor,result.rows.map(r=>r.id));return result.rows.map(r=>task(r,sm.get(r.id)||[]));}
-async function findTask(tenantId,userId,taskId,client=null){const executor=client||{query};const result=await executor.query('SELECT * FROM effort_tasks WHERE id=$1 AND tenant_id=$2 AND created_by=$3',[taskId,tenantId,userId]);if(!result.rows[0])return null;const sm=await sessionsFor(executor,[taskId]);return task(result.rows[0],sm.get(taskId)||[]);}
 
-async function saveProject(input,client=null){const executor=client||{query};const pid=String(input.id||input._id||newId());const result=await executor.query(`INSERT INTO effort_projects
-  (id,tenant_id,name,normalized_name,customer,comment,work_item_id,work_item_snapshot,status,closed_at,closed_net_ms,closed_gross_ms,created_by,updated_by,closed_by,created_at,updated_at)
-  VALUES($1,$2,$3,$4,$5,$6,$7,$8::jsonb,$9,$10,$11,$12,$13,$14,$15,coalesce($16,now()),now()) ON CONFLICT(id) DO UPDATE SET
-  name=EXCLUDED.name,normalized_name=EXCLUDED.normalized_name,customer=EXCLUDED.customer,comment=EXCLUDED.comment,
-  work_item_id=EXCLUDED.work_item_id,work_item_snapshot=EXCLUDED.work_item_snapshot,status=EXCLUDED.status,closed_at=EXCLUDED.closed_at,
-  closed_net_ms=EXCLUDED.closed_net_ms,closed_gross_ms=EXCLUDED.closed_gross_ms,updated_by=EXCLUDED.updated_by,closed_by=EXCLUDED.closed_by,updated_at=now() RETURNING *`,
-  [pid,input.tenantId,input.name,input.normalizedName||String(input.name).toLowerCase(),input.customer||'',input.comment||'',input.workItemId||null,JSON.stringify(input.workItemSnapshot||{}),input.status||'open',input.closedAt||null,Number(input.closedNetMs||0),Number(input.closedGrossMs||0),input.createdBy,input.updatedBy,input.closedBy||null,input.createdAt||null]);return project(result.rows[0]);}
+async function sessionsFor(client, ids) {
+  const grouped = new Map();
+  if (!ids.length) return grouped;
+  const { rows } = await client.query(`SELECT task_id, user_id, started_at, stopped_at, duration_ms
+    FROM effort_sessions WHERE task_id=ANY($1::varchar[]) ORDER BY task_id,position`, [ids]);
+  for (const row of rows) {
+    const sessions = grouped.get(row.task_id) || [];
+    sessions.push({ userId: row.user_id, startedAt: row.started_at, stoppedAt: row.stopped_at, durationMs: Number(row.duration_ms) });
+    grouped.set(row.task_id, sessions);
+  }
+  return grouped;
+}
 
-async function saveTask(input,client=null){const executor=client||{query};const tid=String(input.id||input._id||newId());const result=await executor.query(`INSERT INTO effort_tasks
-  (id,project_id,tenant_id,name,note,sub_work_item_id,sub_work_item_snapshot,status,archived_net_ms,archived_session_count,first_started_at,active_timer_user_id,active_timer_started_at,closed_at,closed_net_ms,closed_gross_ms,created_by,updated_by,closed_by,created_at,updated_at)
-  VALUES($1,$2,$3,$4,$5,$6,$7::jsonb,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,coalesce($20,now()),now()) ON CONFLICT(id) DO UPDATE SET
-  name=EXCLUDED.name,note=EXCLUDED.note,sub_work_item_id=EXCLUDED.sub_work_item_id,sub_work_item_snapshot=EXCLUDED.sub_work_item_snapshot,
-  status=EXCLUDED.status,archived_net_ms=EXCLUDED.archived_net_ms,archived_session_count=EXCLUDED.archived_session_count,
-  first_started_at=EXCLUDED.first_started_at,active_timer_user_id=EXCLUDED.active_timer_user_id,active_timer_started_at=EXCLUDED.active_timer_started_at,
-  closed_at=EXCLUDED.closed_at,closed_net_ms=EXCLUDED.closed_net_ms,closed_gross_ms=EXCLUDED.closed_gross_ms,updated_by=EXCLUDED.updated_by,closed_by=EXCLUDED.closed_by,updated_at=now() RETURNING *`,
-  [tid,input.projectId,input.tenantId,input.name,input.note||'',input.subWorkItemId||null,JSON.stringify(input.subWorkItemSnapshot||{}),input.status||'open',Number(input.archivedNetMs||0),Number(input.archivedSessionCount||0),input.firstStartedAt||null,input.activeTimer?.userId||null,input.activeTimer?.startedAt||null,input.closedAt||null,Number(input.closedNetMs||0),Number(input.closedGrossMs||0),input.createdBy,input.updatedBy,input.closedBy||null,input.createdAt||null]);
-  await executor.query('DELETE FROM effort_sessions WHERE task_id=$1',[tid]);let position=0;for(const s of input.sessions||[])await executor.query(`INSERT INTO effort_sessions(task_id,user_id,position,started_at,stopped_at,duration_ms) VALUES($1,$2,$3,$4,$5,$6)`,[tid,s.userId,position++,s.startedAt,s.stoppedAt||null,Number(s.durationMs||0)]);return task(result.rows[0],input.sessions||[]);}
+async function listProjects(client, scope, limit) {
+  const { rows } = await client.query(`SELECT * FROM effort_projects WHERE ${projectAccess}
+    ORDER BY status,updated_at DESC LIMIT $4`, [...scope, limit]);
+  return rows.map(project);
+}
 
-async function deleteProject(tenantId,userId,projectId){return withTransaction(async client=>{const p=await findProject(tenantId,userId,projectId,client);if(!p)return false;await client.query('DELETE FROM effort_projects WHERE id=$1',[projectId]);return true;});}
-async function deleteTask(tenantId,userId,taskId){const result=await query('DELETE FROM effort_tasks WHERE id=$1 AND tenant_id=$2 AND created_by=$3 RETURNING id',[taskId,tenantId,userId]);return Boolean(result.rows[0]);}
-async function activeWork(tenantId,workId){if(!workId)return null;const result=await query(`SELECT * FROM work_items WHERE id=$1 AND tenant_id=$2 AND archived_at IS NULL AND status<>ALL($3::text[])`,[workId,tenantId,['completed_billable','invoiced','paid','closed','cancelled','lost']]);return result.rows[0]||null;}
-async function activeSubWork(tenantId,workId,subWorkId){if(!subWorkId)return null;const result=await query(`SELECT * FROM sub_work_items WHERE id=$1 AND work_item_id=$2 AND tenant_id=$3 AND archived_at IS NULL AND status<>ALL($4::text[])`,[subWorkId,workId,tenantId,['completed_billable','invoiced','paid','closed','cancelled','lost']]);return result.rows[0]||null;}
+async function findProject(client, scope, id, lock = false) {
+  const { rows } = await client.query(`SELECT * FROM effort_projects WHERE ${projectAccess}
+    AND id=$4 ${lock ? 'FOR UPDATE' : ''}`, [...scope, id]);
+  return project(rows[0]);
+}
 
-async function switchActiveTimer(tenantId,userId,targetTaskId,now=new Date()) {return withTransaction(async client=>{
-  const active=await client.query(`SELECT * FROM effort_tasks WHERE tenant_id=$1 AND active_timer_user_id=$2 AND active_timer_started_at IS NOT NULL FOR UPDATE`,[tenantId,userId]);
-  for(const row of active.rows){if(row.id===targetTaskId)continue;const duration=Math.max(0,now-new Date(row.active_timer_started_at));const pos=await client.query('SELECT coalesce(max(position),-1)+1 AS p FROM effort_sessions WHERE task_id=$1',[row.id]);await client.query(`INSERT INTO effort_sessions(task_id,user_id,position,started_at,stopped_at,duration_ms) VALUES($1,$2,$3,$4,$5,$6)`,[row.id,userId,Number(pos.rows[0].p),row.active_timer_started_at,now,duration]);await client.query(`UPDATE effort_tasks SET active_timer_user_id=NULL,active_timer_started_at=NULL,updated_by=$2,updated_at=now() WHERE id=$1`,[row.id,userId]);}
-  const target=await client.query(`UPDATE effort_tasks SET active_timer_user_id=$2,active_timer_started_at=coalesce(active_timer_started_at,$3),first_started_at=coalesce(first_started_at,$3),updated_by=$2,updated_at=now() WHERE id=$1 AND tenant_id=$4 AND created_by=$2 AND status='open' AND (active_timer_user_id IS NULL OR active_timer_user_id=$2) RETURNING *`,[targetTaskId,userId,now,tenantId]);if(!target.rows[0])return null;const sm=await sessionsFor(client,[targetTaskId]);return task(target.rows[0],sm.get(targetTaskId)||[]);
-});}
-async function stopTimer(tenantId,userId,taskId,now=new Date()){return withTransaction(async client=>{const locked=await client.query(`SELECT * FROM effort_tasks WHERE id=$1 AND tenant_id=$2 AND created_by=$3 FOR UPDATE`,[taskId,tenantId,userId]);const row=locked.rows[0];if(!row||row.active_timer_user_id!==userId||!row.active_timer_started_at)return null;const duration=Math.max(0,now-new Date(row.active_timer_started_at));const pos=await client.query('SELECT coalesce(max(position),-1)+1 AS p FROM effort_sessions WHERE task_id=$1',[taskId]);await client.query(`INSERT INTO effort_sessions(task_id,user_id,position,started_at,stopped_at,duration_ms) VALUES($1,$2,$3,$4,$5,$6)`,[taskId,userId,Number(pos.rows[0].p),row.active_timer_started_at,now,duration]);const updated=await client.query(`UPDATE effort_tasks SET active_timer_user_id=NULL,active_timer_started_at=NULL,updated_by=$2,updated_at=now() WHERE id=$1 RETURNING *`,[taskId,userId]);const sm=await sessionsFor(client,[taskId]);return task(updated.rows[0],sm.get(taskId)||[]);});}
+async function listTasks(client, tenantId, projectIds) {
+  if (!projectIds.length) return [];
+  const { rows } = await client.query(`SELECT * FROM effort_tasks WHERE tenant_id=$1
+    AND project_id=ANY($2::varchar[]) ORDER BY created_at,id`, [tenantId, projectIds]);
+  const sessions = await sessionsFor(client, rows.map((row) => row.id));
+  return rows.map((row) => task(row, sessions.get(row.id)));
+}
 
-module.exports={listProjects,findProject,listTasks,findTask,saveProject,saveTask,deleteProject,deleteTask,activeWork,activeSubWork,switchActiveTimer,stopTimer,project,task};
+async function findTaskProject(client, tenantId, taskId) {
+  const { rows } = await client.query('SELECT project_id FROM effort_tasks WHERE tenant_id=$1 AND id=$2', [tenantId, taskId]);
+  return rows[0]?.project_id;
+}
+
+async function findTask(client, projectId, taskId) {
+  const { rows } = await client.query('SELECT * FROM effort_tasks WHERE project_id=$1 AND id=$2', [projectId, taskId]);
+  if (!rows.length) return null;
+  const sessions = await sessionsFor(client, [taskId]);
+  return task(rows[0], sessions.get(taskId));
+}
+
+async function write(client, table, id, values, insertConflict = '') {
+  const columns = Object.keys(values);
+  const args = Object.values(values);
+  const placeholders = columns.map((_, i) => `$${i + 1}`);
+  if (!id) {
+    const { rows } = await client.query(`INSERT INTO ${table} (${columns.join(',')},id,created_at,updated_at)
+      VALUES (${placeholders.join(',')},$${args.length + 1},now(),now()) ${insertConflict} RETURNING *`, [...args, newId()]);
+    return rows[0];
+  }
+  const assignments = columns.map((key, i) => `${key}=${placeholders[i]}`);
+  const { rows } = await client.query(`UPDATE ${table} SET ${assignments.join(',')},updated_at=now()
+    WHERE id=$${args.length + 1} RETURNING *`, [...args, id]);
+  return rows[0];
+}
+
+async function saveProject(client, input) {
+  const row = await write(client, 'effort_projects', input._id, {
+    tenant_id: input.tenantId, name: input.name, normalized_name: input.name.toLowerCase(),
+    customer: input.customer || '', comment: input.comment || '', work_item_id: input.workItemId || null,
+    work_item_snapshot: JSON.stringify(input.workItemSnapshot || {}), shared: Boolean(input.shared),
+    status: input.status || 'open', closed_at: input.closedAt || null,
+    closed_net_ms: input.closedNetMs || 0, closed_gross_ms: input.closedGrossMs || 0,
+    created_by: input.createdBy, updated_by: input.updatedBy, closed_by: input.closedBy || null
+  }, input.shared ? 'ON CONFLICT (tenant_id,work_item_id) WHERE shared AND work_item_id IS NOT NULL DO NOTHING' : '');
+  return project(row) || findLinkedProject(client, input.tenantId, input.createdBy, input.workItemId, true);
+}
+
+async function findLinkedProject(client, tenantId, userId, workId, shared = false) {
+  const { rows } = await client.query(`SELECT * FROM effort_projects
+    WHERE tenant_id=$1 AND work_item_id=$2 AND shared=$3 AND ($3 OR created_by=$4)
+    ORDER BY status DESC,created_at LIMIT 1`, [tenantId, workId, shared, userId]);
+  return project(rows[0]);
+}
+
+async function saveTask(client, input) {
+  const row = await write(client, 'effort_tasks', input._id, {
+    project_id: input.projectId, tenant_id: input.tenantId, name: input.name, note: input.note || '',
+    sub_work_item_id: input.subWorkItemId || null, sub_work_item_snapshot: JSON.stringify(input.subWorkItemSnapshot || {}),
+    status: input.status || 'new', assignee_id: input.assigneeId || null, assignee_name: input.assigneeName || '',
+    estimate_ms: input.estimateMs ?? null, net_adjustment_ms: input.netAdjustmentMs || 0,
+    net_corrections: JSON.stringify(input.netCorrections || []), timer_paused: Boolean(input.timerPaused),
+    archived_net_ms: input.archivedNetMs || 0, archived_session_count: input.archivedSessionCount || 0,
+    first_started_at: input.firstStartedAt || null, active_timer_user_id: input.activeTimer?.userId || null,
+    active_timer_started_at: input.activeTimer?.startedAt || null, closed_at: input.closedAt || null,
+    closed_net_ms: input.closedNetMs || 0, closed_gross_ms: input.closedGrossMs || 0,
+    created_by: input.createdBy, updated_by: input.updatedBy, closed_by: input.closedBy || null
+  });
+  const sessions = input.sessions || [];
+  for (let position = input.persistedSessions || 0; position < sessions.length; position++) {
+    const session = sessions[position];
+    await client.query(`INSERT INTO effort_sessions(task_id,user_id,position,started_at,stopped_at,duration_ms)
+      VALUES($1,$2,$3,$4,$5,$6)`, [row.id, session.userId, position, session.startedAt, session.stoppedAt, session.durationMs]);
+  }
+  return task(row, sessions);
+}
+
+async function work(client, tenantId, workId) {
+  const { rows } = await client.query(`SELECT id, name, customer, work_number, status FROM work_items
+    WHERE id=$1 AND tenant_id=$2 AND archived_at IS NULL`, [workId, tenantId]);
+  return rows[0];
+}
+
+async function subWork(client, tenantId, workId, subWorkId) {
+  const { rows } = await client.query(`SELECT id, name, sequence_number FROM sub_work_items
+    WHERE id=$1 AND work_item_id=$2 AND tenant_id=$3 AND archived_at IS NULL`, [subWorkId, workId, tenantId]);
+  return rows[0];
+}
+
+async function otherTimer(client, userId, taskId) {
+  const { rows } = await client.query(`SELECT 1 FROM effort_tasks WHERE active_timer_user_id=$1
+    AND active_timer_started_at IS NOT NULL AND id<>$2 LIMIT 1`, [userId, taskId]);
+  return Boolean(rows.length);
+}
+
+module.exports = { listProjects, findProject, listTasks, findTaskProject, findTask, saveProject, findLinkedProject,
+  saveTask, work, subWork, otherTimer };

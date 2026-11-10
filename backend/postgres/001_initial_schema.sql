@@ -244,11 +244,16 @@ CREATE TABLE IF NOT EXISTS effort_tasks (
   updated_at timestamptz NOT NULL
 );
 
+ALTER TABLE effort_projects ADD COLUMN IF NOT EXISTS shared boolean NOT NULL DEFAULT false;
+CREATE UNIQUE INDEX IF NOT EXISTS effort_projects_shared_work
+  ON effort_projects(tenant_id, work_item_id) WHERE shared AND work_item_id IS NOT NULL;
+
 ALTER TABLE effort_tasks
   ADD COLUMN IF NOT EXISTS assignee_id varchar(24) REFERENCES users(id) ON DELETE SET NULL,
   ADD COLUMN IF NOT EXISTS assignee_name text NOT NULL DEFAULT '',
   ADD COLUMN IF NOT EXISTS estimate_ms bigint CHECK (estimate_ms >= 0),
   ADD COLUMN IF NOT EXISTS net_adjustment_ms bigint NOT NULL DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS net_corrections jsonb NOT NULL DEFAULT '[]'::jsonb,
   ADD COLUMN IF NOT EXISTS timer_paused boolean NOT NULL DEFAULT false;
 
 ALTER TABLE effort_tasks DROP CONSTRAINT IF EXISTS effort_tasks_status_check;

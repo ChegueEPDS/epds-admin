@@ -7,6 +7,7 @@ const EffortProjectSchema = new mongoose.Schema(
     customer: { type: String, trim: true, default: '' },
     comment: { type: String, trim: true, default: '' },
     workItemId: { type: mongoose.Schema.Types.ObjectId, ref: 'WorkItem', index: true },
+    shared: { type: Boolean, default: false },
     workItemSnapshot: {
       workNumber: { type: String, trim: true, default: '' },
       name: { type: String, trim: true, default: '' },
@@ -25,5 +26,8 @@ const EffortProjectSchema = new mongoose.Schema(
 );
 
 EffortProjectSchema.index({ tenantId: 1, createdBy: 1, status: 1, updatedAt: -1 });
+EffortProjectSchema.index({ tenantId: 1, workItemId: 1 }, {
+  unique: true, partialFilterExpression: { shared: true, workItemId: { $type: 'objectId' } }
+});
 
 module.exports = mongoose.models.EffortProject || mongoose.model('EffortProject', EffortProjectSchema);

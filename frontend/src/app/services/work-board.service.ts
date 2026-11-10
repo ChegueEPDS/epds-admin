@@ -172,6 +172,9 @@ export class WorkBoardService {
   listActiveOptions(): Observable<WorkOption[]> {
     return this.http.get<{ works: WorkOption[] }>(`${this.baseUrl}/options`, { withCredentials: true }).pipe(map((res) => res.works || []));
   }
+  listBoardOptions(): Observable<WorkOption[]> {
+    return this.http.get<{ works: WorkOption[] }>(`${this.baseUrl}/board-options`, { withCredentials: true }).pipe(map(res => res.works || []));
+  }
   getWork(id: string): Observable<WorkItem> {
     return this.http.get<{ work: WorkItem }>(`${this.baseUrl}/works/${encodeURIComponent(id)}`, { withCredentials: true }).pipe(map((res) => res.work));
   }

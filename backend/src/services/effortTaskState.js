@@ -54,10 +54,17 @@ async function applyTaskFields(task, body, findAssignee) {
   }
 }
 
-function setNetOverride(task, body, now) {
+function setNetOverride(task, body, now, userId, actor) {
   if (!Object.hasOwn(body, 'netOverrideMs')) return;
   if (task.activeTimer?.startedAt) throw httpError('Pause or stop the timer before correcting net time', 409);
   const target = durationField(body.netOverrideMs, 'Net time');
+  const previousMs = task.status === 'closed' ? Number(task.closedNetMs || 0) : taskNetMs(task, now);
+  if (target === previousMs) return;
+  const reason = typeof body.netOverrideReason === 'string' ? body.netOverrideReason.trim() : '';
+  if (!reason || reason.length > 500) throw httpError('Enter a time correction reason (up to 500 characters)');
+  task.netCorrections ||= [];
+  const userName = [actor?.firstName, actor?.lastName].filter(Boolean).join(' ').trim() || actor?.email || '';
+  task.netCorrections.push({ userId, userName, at: now, reason, previousMs, netMs: target });
   task.netAdjustmentMs = target - measuredNetMs(task, now);
   if (task.status === 'closed') task.closedNetMs = target;
 }
@@ -132,6 +139,7 @@ function presentTask(task, now, userId) {
     assigneeName: task.assigneeName || '',
     estimateMs: task.estimateMs ?? null,
     measuredNetMs: measuredNetMs(task, now),
+    netCorrections: task.netCorrections || [],
     netMs: task.status === 'closed' ? Number(task.closedNetMs || 0) : taskNetMs(task, now),
     grossMs: task.status === 'closed' ? Number(task.closedGrossMs || 0) : 0,
     active,
@@ -156,6 +164,7 @@ function presentProject(project, tasks, now, userId) {
     name: project.name,
     customer: project.customer || '',
     comment: project.comment || '',
+    shared: Boolean(project.shared),
     workItemId: project.workItemId ? String(project.workItemId) : null,
     workItem: project.workItemSnapshot?.name ? {
       id: project.workItemId ? String(project.workItemId) : null,

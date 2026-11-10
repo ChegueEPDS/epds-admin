@@ -1,251 +1,345 @@
-<section class="effort-page">
+<section class="effort-page" lang="hu" aria-labelledby="effort-title">
   <header class="page-header">
     <div>
-      <h1>Effort Tracking</h1>
-      <p>Projects, task timers, and net/gross effort summaries.</p>
+      <h1 id="effort-title">Effort Tracking</h1>
+      <p>Munkatábla projektek és feladatidők</p>
     </div>
-    <button mat-flat-button color="primary" type="button" *ngIf="auth.canEditFeature('effortTracking')" (click)="startCreateProject()">
-      <mat-icon class="material-symbols-outlined">add</mat-icon>
-      New project
-    </button>
+    <div class="header-actions">
+      @if (activeTask; as task) {
+        <button type="button" mat-stroked-button class="active-timer" (click)="showActiveTask()"
+          [matTooltip]="'Ugrás a futó méréshez: ' + task.name">
+          <mat-icon class="material-symbols-outlined">timer</mat-icon>
+          Futó mérés · {{ formatDuration(taskNet(task)) }}
+        </button>
+      }
+      @if (canCreateWork) {
+        <button type="button" mat-flat-button color="primary" [disabled]="saving || loading" (click)="startProjectEditor()">
+          <mat-icon class="material-symbols-outlined">add</mat-icon>
+          Új projekt
+        </button>
+      } @else if (canEdit && !loadError) {
+        <button type="button" mat-stroked-button [disabled]="saving || loading" (click)="startProjectEditor()">
+          <mat-icon class="material-symbols-outlined">add</mat-icon>
+          Személyes projekt
+        </button>
+      }
+    </div>
   </header>
 
-  <form class="project-form" *ngIf="showProjectForm" (ngSubmit)="saveProject()">
-    <mat-form-field appearance="outline" class="wide-field">
-      <mat-label>Related work</mat-label>
-      <mat-select name="projectWorkItem" [(ngModel)]="projectForm.workItemId" (selectionChange)="projectWorkChanged()">
-        <mat-option value="">No related work</mat-option>
-        <mat-option *ngFor="let work of workOptions" [value]="work.id">{{ work.workNumber }} · {{ work.name }}<span *ngIf="work.customer"> · {{ work.customer }}</span></mat-option>
-        <mat-option *ngIf="selectedProject?.workItem && selectedProject?.workItemId && !selectedWorkOption()" [value]="selectedProject!.workItemId" disabled>{{ selectedProject!.workItem!.workNumber }} · {{ selectedProject!.workItem!.name }} (not active)</mat-option>
-      </mat-select>
-      <mat-hint>Only active, not completed works are available.</mat-hint>
-    </mat-form-field>
-    <mat-form-field appearance="outline">
-      <mat-label>Project name</mat-label>
-      <input matInput name="projectName" [(ngModel)]="projectForm.name" required>
-    </mat-form-field>
-    <mat-form-field appearance="outline">
-      <mat-label>Customer</mat-label>
-      <input matInput name="projectCustomer" [(ngModel)]="projectForm.customer">
-    </mat-form-field>
-    <app-rich-text-editor
-      class="wide-field"
-      label="Comment"
-      ariaLabel="Project comment"
-      placeholder="Write a comment..."
-      minHeight="180px"
-      [(html)]="projectForm.comment"
-    ></app-rich-text-editor>
-    <div class="form-actions">
-      <button mat-button type="button" (click)="cancelProjectForm()">Cancel</button>
-      <button mat-flat-button color="primary" type="submit" [disabled]="saving">
-        <mat-icon class="material-symbols-outlined">save</mat-icon>
-        Save
-      </button>
+  @if (loading) {
+    <div class="board-message"><mat-spinner diameter="34" aria-label="A tábla betöltése"></mat-spinner></div>
+  } @else if (loadError) {
+    <div class="board-message" role="alert">
+      <p>{{ loadError }}</p>
+      <button type="button" mat-stroked-button (click)="load()">Újrapróbálás</button>
     </div>
-  </form>
+  } @else {
+    <div class="filters" role="group" aria-label="Feladatszűrők">
+      <label>Felelős
+        <select [(ngModel)]="filters.who" (ngModelChange)="applyFilters()">
+          <option [value]="all">Minden felelős</option>
+          <option [value]="unassigned">Nincs felelős</option>
+          @for (person of people; track person.id) { <option [value]="person.id">{{ person.fullName }}</option> }
+        </select>
+      </label>
+      <label>Projekt
+        <select [(ngModel)]="filters.project" (ngModelChange)="applyFilters()">
+          <option [value]="all">Minden projekt</option>
+          @for (row of rows; track row.id) {
+            <option [value]="row.id">{{ row.workNumber ? row.workNumber + ' · ' : '' }}{{ row.name }}</option>
+          }
+        </select>
+      </label>
+      <label>Státusz
+        <select [(ngModel)]="filters.status" (ngModelChange)="applyFilters()">
+          <option [value]="all">Minden státusz</option>
+          @for (lane of lanes; track lane.id) { <option [value]="lane.id">{{ lane.label }}</option> }
+        </select>
+      </label>
+      <label>Almunka
+        <select [(ngModel)]="filters.sub" (ngModelChange)="applyFilters()">
+          <option [value]="all">Minden almunka</option>
+          @for (sub of subFilters; track sub.id) { <option [value]="sub.id">{{ sub.label }}</option> }
+        </select>
+      </label>
+    </div>
 
-  <div class="loading-state" *ngIf="loading">
-    <mat-spinner diameter="36"></mat-spinner>
-  </div>
-
-  <div class="effort-layout" *ngIf="!loading">
-    <aside class="project-list">
-      <button
-        class="project-card"
-        type="button"
-        *ngFor="let project of projects"
-        [class.selected]="selectedProject?.id === project.id"
-        [class.closed]="project.status === 'closed'"
-        (click)="selectProject(project)">
-        <span class="status-pill" [class.closed]="project.status === 'closed'">{{ statusText(project.status) }}</span>
-        <strong>{{ project.name }}</strong>
-        <span>{{ project.customer || 'No customer' }}</span>
-        <div class="time-row">
-          <span>Net {{ formatDuration(project.status === 'closed' ? project.closedNetMs : projectDisplayNet(project)) }}</span>
-          <span>{{ project.taskCount }} task</span>
-        </div>
-      </button>
-      <div class="empty-state" *ngIf="!projects.length">
-        No projects yet.
-      </div>
-    </aside>
-
-    <section class="project-detail" *ngIf="selectedProject; else noProjectSelected">
-      <div class="detail-header">
-        <div>
-          <span class="status-pill" [class.closed]="selectedProject.status === 'closed'">{{ statusText(selectedProject.status) }}</span>
-          <h2>{{ selectedProject.name }}</h2>
-          <p>{{ selectedProject.customer || 'No customer' }}</p>
-          <a class="work-reference" *ngIf="selectedProject.workItem" routerLink="/project-tracker">
-            <mat-icon class="material-symbols-outlined">link</mat-icon>
-            {{ selectedProject.workItem.workNumber }} · {{ selectedProject.workItem.name }}
-          </a>
-        </div>
-        <div class="detail-actions" *ngIf="auth.canEditFeature('effortTracking') || auth.canDeleteFeature('effortTracking')">
-          <ng-container *ngIf="auth.canEditFeature('effortTracking')">
-          <button mat-stroked-button type="button" (click)="startEditProject()" [disabled]="selectedProject.status === 'closed'">
-            <mat-icon class="material-symbols-outlined">edit</mat-icon>
-            Edit
-          </button>
-          <button mat-stroked-button type="button" *ngIf="selectedProject.status === 'open'" (click)="closeProject()" [disabled]="saving">
-            <mat-icon class="material-symbols-outlined">task_alt</mat-icon>
-            Close project
-          </button>
-          <button mat-stroked-button type="button" *ngIf="selectedProject.status === 'closed'" (click)="reopenProject()" [disabled]="saving">
-            <mat-icon class="material-symbols-outlined">lock_open</mat-icon>
-            Reopen
-          </button>
-          </ng-container>
-          <button class="project-delete-button" mat-stroked-button type="button" *ngIf="auth.canDeleteFeature('effortTracking')" (click)="deleteProject()" [disabled]="saving">
-            <mat-icon class="material-symbols-outlined">delete</mat-icon>
-            Delete
+    <div class="board">
+      <div class="board-grid board-head">
+        <div class="project-heading">
+          <span>Projekt <span class="count">{{ visibleRows.length }}</span></span>
+          <button type="button" mat-icon-button [disabled]="!visibleRows.length" [attr.aria-label]="toggleLabel"
+            [matTooltip]="toggleLabel" aria-controls="effort-rows" (click)="toggleAll()">
+            <mat-icon class="material-symbols-outlined">{{ anyOpen ? 'unfold_less' : 'unfold_more' }}</mat-icon>
           </button>
         </div>
-      </div>
-
-      <div class="summary-grid">
-        <div>
-          <span>Project net</span>
-          <strong>{{ formatDuration(projectDisplayNet()) }}</strong>
-        </div>
-        <div>
-          <span>Project gross</span>
-          <strong>{{ grossText(selectedProject) }}</strong>
-        </div>
-        <div>
-          <span>Tasks</span>
-          <strong>{{ selectedProject.taskCount }}</strong>
-        </div>
-        <div>
-          <span>Running</span>
-          <strong>{{ selectedProject.activeTaskCount }}</strong>
-        </div>
-      </div>
-
-      <div class="comment rich-content" *ngIf="selectedProject.comment" [innerHTML]="selectedProject.comment"></div>
-
-      <div class="section-header">
-        <h3>Tasks</h3>
-        <button mat-stroked-button type="button" *ngIf="auth.canEditFeature('effortTracking')" (click)="startCreateTask()" [disabled]="selectedProject.status === 'closed'">
-          <mat-icon class="material-symbols-outlined">add</mat-icon>
-          Add task
-        </button>
-      </div>
-
-      <form class="task-form" *ngIf="showTaskForm" (ngSubmit)="saveTask()">
-        <mat-form-field appearance="outline">
-          <mat-label>Task name</mat-label>
-          <input matInput name="taskName" [(ngModel)]="taskForm.name" required>
-        </mat-form-field>
-        <mat-form-field appearance="outline">
-          <mat-label>Related sub-work</mat-label>
-          <mat-select name="taskSubWorkItem" [(ngModel)]="taskForm.subWorkItemId" [disabled]="!selectedProject.workItemId">
-            <mat-option value="">No related sub-work</mat-option>
-            <mat-option *ngFor="let subWork of availableSubWorks()" [value]="subWork.id">{{ subWork.subWorkNumber }} · {{ subWork.name }}</mat-option>
-          </mat-select>
-          <mat-hint>{{ selectedProject.workItemId ? 'Optional; active sub-works only.' : 'Link the effort project to a work first.' }}</mat-hint>
-        </mat-form-field>
-        <app-rich-text-editor
-          class="wide-field"
-          label="Note"
-          ariaLabel="Task note"
-          placeholder="Write a note..."
-          minHeight="180px"
-          [(html)]="taskForm.note"
-        ></app-rich-text-editor>
-        <div class="form-actions">
-          <button mat-button type="button" (click)="cancelTaskForm()">Cancel</button>
-          <button mat-flat-button color="primary" type="submit" [disabled]="saving">
-            <mat-icon class="material-symbols-outlined">save</mat-icon>
-            {{ editingTaskId ? 'Save task' : 'Create task' }}
-          </button>
-        </div>
-      </form>
-
-      <div class="task-grid" *ngIf="selectedProject.tasks.length; else noTasks">
-        <article class="task-card" *ngFor="let task of selectedProject.tasks" [class.closed]="task.status === 'closed'" [class.active]="task.active">
-          <div class="task-head">
-            <div class="task-title">
-              <h4>{{ task.name }}</h4>
-              <span class="sub-work-reference" *ngIf="task.subWorkItem"><mat-icon class="material-symbols-outlined">account_tree</mat-icon>{{ task.subWorkItem.subWorkNumber }} · {{ task.subWorkItem.name }}</span>
-            </div>
-            <div class="task-status">
-              <span class="status-pill" [class.closed]="task.status === 'closed'" [class.new]="taskStatusText(task) === 'New'">{{ taskStatusText(task) }}</span>
-              <mat-icon class="material-symbols-outlined" *ngIf="task.active">timer</mat-icon>
-            </div>
+        @for (lane of lanes; track lane.id) {
+          <div class="lane-heading" [class]="lane.id">
+            <span class="status-dot" aria-hidden="true"></span>{{ lane.label }}
+            <span class="count">{{ laneCounts[lane.id] }}</span>
           </div>
-          <div
-            class="task-note rich-content"
-            *ngIf="task.note"
-            [class.expanded]="isTaskNoteExpanded(task)"
-            [innerHTML]="task.note">
-          </div>
-          <button
-            class="show-more-button"
-            type="button"
-            *ngIf="shouldShowTaskNoteToggle(task)"
-            (click)="toggleTaskNote(task)">
-            {{ isTaskNoteExpanded(task) ? 'Show less' : 'Show more...' }}
-          </button>
-          <div class="task-times">
-            <div>
-              <span>Net</span>
-              <strong>{{ formatDuration(taskDisplayNet(task)) }}</strong>
-            </div>
-            <div>
-              <span>Gross</span>
-              <strong>{{ grossText(task) }}</strong>
-            </div>
-          </div>
-          <div class="task-actions" *ngIf="auth.canEditFeature('effortTracking') || auth.canDeleteFeature('effortTracking')">
-            <ng-container *ngIf="auth.canEditFeature('effortTracking')">
-            <button class="task-action-edit" mat-stroked-button type="button" *ngIf="task.status === 'open'" (click)="startEditTask(task)" [disabled]="saving || selectedProject.status === 'closed'">
-              <mat-icon class="material-symbols-outlined">edit</mat-icon>
-              Edit
-            </button>
-            <button
-              mat-flat-button
-              class="task-action-start"
-              type="button"
-              *ngIf="!task.active && task.status === 'open'"
-              [matTooltip]="startButtonTooltip(task)"
-              (click)="startTask(task)"
-              [disabled]="saving || selectedProject.status === 'closed'">
-              <mat-progress-spinner *ngIf="isTaskActionRunning(task, 'start')" diameter="18" mode="indeterminate"></mat-progress-spinner>
-              <mat-icon class="material-symbols-outlined" *ngIf="!isTaskActionRunning(task, 'start')">play_arrow</mat-icon>
-              {{ startButtonText(task) }}
-            </button>
-            <button class="task-action-stop" mat-stroked-button type="button" *ngIf="task.activeByCurrentUser || isTaskActionRunning(task, 'stop')" (click)="stopTask(task)" [disabled]="saving">
-              <mat-progress-spinner *ngIf="isTaskActionRunning(task, 'stop')" diameter="18" mode="indeterminate"></mat-progress-spinner>
-              <mat-icon class="material-symbols-outlined" *ngIf="!isTaskActionRunning(task, 'stop')">stop</mat-icon>
-              Stop
-            </button>
-            <button class="task-action-close" mat-stroked-button type="button" *ngIf="task.status === 'open'" (click)="closeTask(task)" [disabled]="saving || selectedProject.status === 'closed'">
-              <mat-progress-spinner *ngIf="isTaskActionRunning(task, 'close')" diameter="18" mode="indeterminate"></mat-progress-spinner>
-              <mat-icon class="material-symbols-outlined" *ngIf="!isTaskActionRunning(task, 'close')">check_circle</mat-icon>
-              Close
-            </button>
-            </ng-container>
-            <button class="task-action-delete" mat-stroked-button type="button" *ngIf="auth.canDeleteFeature('effortTracking')" (click)="deleteTask(task)" [disabled]="saving">
-              <mat-progress-spinner *ngIf="isTaskActionRunning(task, 'delete')" diameter="18" mode="indeterminate"></mat-progress-spinner>
-              <mat-icon class="material-symbols-outlined" *ngIf="!isTaskActionRunning(task, 'delete')">delete</mat-icon>
-              Delete
-            </button>
-          </div>
-          <small *ngIf="task.status === 'closed'">
-            Closed net {{ formatDuration(task.closedNetMs) }} / gross {{ formatDuration(task.closedGrossMs) }}
-          </small>
-        </article>
+        }
       </div>
+      <div id="effort-rows">
+        @for (row of visibleRows; track row.id) {
+          <section class="board-grid project-row" [class.collapsed]="collapsed.has(row.id)" [attr.aria-label]="row.name">
+            <div class="project-cell">
+              <div class="project-actions">
+                <button type="button" class="project-toggle" [attr.aria-expanded]="!collapsed.has(row.id)" (click)="toggleRow(row)">
+                  <mat-icon class="material-symbols-outlined">{{ collapsed.has(row.id) ? 'chevron_right' : 'expand_more' }}</mat-icon>
+                  <span>{{ row.name }}</span>
+                </button>
+                @if (personalProjects(row).length) {
+                  <button type="button" mat-icon-button [matMenuTriggerFor]="personalMenu" [disabled]="saving"
+                    aria-label="Személyes projekt műveletei" matTooltip="Személyes projekt műveletei">
+                    <mat-icon class="material-symbols-outlined">more_vert</mat-icon>
+                  </button>
+                  <mat-menu #personalMenu="matMenu">
+                    @for (project of personalProjects(row); track project.id) {
+                      @if (canEdit && project.status === 'open') {
+                        <button mat-menu-item (click)="startProjectEditor(project)">Szerkesztés · {{ project.name }}</button>
+                        <button mat-menu-item (click)="changePersonalProject(project, 'close')">Lezárás · {{ project.name }}</button>
+                      } @else {
+                        <button mat-menu-item (click)="startProjectEditor(project)">Részletek · {{ project.name }}</button>
+                        @if (canEdit) {
+                          <button mat-menu-item (click)="changePersonalProject(project, 'reopen')">Újranyitás · {{ project.name }}</button>
+                        }
+                      }
+                      @if (canDelete) {
+                        <button mat-menu-item (click)="changePersonalProject(project, 'delete')">Törlés · {{ project.name }}</button>
+                      }
+                    }
+                  </mat-menu>
+                }
+              </div>
+              <div class="project-details">
+                @if (row.work && auth.canAccessFeature('workBoard')) {
+                  <a routerLink="/project-tracker" [queryParams]="{ work: row.work.id }">{{ row.workNumber }}</a>
+                } @else if (row.workNumber) {
+                  <span>{{ row.workNumber }}</span>
+                } @else {
+                  <span>Személyes projekt</span>
+                }
+                @if (row.customer) { <span>{{ row.customer }}</span> }
+                <span class="duration">Nettó {{ formatDuration(rowNet(row)) }}</span>
+              </div>
+            </div>
 
-      <ng-template #noTasks>
-        <div class="empty-state">No tasks on this project.</div>
-      </ng-template>
-    </section>
-
-    <ng-template #noProjectSelected>
-      <section class="project-detail empty-state">Select or create a project.</section>
-    </ng-template>
-  </div>
+            @for (lane of lanes; track lane.id; let i = $index) {
+              @if (collapsed.has(row.id)) {
+                <div class="lane-summary" [class]="lane.id">
+                  <span class="mobile-lane-label">{{ lane.label }}</span>
+                  <span class="count" [attr.aria-label]="lane.label + ' feladatok: ' + row.byStatus[lane.id].length">
+                    {{ row.byStatus[lane.id].length }}
+                  </span>
+                </div>
+              } @else {
+                <div class="lane" [class]="lane.id" [attr.aria-label]="lane.label"
+                  cdkDropList [id]="row.dropIds[i]" [cdkDropListConnectedTo]="row.dropIds"
+                  [cdkDropListData]="lane.id" [cdkDropListSortingDisabled]="true" (cdkDropListDropped)="drop($event)">
+                  <div class="mobile-lane-label"><span class="status-dot" aria-hidden="true"></span>{{ lane.label }}
+                    <span class="count">{{ row.byStatus[lane.id].length }}</span>
+                  </div>
+                  @for (task of row.byStatus[lane.id]; track task.id) {
+                    <article class="task-card" [class.running]="task.active" [id]="'effort-task-' + task.id"
+                      cdkDrag [cdkDragData]="task" [cdkDragDisabled]="saving || !canEditTask(task)" (dblclick)="startTaskEditor(row, task)">
+                      <div class="task-title">
+                        <h2 cdkDragHandle [class.draggable]="canEditTask(task)" [cdkDragHandleDisabled]="!canEditTask(task)">{{ task.name }}</h2>
+                        <button type="button" mat-icon-button class="task-editor-button" aria-label="Feladat megnyitása"
+                          matTooltip="Feladat megnyitása" (click)="startTaskEditor(row, task)" (dblclick)="$event.stopPropagation()">
+                          <mat-icon class="material-symbols-outlined">open_in_new</mat-icon>
+                        </button>
+                      </div>
+                      @if (task.subWorkItem; as sub) {
+                        <span class="sub-work-badge" [matTooltip]="sub.name">
+                          <mat-icon class="material-symbols-outlined" aria-hidden="true">account_tree</mat-icon>
+                          <span>{{ sub.name }}</span>
+                        </span>
+                      }
+                      <div class="task-fields" (dblclick)="$event.stopPropagation()">
+                        <select aria-label="Feladatstátusz" [ngModel]="task.status" #statusSelect
+                          [disabled]="saving || !canEditTask(task)" (ngModelChange)="statusSelect.value = task.status; changeStatus(task, $event)">
+                          @for (status of lanes; track status.id) { <option [value]="status.id">{{ status.label }}</option> }
+                        </select>
+                        <select aria-label="Feladat felelőse" [ngModel]="task.assigneeId || unassigned" #assigneeSelect
+                          [disabled]="saving || !canEditTask(task)" (ngModelChange)="assigneeSelect.value = task.assigneeId || unassigned; changeAssignee(task, $event)">
+                          <option [value]="unassigned">Nincs felelős</option>
+                          @if (task.assigneeId && !peopleById.has(task.assigneeId)) {
+                            <option [value]="task.assigneeId">{{ task.assigneeName }}</option>
+                          }
+                          @for (person of people; track person.id) { <option [value]="person.id">{{ person.fullName }}</option> }
+                        </select>
+                      </div>
+                      <div class="task-times">
+                        <span>Nettó <strong>{{ formatDuration(taskNet(task)) }}</strong></span>
+                        <span>Becs. {{ task.estimateMs === null ? '—' : formatDuration(task.estimateMs) }}</span>
+                      </div>
+                      @if (task.status === 'in_progress') {
+                        <div class="transport" (dblclick)="$event.stopPropagation()">
+                          <button type="button" mat-icon-button [attr.aria-label]="timerLabel(task)" [matTooltip]="timerLabel(task)"
+                            [disabled]="saving || !canEditTask(task) || (task.active && !task.activeByCurrentUser)" (click)="toggleTimer(task)">
+                            <mat-icon class="material-symbols-outlined">{{ task.activeByCurrentUser ? 'pause' : 'play_arrow' }}</mat-icon>
+                          </button>
+                          <button type="button" mat-icon-button aria-label="Mérés leállítása" matTooltip="Mérés leállítása"
+                            [disabled]="saving || !canEditTask(task) || (!task.activeByCurrentUser && !task.timerPaused)" (click)="stopTimer(task)">
+                            <mat-icon class="material-symbols-outlined">stop</mat-icon>
+                          </button>
+                          <span>{{ task.active ? (task.activeByCurrentUser ? 'Mérés fut' : 'Más méri') : task.timerPaused ? 'Szünetel' : 'Mérés áll' }}</span>
+                        </div>
+                      }
+                    </article>
+                  }
+                  @if (lane.id === 'new' && canAddTask(row)) {
+                    <button type="button" class="add-task" mat-stroked-button [disabled]="saving" (click)="startTaskEditor(row)">
+                      <mat-icon class="material-symbols-outlined">add</mat-icon> Feladat
+                    </button>
+                  } @else if (!row.byStatus[lane.id].length) {
+                    <span class="lane-empty" aria-hidden="true">—</span>
+                  }
+                </div>
+              }
+            }
+          </section>
+        } @empty {
+          <div class="board-message" role="status">{{ rows.length ? 'A kiválasztott szűrőkkel nincs találat.' : 'Még nincs projekt a táblán.' }}</div>
+        }
+      </div>
+    </div>
+  }
 </section>
+
+<ng-template #taskEditor>
+  <form #taskNgForm="ngForm" (ngSubmit)="taskNgForm.valid && saveTask()" lang="hu">
+    <h2 mat-dialog-title>{{ taskInEditor ? 'Feladat részletei' : 'Új feladat' }}</h2>
+    <mat-dialog-content>
+      <p class="dialog-context">{{ rowInEditor?.workNumber }} {{ rowInEditor?.name }}</p>
+      <fieldset class="editor-fields" [disabled]="saving || !editableTask">
+        <label class="full-width">Feladat neve
+          <input name="title" [(ngModel)]="taskForm.name" required maxlength="200" cdkFocusInitial>
+        </label>
+        <label>Almunka
+          <select name="sub" [(ngModel)]="taskForm.sub">
+            <option value="">Nincs hozzárendelve</option>
+            @if (taskInEditor?.subWorkItem; as sub) {
+              @if (sub.id && !taskSubOptionsById(sub.id)) {
+                <option [value]="sub.id">{{ sub.name }} · archivált</option>
+              }
+            }
+            @for (sub of taskSubOptions; track sub.id) { <option [value]="sub.id">{{ sub.subWorkNumber }} · {{ sub.name }}</option> }
+          </select>
+        </label>
+        <label>Felelős
+          <select name="assignee" [(ngModel)]="taskForm.who">
+            <option value="">Nincs felelős</option>
+            @if (taskInEditor?.assigneeId && !peopleById.has(taskInEditor!.assigneeId!)) {
+              <option [value]="taskInEditor!.assigneeId">{{ taskInEditor!.assigneeName }}</option>
+            }
+            @for (person of people; track person.id) { <option [value]="person.id">{{ person.fullName }}</option> }
+          </select>
+        </label>
+        <label>Időbecslés (perc)
+          <input type="number" min="0" max="1000000" step="any" name="estimate" [(ngModel)]="taskForm.estimate" placeholder="Nincs becslés">
+        </label>
+        @if (taskInEditor; as task) {
+          <label>Korrigált nettó (perc)
+            <input type="number" min="0" max="1000000" step="any" name="net" [(ngModel)]="taskForm.net"
+              [disabled]="task.active" [placeholder]="(task.netMs / 60000 | number:'1.0-2') || ''">
+          </label>
+          <p class="duration full-width dialog-context">
+            Mért nettó {{ formatDuration(task.measuredNetMs) }} · Elszámolt nettó {{ formatDuration(task.netMs) }}
+            @if (task.status === 'closed') { <span class="correction-hint">Bruttó átfutás {{ formatDuration(task.grossMs) }}</span> }
+            @if (task.active) { <span class="correction-hint">A korrekcióhoz szüneteltesd vagy állítsd le a mérést.</span> }
+          </p>
+          @if (taskForm.net !== null) {
+            <label class="full-width">Korrekció indoka
+              <input name="reason" required maxlength="500" [(ngModel)]="taskForm.reason">
+            </label>
+          }
+        }
+      </fieldset>
+      <app-rich-text-editor label="Megjegyzés" ariaLabel="Feladat megjegyzése" minHeight="110px"
+        [readonly]="!editableTask" [disabled]="saving" [(html)]="taskForm.note"></app-rich-text-editor>
+      @if (taskInEditor?.netCorrections?.length) {
+        <details class="corrections">
+          <summary>Időkorrekciók ({{ taskInEditor!.netCorrections.length }})</summary>
+          @for (correction of taskInEditor!.netCorrections; track $index) {
+            <div class="correction">
+              <span>{{ correction.at | date:'yyyy.MM.dd. HH:mm' }} · {{ correction.userName || peopleById.get(correction.userId) || 'Korábbi felhasználó' }}</span>
+              <strong>{{ formatDuration(correction.previousMs) }} → {{ formatDuration(correction.netMs) }}</strong>
+              <span>{{ correction.reason }}</span>
+            </div>
+          }
+        </details>
+      }
+      @if (editorError) { <p class="editor-error" role="alert">{{ editorError }}</p> }
+    </mat-dialog-content>
+    <mat-dialog-actions align="end">
+      @if (taskInEditor && canDelete) {
+        <button type="button" mat-button class="delete-action" [disabled]="saving || taskInEditor.active" (click)="deleteTask(taskInEditor)">Törlés</button>
+      }
+      <button type="button" mat-button mat-dialog-close [disabled]="saving">{{ editableTask ? 'Mégse' : 'Bezárás' }}</button>
+      @if (editableTask) {
+        <button type="submit" mat-flat-button color="primary" [disabled]="saving || taskNgForm.invalid">Mentés</button>
+      }
+    </mat-dialog-actions>
+  </form>
+</ng-template>
+
+<ng-template #projectEditor>
+  <form #projectNgForm="ngForm" (ngSubmit)="projectNgForm.valid && saveProject()" lang="hu">
+    <h2 mat-dialog-title>{{ projectInEditor ? (editableProject ? 'Személyes projekt szerkesztése' : 'Személyes projekt részletei') : projectEditorMode === 'work' ? 'Új projekt' : 'Új személyes projekt' }}</h2>
+    <mat-dialog-content>
+      @if (projectEditorMode === 'work') { <p class="dialog-context">A projekt a Munkatáblán is megjelenik.</p> }
+      @if (projectInEditor?.status === 'closed') {
+        <p class="dialog-context">Nettó {{ formatDuration(projectInEditor!.closedNetMs) }} · Bruttó {{ formatDuration(projectInEditor!.closedGrossMs) }}</p>
+      }
+      @if (projectEditorLoading) {
+        <div class="board-message"><mat-spinner diameter="28" aria-label="Az űrlap betöltése"></mat-spinner></div>
+      }
+      <fieldset class="editor-fields" [disabled]="saving || projectEditorLoading || !editableProject">
+        <label class="full-width">Projekt neve
+          <input name="projectName" required maxlength="200" [(ngModel)]="projectForm.name" cdkFocusInitial>
+        </label>
+        @if (projectEditorMode === 'work') {
+          <label class="full-width">Ügyfél
+            <select name="client" [(ngModel)]="projectForm.client">
+              <option value="">Nincs ügyfél</option>
+              @for (client of clients; track client.id) { <option [value]="client.id">{{ client.name }}</option> }
+            </select>
+          </label>
+          <label class="full-width">Leírás
+            <textarea name="description" rows="3" [(ngModel)]="projectForm.note"></textarea>
+          </label>
+        } @else {
+          <label class="full-width">Ügyfél
+            <input name="customer" [(ngModel)]="projectForm.customer">
+          </label>
+          @if (availableWorks.length) {
+            <label class="full-width">Munkatábla-projekt összekapcsolása
+              <select name="relatedWork" [(ngModel)]="projectForm.work">
+                <option value="">Nincs összekapcsolva</option>
+                @if (projectInEditor?.workItemId && !hasWork(projectInEditor!.workItemId!)) {
+                  <option [value]="projectInEditor!.workItemId">{{ projectInEditor!.workItem?.name }} · archivált</option>
+                }
+                @for (work of availableWorks; track work.id) { <option [value]="work.id">{{ work.workNumber }} · {{ work.name }}</option> }
+              </select>
+            </label>
+          }
+        }
+      </fieldset>
+      @if (projectEditorMode === 'work') {
+        <app-work-field-values [fields]="fields" [changes]="fieldChanges" [files]="fieldFiles"/>
+      } @else {
+        <app-rich-text-editor label="Megjegyzés" ariaLabel="Projekt megjegyzése" minHeight="110px"
+          [disabled]="saving" [readonly]="!editableProject" [(html)]="projectForm.note"></app-rich-text-editor>
+      }
+      @if (editorError) { <p class="editor-error" role="alert">{{ editorError }}</p> }
+    </mat-dialog-content>
+    <mat-dialog-actions align="end">
+      <button type="button" mat-button mat-dialog-close [disabled]="saving">{{ editableProject ? 'Mégse' : 'Bezárás' }}</button>
+      @if (editableProject) {
+        <button type="submit" mat-flat-button color="primary" [disabled]="saving || projectEditorLoading || projectNgForm.invalid">Mentés</button>
+      }
+    </mat-dialog-actions>
+  </form>
+</ng-template>

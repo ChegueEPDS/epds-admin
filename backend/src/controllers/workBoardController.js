@@ -349,9 +349,13 @@ exports.listWorks = (req, res) => withErrors(res, async () => {
   });
 });
 
-exports.activeOptions = (req, res) => withErrors(res, async () => {
-  const works = await WorkItem.find({ ...scopeQuery(req.scope), archivedAt: { $exists: false }, status: { $nin: [...TERMINAL_STATUSES] } }).sort({ workNumber: -1 }).limit(250);
-  const subWorks = await SubWorkItem.find({ ...scopeQuery(req.scope), workItemId: { $in: works.map((work) => work._id) }, archivedAt: { $exists: false }, status: { $nin: [...TERMINAL_STATUSES] } }).sort({ sequenceNumber: 1 });
+const workOptions = (activeOnly) => (req, res) => withErrors(res, async () => {
+  const filter = { ...scopeQuery(req.scope), archivedAt: { $exists: false } };
+  if (activeOnly) filter.status = { $nin: [...TERMINAL_STATUSES] };
+  const worksQuery = WorkItem.find(filter).select('workNumber name customer status').sort({ workNumber: -1 }).lean();
+  const works = await (activeOnly ? worksQuery.limit(250) : worksQuery);
+  const subWorks = await SubWorkItem.find({ ...filter, workItemId: { $in: works.map((work) => work._id) } })
+    .select('workItemId sequenceNumber name status').sort({ sequenceNumber: 1 }).lean();
   const byWork = new Map();
   subWorks.forEach((item) => {
     const key = String(item.workItemId);
@@ -365,6 +369,8 @@ exports.activeOptions = (req, res) => withErrors(res, async () => {
     }))
   });
 });
+exports.activeOptions = workOptions(true);
+exports.boardOptions = workOptions(false);
 
 exports.getWork = (req, res) => withErrors(res, async () => {
   const includeArchived = req.query?.includeDeleted === 'true';

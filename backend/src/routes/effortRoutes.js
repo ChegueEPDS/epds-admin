@@ -1,9 +1,11 @@
 const express = require('express');
 const controller = require('../controllers/effortControllerFacade');
-const { requireAuth, requireTenantFeature } = require('../middlewares/authMiddleware');
+const { listTenantUsers } = require('../controllers/workBoardControllerFacade');
+const { requireAuth, requireTenantContext, requireTenantFeature } = require('../middlewares/authMiddleware');
 
 const router = express.Router();
 
+router.get('/effort/assignees', requireAuth, requireTenantContext, requireTenantFeature('effortTracking'), listTenantUsers);
 router.get('/effort/projects', requireAuth, requireTenantFeature('effortTracking'), controller.listProjects);
 router.post('/effort/projects', requireAuth, requireTenantFeature('effortTracking', 'edit'), controller.createProject);
 router.get('/effort/projects/:id', requireAuth, requireTenantFeature('effortTracking'), controller.getProject);

@@ -251,7 +251,7 @@ async function projectEffort(client) {
   for (const doc of projects) await upsert(client, 'effort_projects', {
     id: id(doc._id), tenant_id: await resolveTenantId(client, doc, doc), name: doc.name, normalized_name: doc.normalizedName,
     customer: doc.customer || '', comment: doc.comment || '', work_item_id: id(doc.workItemId),
-    work_item_snapshot: json(doc.workItemSnapshot, {}), status: doc.status || 'open', closed_at: date(doc.closedAt),
+    work_item_snapshot: json(doc.workItemSnapshot, {}), shared: Boolean(doc.shared), status: doc.status || 'open', closed_at: date(doc.closedAt),
     closed_net_ms: Number(doc.closedNetMs || 0), closed_gross_ms: Number(doc.closedGrossMs || 0),
     created_by: id(doc.createdBy), updated_by: id(doc.updatedBy), closed_by: id(doc.closedBy), ...stamps(doc)
   });
@@ -262,6 +262,9 @@ async function projectEffort(client) {
       note: doc.note || '', sub_work_item_id: id(doc.subWorkItemId), sub_work_item_snapshot: json(doc.subWorkItemSnapshot, {}),
       assignee_id: id(doc.assigneeId), assignee_name: doc.assigneeName || '',
       estimate_ms: doc.estimateMs ?? null, net_adjustment_ms: Number(doc.netAdjustmentMs || 0),
+      net_corrections: json((doc.netCorrections || []).map((entry) => ({
+        ...entry, userId: id(entry.userId), at: date(entry.at)
+      })), []),
       timer_paused: Boolean(doc.timerPaused),
       status: doc.status || 'open', archived_net_ms: Number(doc.archivedNetMs || 0),
       archived_session_count: Number(doc.archivedSessionCount || 0), first_started_at: date(doc.firstStartedAt),

@@ -61,6 +61,18 @@ async function listSubWorks(tenantId, workIds, deleted = false) {
   return result.rows.map(subWork);
 }
 
+async function listBoardOptions(tenantId) {
+  const { rows } = await query(`SELECT id, work_number AS "workNumber", name, customer, status
+    FROM work_items WHERE tenant_id=$1 AND archived_at IS NULL ORDER BY work_number DESC`, [tenantId]);
+  const byWork = new Map(rows.map((row) => [row.id, { ...row, subWorks: [] }]));
+  for (const item of await listSubWorks(tenantId, rows.map((row) => row.id))) {
+    const parent = byWork.get(item.workItemId);
+    parent.subWorks.push({ id: item.id, name: item.name, status: item.status, sequenceNumber: item.sequenceNumber,
+      subWorkNumber: `${parent.workNumber}/${String(item.sequenceNumber).padStart(2, '0')}` });
+  }
+  return [...byWork.values()];
+}
+
 async function list({ tenantId, status = 'active', search = '', page = 1, limit = 50 }) {
   const params = [tenantId];
   const where = ['tenant_id=$1'];
@@ -105,8 +117,10 @@ async function findWork(tenantId, workId, includeDeleted = false) {
 async function nextSequence(client, tenantId, year) {
   const key = `work:${year}`;
   const result = await client.query(`INSERT INTO work_sequences(id,tenant_id,key,value,created_at,updated_at)
-    VALUES($1,$2,$3,1,now(),now()) ON CONFLICT(tenant_id,key) DO UPDATE
-    SET value=work_sequences.value+1,updated_at=now() RETURNING value`, [id(), tenantId, key]);
+    SELECT $1::varchar,$2::varchar,$3::text,COALESCE(MAX(sequence_number),0)+1,now(),now()
+    FROM work_items WHERE tenant_id=$2::varchar AND year=$4::integer
+    ON CONFLICT(tenant_id,key) DO UPDATE
+    SET value=GREATEST(work_sequences.value+1,EXCLUDED.value),updated_at=now() RETURNING value`, [id(), tenantId, key, year]);
   return Number(result.rows[0].value);
 }
 
@@ -130,7 +144,7 @@ async function createWork(tenantId, actorId, input) {
       Boolean(input.contractSigned), Boolean(input.performanceCertificate), actorId, JSON.stringify(input.customFields || {}),
       input.entityId || null, input.serviceTypeId || null, JSON.stringify(input.reporting || {})]);
     return work(result.rows[0]);
-  }, { isolationLevel: 'SERIALIZABLE' });
+  });
 }
 
 const WORK_MUTABLE = new Map([
@@ -298,6 +312,6 @@ async function deleteDocument(tenantId, documentId) {
   return document(result.rows[0]);
 }
 
-module.exports = { list, findWork, createWork, updateWork, archiveWork, restoreWork, createSubWork,
+module.exports = { list, listBoardOptions, findWork, createWork, updateWork, archiveWork, restoreWork, createSubWork,
   updateSubWork, archiveSubWork, listClients, findClientByTaxNumber, isClientLinked, saveClient, listUsers,
   listDocuments, findDocument, createDocument, deleteDocument, work, subWork, document };

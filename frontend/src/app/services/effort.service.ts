@@ -1,9 +1,11 @@
 import { HttpClient } from '@angular/common/http';
 import { Injectable } from '@angular/core';
-import { Observable } from 'rxjs';
+import { map, Observable } from 'rxjs';
 import { environment } from '../../environments/environment';
+import { TenantUserOption } from './work-board.service';
 
 export type EffortStatus = 'open' | 'closed';
+export type EffortTaskStatus = 'new' | 'in_progress' | 'closed';
 
 export type EffortTask = {
   id: string;
@@ -12,7 +14,13 @@ export type EffortTask = {
   note: string;
   subWorkItemId: string | null;
   subWorkItem: { id: string | null; subWorkNumber: string; name: string } | null;
-  status: EffortStatus;
+  status: EffortTaskStatus;
+  assigneeId: string | null;
+  assigneeName: string;
+  estimateMs: number | null;
+  measuredNetMs: number;
+  netCorrections: { userId: string; userName?: string; at: string; reason: string; previousMs: number; netMs: number }[];
+  timerPaused: boolean;
   netMs: number;
   grossMs: number;
   active: boolean;
@@ -33,6 +41,7 @@ export type EffortProject = {
   name: string;
   customer: string;
   comment: string;
+  shared: boolean;
   workItemId: string | null;
   workItem: { id: string | null; workNumber: string; name: string; customer: string } | null;
   status: EffortStatus;
@@ -54,12 +63,18 @@ export type EffortProjectPayload = {
   customer?: string;
   comment?: string;
   workItemId?: string | null;
+  shared?: boolean;
 };
 
 export type EffortTaskPayload = {
   name: string;
   note?: string;
   subWorkItemId?: string | null;
+  assigneeId?: string | null;
+  estimateMs?: number | null;
+  netOverrideMs?: number;
+  netOverrideReason?: string;
+  status?: EffortTaskStatus;
 };
 
 @Injectable({ providedIn: 'root' })
@@ -68,8 +83,12 @@ export class EffortService {
 
   constructor(private http: HttpClient) {}
 
-  listProjects(): Observable<EffortProject[]> {
-    return this.http.get<EffortProject[]>(`${this.baseUrl}/projects`, { withCredentials: true });
+  listProjects(board = false): Observable<EffortProject[]> {
+    return this.http.get<EffortProject[]>(`${this.baseUrl}/projects`, { withCredentials: true, params: board ? { board: '1' } : {} });
+  }
+
+  listAssignees(): Observable<TenantUserOption[]> {
+    return this.http.get<{ users: TenantUserOption[] }>(`${this.baseUrl}/assignees`, { withCredentials: true }).pipe(map(res => res.users));
   }
 
   getProject(id: string): Observable<EffortProject> {
@@ -100,7 +119,7 @@ export class EffortService {
     return this.http.post<EffortTask>(`${this.baseUrl}/projects/${projectId}/tasks`, payload, { withCredentials: true });
   }
 
-  updateTask(taskId: string, payload: EffortTaskPayload): Observable<EffortTask> {
+  updateTask(taskId: string, payload: Partial<EffortTaskPayload>): Observable<EffortTask> {
     return this.http.patch<EffortTask>(`${this.baseUrl}/tasks/${taskId}`, payload, { withCredentials: true });
   }
 
@@ -108,8 +127,8 @@ export class EffortService {
     return this.http.post<EffortTask>(`${this.baseUrl}/tasks/${taskId}/start`, {}, { withCredentials: true });
   }
 
-  stopTask(taskId: string): Observable<EffortTask> {
-    return this.http.post<EffortTask>(`${this.baseUrl}/tasks/${taskId}/stop`, {}, { withCredentials: true });
+  stopTask(taskId: string, pause = false): Observable<EffortTask> {
+    return this.http.post<EffortTask>(`${this.baseUrl}/tasks/${taskId}/stop`, { pause }, { withCredentials: true });
   }
 
   closeTask(taskId: string): Observable<EffortTask> {

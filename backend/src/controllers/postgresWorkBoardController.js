@@ -37,6 +37,9 @@ exports.activeOptions=(req,res)=>run(res,async()=>{const result=await store.list
   res.json({works:result.works.map(w=>({id:w.id,workNumber:w.workNumber,name:w.name,customer:w.customer||'',status:w.status,
     subWorks:(w.subWorks||[]).filter(s=>!TERMINAL.has(s.status)).map(s=>({id:s.id,sequenceNumber:s.sequenceNumber,
       subWorkNumber:`${w.workNumber}/${String(s.sequenceNumber).padStart(2,'0')}`,name:s.name,status:s.status}))}))});});
+exports.boardOptions = (req, res) => run(res, async () => {
+  res.json({ works: await store.listBoardOptions(req.scope.tenantId) });
+});
 exports.getWork=(req,res)=>run(res,async()=>{const w=await store.findWork(req.scope.tenantId,req.params.id,req.query.includeDeleted==='true');if(!w)throw fail('Work not found',404);res.json({work:presentWork(w)});});
 exports.createWork=(req,res)=>run(res,async()=>{if(!clean(req.body?.name))throw fail('Work name is required');
   const client=req.body?.clientId?(await store.listClients(req.scope.tenantId)).find(c=>c.id===req.body.clientId):null;
