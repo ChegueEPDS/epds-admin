@@ -1,5 +1,6 @@
 const mongoose = require('mongoose');
 const { query, withTransaction } = require('../../postgres');
+const { pgOrderBy } = require('../../services/workBoardSort');
 
 const id = () => String(new mongoose.Types.ObjectId());
 const TERMINAL = ['completed_billable', 'invoiced', 'paid', 'closed', 'cancelled', 'lost'];
@@ -73,7 +74,7 @@ async function listBoardOptions(tenantId) {
   return [...byWork.values()];
 }
 
-async function list({ tenantId, status = 'active', search = '', page = 1, limit = 50 }) {
+async function list({ tenantId, status = 'active', search = '', page = 1, limit = 50, sort }) {
   const params = [tenantId];
   const where = ['tenant_id=$1'];
   if (status === 'deleted') where.push('archived_at IS NOT NULL');
@@ -88,9 +89,10 @@ async function list({ tenantId, status = 'active', search = '', page = 1, limit 
   }
   const clause = where.join(' AND ');
   const count = await query(`SELECT count(*)::int AS count FROM work_items WHERE ${clause}`, params);
+  const orderBy = sort ? pgOrderBy(sort, params, status === 'deleted') : 'w.status, w.deadline NULLS LAST, w.updated_at DESC';
   params.push(Math.max(1, limit), Math.max(0, (page - 1) * limit));
-  const rows = await query(`SELECT * FROM work_items WHERE ${clause}
-    ORDER BY status,deadline NULLS LAST,updated_at DESC LIMIT $${params.length - 1} OFFSET $${params.length}`, params);
+  const rows = await query(`SELECT w.* FROM work_items w WHERE ${clause}
+    ORDER BY ${orderBy} LIMIT $${params.length - 1} OFFSET $${params.length}`, params);
   const works = rows.rows.map(work);
   const children = await listSubWorks(tenantId, works.map((item) => item.id), status === 'deleted');
   const byWork = new Map();

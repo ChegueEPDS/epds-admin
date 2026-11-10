@@ -8,6 +8,7 @@ const { WorkDocument, WORK_DOCUMENT_CATEGORIES } = require('../models/workDocume
 const fileStorage = require('../services/fileStorageService');
 const workFields = require('../services/workFields');
 const tenantCurrency = require('../services/tenantCurrency');
+const { workBoardSort, mongoSortStages } = require('../services/workBoardSort');
 const { markMongoDashboardDirty } = require('../services/workDashboardSnapshots');
 const { pipeline } = require('stream/promises');
 const crypto = require('crypto');
@@ -322,8 +323,16 @@ exports.listWorks = (req, res) => withErrors(res, async () => {
 
   const limit = requestLimit(req.query.limit, 25, 100);
   const page = Math.max(1, Math.floor(numberValue(req.query.page, 1)));
+  const sort = await workBoardSort(req.scope.tenantId, req.query);
+  const sortStages = mongoSortStages(sort, SubWorkItem.collection.name, status === 'deleted');
+  const worksQuery = sort.key === 'workNumber'
+    ? WorkItem.find(query).sort(sortStages[0].$sort).skip((page - 1) * limit).limit(limit)
+    : WorkItem.aggregate([
+      { $match: { ...query, tenantId: new mongoose.Types.ObjectId(req.scope.tenantId) } },
+      ...sortStages, { $skip: (page - 1) * limit }, { $limit: limit }
+    ]).allowDiskUse(true);
   const [works, total, activeCount, overdueCount, activeValue] = await Promise.all([
-    WorkItem.find(query).sort({ status: 1, deadline: 1, updatedAt: -1 }).skip((page - 1) * limit).limit(limit),
+    worksQuery,
     WorkItem.countDocuments(query),
     WorkItem.countDocuments({ ...scopeQuery(req.scope), archivedAt: { $exists: false }, status: { $nin: [...TERMINAL_STATUSES] } }),
     WorkItem.countDocuments({ ...scopeQuery(req.scope), archivedAt: { $exists: false }, status: { $nin: [...TERMINAL_STATUSES] }, deadline: { $lt: new Date(new Date().setHours(0, 0, 0, 0)) } }),

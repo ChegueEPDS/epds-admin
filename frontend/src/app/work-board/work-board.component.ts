@@ -13,6 +13,7 @@ import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatSelectModule } from '@angular/material/select';
 import { MatNativeDateModule } from '@angular/material/core';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
+import { MatSortModule, Sort } from '@angular/material/sort';
 import { AuthService } from '../services/auth.service';
 import { ClientPayload, SubWorkItem, SubWorkPayload, TenantUserOption, WorkBoardClient, WorkBoardService, WorkDocument, WorkItem, WorkPayload, WorkStatus } from '../services/work-board.service';
 import { WorkFieldValuesComponent } from './work-field-values.component';
@@ -34,7 +35,7 @@ type SubWorkForm = {
 @Component({
   selector: 'app-work-board',
   standalone: true,
-  imports: [CommonModule, FormsModule, MatButtonModule, MatCheckboxModule, MatDatepickerModule, MatNativeDateModule, MatFormFieldModule, MatIconModule, MatInputModule, MatProgressSpinnerModule, MatSelectModule, MatSnackBarModule, WorkFieldValuesComponent],
+  imports: [CommonModule, FormsModule, MatButtonModule, MatCheckboxModule, MatDatepickerModule, MatNativeDateModule, MatFormFieldModule, MatIconModule, MatInputModule, MatProgressSpinnerModule, MatSelectModule, MatSnackBarModule, MatSortModule, WorkFieldValuesComponent],
   templateUrl: './work-board.component.html',
   styleUrl: './work-board.component.scss'
 })
@@ -59,6 +60,7 @@ export class WorkBoardComponent implements OnInit {
   saving = false;
   search = '';
   statusFilter: WorkStatus | 'active' | 'all' | 'deleted' = 'active';
+  sort: { active: string; direction: 'asc' | 'desc' } = { active: 'workNumber', direction: 'desc' };
   page = 1;
   pageSize = 25;
   totalWorks = 0;
@@ -99,7 +101,7 @@ export class WorkBoardComponent implements OnInit {
   };
   private searchTimer: ReturnType<typeof setTimeout> | null = null;
   private loadRequestId = 0;
-  private referencesLoaded = false;
+  protected referencesLoaded = false;
 
   constructor(private board: WorkBoardService, private snackBar: MatSnackBar, public auth: AuthService, private route: ActivatedRoute) {}
   ngOnInit(): void {
@@ -122,7 +124,8 @@ export class WorkBoardComponent implements OnInit {
     this.loading = true;
     try {
       const [workPage, clients, users, settings] = await Promise.all([
-        firstValueFrom(this.board.listWorks({ page: this.page, limit: this.pageSize, search: this.search.trim(), status: this.statusFilter })),
+        firstValueFrom(this.board.listWorks({ page: this.page, limit: this.pageSize, search: this.search.trim(),
+          status: this.statusFilter, sort: this.sort.active, direction: this.sort.direction })),
         this.referencesLoaded ? Promise.resolve(this.clients) : firstValueFrom(this.board.listClients()),
         this.referencesLoaded ? Promise.resolve(this.tenantUsers) : firstValueFrom(this.board.listTenantUsers()),
         this.referencesLoaded || !this.auth.isWorkFieldTenant() ? Promise.resolve(null) : firstValueFrom(this.board.fieldSettings())
@@ -152,6 +155,12 @@ export class WorkBoardComponent implements OnInit {
     if (this.searchTimer) clearTimeout(this.searchTimer);
     if (debounce) this.searchTimer = setTimeout(() => void this.load(), 300);
     else void this.load();
+  }
+  sortChanged({ active, direction }: Sort): void {
+    if (!direction) return;
+    this.sort = { active, direction };
+    this.expandedWorkIds = new Set<string>();
+    this.filtersChanged();
   }
   changePage(nextPage: number): void {
     if (nextPage < 1 || nextPage > this.totalPages || nextPage === this.page) return;

@@ -1,64 +1,64 @@
-<section class="effort-page" lang="hu" aria-labelledby="effort-title">
+<section class="effort-page" lang="en" aria-labelledby="effort-title">
   <header class="page-header">
     <div>
       <h1 id="effort-title">Effort Tracking</h1>
-      <p>Munkatábla projektek és feladatidők</p>
+      <p>Project Tracker projects and task time</p>
     </div>
     <div class="header-actions">
       @if (activeTask; as task) {
         <button type="button" mat-stroked-button class="active-timer" (click)="showActiveTask()"
-          [matTooltip]="'Ugrás a futó méréshez: ' + task.name">
+          [matTooltip]="'Go to the running timer for ' + task.name">
           <mat-icon class="material-symbols-outlined">timer</mat-icon>
-          Futó mérés · {{ formatDuration(taskNet(task)) }}
+          Running timer · {{ formatDuration(taskNet(task)) }}
         </button>
       }
       @if (canCreateWork) {
         <button type="button" mat-flat-button color="primary" [disabled]="saving || loading" (click)="startProjectEditor()">
           <mat-icon class="material-symbols-outlined">add</mat-icon>
-          Új projekt
+          New project
         </button>
       } @else if (canEdit && !loadError) {
         <button type="button" mat-stroked-button [disabled]="saving || loading" (click)="startProjectEditor()">
           <mat-icon class="material-symbols-outlined">add</mat-icon>
-          Személyes projekt
+          Personal project
         </button>
       }
     </div>
   </header>
 
   @if (loading) {
-    <div class="board-message"><mat-spinner diameter="34" aria-label="A tábla betöltése"></mat-spinner></div>
+    <div class="board-message"><mat-spinner diameter="34" aria-label="Loading the board"></mat-spinner></div>
   } @else if (loadError) {
     <div class="board-message" role="alert">
       <p>{{ loadError }}</p>
-      <button type="button" mat-stroked-button (click)="load()">Újrapróbálás</button>
+      <button type="button" mat-stroked-button (click)="load()">Retry</button>
     </div>
   } @else {
-    <div class="filters" role="group" aria-label="Feladatszűrők">
-      <label>Felelős
+    <div class="filters" role="group" aria-label="Task filters">
+      <label>Assignee
         <select [(ngModel)]="filters.who" (ngModelChange)="applyFilters()">
-          <option [value]="all">Minden felelős</option>
-          <option [value]="unassigned">Nincs felelős</option>
+          <option [value]="all">All assignees</option>
+          <option [value]="unassigned">Unassigned</option>
           @for (person of people; track person.id) { <option [value]="person.id">{{ person.fullName }}</option> }
         </select>
       </label>
-      <label>Projekt
+      <label>Project
         <select [(ngModel)]="filters.project" (ngModelChange)="applyFilters()">
-          <option [value]="all">Minden projekt</option>
+          <option [value]="all">All projects</option>
           @for (row of rows; track row.id) {
             <option [value]="row.id">{{ row.workNumber ? row.workNumber + ' · ' : '' }}{{ row.name }}</option>
           }
         </select>
       </label>
-      <label>Státusz
+      <label>Status
         <select [(ngModel)]="filters.status" (ngModelChange)="applyFilters()">
-          <option [value]="all">Minden státusz</option>
+          <option [value]="all">All statuses</option>
           @for (lane of lanes; track lane.id) { <option [value]="lane.id">{{ lane.label }}</option> }
         </select>
       </label>
-      <label>Almunka
+      <label>Sub-work
         <select [(ngModel)]="filters.sub" (ngModelChange)="applyFilters()">
-          <option [value]="all">Minden almunka</option>
+          <option [value]="all">All sub-works</option>
           @for (sub of subFilters; track sub.id) { <option [value]="sub.id">{{ sub.label }}</option> }
         </select>
       </label>
@@ -67,7 +67,7 @@
     <div class="board">
       <div class="board-grid board-head">
         <div class="project-heading">
-          <span>Projekt <span class="count">{{ visibleRows.length }}</span></span>
+          <span>Project <span class="count">{{ visibleRows.length }}</span></span>
           <button type="button" mat-icon-button [disabled]="!visibleRows.length" [attr.aria-label]="toggleLabel"
             [matTooltip]="toggleLabel" aria-controls="effort-rows" (click)="toggleAll()">
             <mat-icon class="material-symbols-outlined">{{ anyOpen ? 'unfold_less' : 'unfold_more' }}</mat-icon>
@@ -91,22 +91,22 @@
                 </button>
                 @if (personalProjects(row).length) {
                   <button type="button" mat-icon-button [matMenuTriggerFor]="personalMenu" [disabled]="saving"
-                    aria-label="Személyes projekt műveletei" matTooltip="Személyes projekt műveletei">
+                    aria-label="Personal project actions" matTooltip="Personal project actions">
                     <mat-icon class="material-symbols-outlined">more_vert</mat-icon>
                   </button>
                   <mat-menu #personalMenu="matMenu">
                     @for (project of personalProjects(row); track project.id) {
                       @if (canEdit && project.status === 'open') {
-                        <button mat-menu-item (click)="startProjectEditor(project)">Szerkesztés · {{ project.name }}</button>
-                        <button mat-menu-item (click)="changePersonalProject(project, 'close')">Lezárás · {{ project.name }}</button>
+                        <button mat-menu-item (click)="startProjectEditor(project)">Edit · {{ project.name }}</button>
+                        <button mat-menu-item (click)="changePersonalProject(project, 'close')">Close · {{ project.name }}</button>
                       } @else {
-                        <button mat-menu-item (click)="startProjectEditor(project)">Részletek · {{ project.name }}</button>
+                        <button mat-menu-item (click)="startProjectEditor(project)">Details · {{ project.name }}</button>
                         @if (canEdit) {
-                          <button mat-menu-item (click)="changePersonalProject(project, 'reopen')">Újranyitás · {{ project.name }}</button>
+                          <button mat-menu-item (click)="changePersonalProject(project, 'reopen')">Reopen · {{ project.name }}</button>
                         }
                       }
                       @if (canDelete) {
-                        <button mat-menu-item (click)="changePersonalProject(project, 'delete')">Törlés · {{ project.name }}</button>
+                        <button mat-menu-item (click)="changePersonalProject(project, 'delete')">Delete · {{ project.name }}</button>
                       }
                     }
                   </mat-menu>
@@ -118,10 +118,10 @@
                 } @else if (row.workNumber) {
                   <span>{{ row.workNumber }}</span>
                 } @else {
-                  <span>Személyes projekt</span>
+                  <span>Personal project</span>
                 }
                 @if (row.customer) { <span>{{ row.customer }}</span> }
-                <span class="duration">Nettó {{ formatDuration(rowNet(row)) }}</span>
+                <span class="duration">Net time {{ formatDuration(rowNet(row)) }}</span>
               </div>
             </div>
 
@@ -129,7 +129,7 @@
               @if (collapsed.has(row.id)) {
                 <div class="lane-summary" [class]="lane.id">
                   <span class="mobile-lane-label">{{ lane.label }}</span>
-                  <span class="count" [attr.aria-label]="lane.label + ' feladatok: ' + row.byStatus[lane.id].length">
+                  <span class="count" [attr.aria-label]="lane.label + ' tasks: ' + row.byStatus[lane.id].length">
                     {{ row.byStatus[lane.id].length }}
                   </span>
                 </div>
@@ -145,8 +145,8 @@
                       cdkDrag [cdkDragData]="task" [cdkDragDisabled]="saving || !canEditTask(task)" (dblclick)="startTaskEditor(row, task)">
                       <div class="task-title">
                         <h2 cdkDragHandle [class.draggable]="canEditTask(task)" [cdkDragHandleDisabled]="!canEditTask(task)">{{ task.name }}</h2>
-                        <button type="button" mat-icon-button class="task-editor-button" aria-label="Feladat megnyitása"
-                          matTooltip="Feladat megnyitása" (click)="startTaskEditor(row, task)" (dblclick)="$event.stopPropagation()">
+                        <button type="button" mat-icon-button class="task-editor-button" aria-label="Open task"
+                          matTooltip="Open task" (click)="startTaskEditor(row, task)" (dblclick)="$event.stopPropagation()">
                           <mat-icon class="material-symbols-outlined">open_in_new</mat-icon>
                         </button>
                       </div>
@@ -157,13 +157,13 @@
                         </span>
                       }
                       <div class="task-fields" (dblclick)="$event.stopPropagation()">
-                        <select aria-label="Feladatstátusz" [ngModel]="task.status" #statusSelect
+                        <select aria-label="Task status" [ngModel]="task.status" #statusSelect
                           [disabled]="saving || !canEditTask(task)" (ngModelChange)="statusSelect.value = task.status; changeStatus(task, $event)">
                           @for (status of lanes; track status.id) { <option [value]="status.id">{{ status.label }}</option> }
                         </select>
-                        <select aria-label="Feladat felelőse" [ngModel]="task.assigneeId || unassigned" #assigneeSelect
+                        <select aria-label="Task assignee" [ngModel]="task.assigneeId || unassigned" #assigneeSelect
                           [disabled]="saving || !canEditTask(task)" (ngModelChange)="assigneeSelect.value = task.assigneeId || unassigned; changeAssignee(task, $event)">
-                          <option [value]="unassigned">Nincs felelős</option>
+                          <option [value]="unassigned">Unassigned</option>
                           @if (task.assigneeId && !peopleById.has(task.assigneeId)) {
                             <option [value]="task.assigneeId">{{ task.assigneeName }}</option>
                           }
@@ -171,8 +171,8 @@
                         </select>
                       </div>
                       <div class="task-times">
-                        <span>Nettó <strong>{{ formatDuration(taskNet(task)) }}</strong></span>
-                        <span>Becs. {{ task.estimateMs === null ? '—' : formatDuration(task.estimateMs) }}</span>
+                        <span>Net time <strong>{{ formatDuration(taskNet(task)) }}</strong></span>
+                        <span>Estimate {{ task.estimateMs === null ? '—' : formatDuration(task.estimateMs) }}</span>
                       </div>
                       @if (task.status === 'in_progress') {
                         <div class="transport" (dblclick)="$event.stopPropagation()">
@@ -180,18 +180,18 @@
                             [disabled]="saving || !canEditTask(task) || (task.active && !task.activeByCurrentUser)" (click)="toggleTimer(task)">
                             <mat-icon class="material-symbols-outlined">{{ task.activeByCurrentUser ? 'pause' : 'play_arrow' }}</mat-icon>
                           </button>
-                          <button type="button" mat-icon-button aria-label="Mérés leállítása" matTooltip="Mérés leállítása"
+                          <button type="button" mat-icon-button aria-label="Stop timer" matTooltip="Stop timer"
                             [disabled]="saving || !canEditTask(task) || (!task.activeByCurrentUser && !task.timerPaused)" (click)="stopTimer(task)">
                             <mat-icon class="material-symbols-outlined">stop</mat-icon>
                           </button>
-                          <span>{{ task.active ? (task.activeByCurrentUser ? 'Mérés fut' : 'Más méri') : task.timerPaused ? 'Szünetel' : 'Mérés áll' }}</span>
+                          <span>{{ task.active ? (task.activeByCurrentUser ? 'Timer running' : 'Timer running for another user') : task.timerPaused ? 'Paused' : 'Stopped' }}</span>
                         </div>
                       }
                     </article>
                   }
                   @if (lane.id === 'new' && canAddTask(row)) {
                     <button type="button" class="add-task" mat-stroked-button [disabled]="saving" (click)="startTaskEditor(row)">
-                      <mat-icon class="material-symbols-outlined">add</mat-icon> Feladat
+                      <mat-icon class="material-symbols-outlined">add</mat-icon> Add task
                     </button>
                   } @else if (!row.byStatus[lane.id].length) {
                     <span class="lane-empty" aria-hidden="true">—</span>
@@ -201,7 +201,7 @@
             }
           </section>
         } @empty {
-          <div class="board-message" role="status">{{ rows.length ? 'A kiválasztott szűrőkkel nincs találat.' : 'Még nincs projekt a táblán.' }}</div>
+          <div class="board-message" role="status">{{ rows.length ? 'No tasks match the selected filters.' : 'No projects on the board yet.' }}</div>
         }
       </div>
     </div>
@@ -209,62 +209,62 @@
 </section>
 
 <ng-template #taskEditor>
-  <form #taskNgForm="ngForm" (ngSubmit)="taskNgForm.valid && saveTask()" lang="hu">
-    <h2 mat-dialog-title>{{ taskInEditor ? 'Feladat részletei' : 'Új feladat' }}</h2>
+  <form #taskNgForm="ngForm" (ngSubmit)="taskNgForm.valid && saveTask()" lang="en">
+    <h2 mat-dialog-title>{{ taskInEditor ? 'Task details' : 'New task' }}</h2>
     <mat-dialog-content>
       <p class="dialog-context">{{ rowInEditor?.workNumber }} {{ rowInEditor?.name }}</p>
       <fieldset class="editor-fields" [disabled]="saving || !editableTask">
-        <label class="full-width">Feladat neve
+        <label class="full-width">Task name
           <input name="title" [(ngModel)]="taskForm.name" required maxlength="200" cdkFocusInitial>
         </label>
-        <label>Almunka
+        <label>Sub-work
           <select name="sub" [(ngModel)]="taskForm.sub">
-            <option value="">Nincs hozzárendelve</option>
+            <option value="">No sub-work</option>
             @if (taskInEditor?.subWorkItem; as sub) {
               @if (sub.id && !taskSubOptionsById(sub.id)) {
-                <option [value]="sub.id">{{ sub.name }} · archivált</option>
+                <option [value]="sub.id">{{ sub.name }} · archived</option>
               }
             }
             @for (sub of taskSubOptions; track sub.id) { <option [value]="sub.id">{{ sub.subWorkNumber }} · {{ sub.name }}</option> }
           </select>
         </label>
-        <label>Felelős
+        <label>Assignee
           <select name="assignee" [(ngModel)]="taskForm.who">
-            <option value="">Nincs felelős</option>
+            <option value="">Unassigned</option>
             @if (taskInEditor?.assigneeId && !peopleById.has(taskInEditor!.assigneeId!)) {
               <option [value]="taskInEditor!.assigneeId">{{ taskInEditor!.assigneeName }}</option>
             }
             @for (person of people; track person.id) { <option [value]="person.id">{{ person.fullName }}</option> }
           </select>
         </label>
-        <label>Időbecslés (perc)
-          <input type="number" min="0" max="1000000" step="any" name="estimate" [(ngModel)]="taskForm.estimate" placeholder="Nincs becslés">
+        <label>Time estimate (minutes)
+          <input type="number" min="0" max="1000000" step="any" name="estimate" [(ngModel)]="taskForm.estimate" placeholder="No estimate">
         </label>
         @if (taskInEditor; as task) {
-          <label>Korrigált nettó (perc)
+          <label>Adjusted net time (minutes)
             <input type="number" min="0" max="1000000" step="any" name="net" [(ngModel)]="taskForm.net"
               [disabled]="task.active" [placeholder]="(task.netMs / 60000 | number:'1.0-2') || ''">
           </label>
           <p class="duration full-width dialog-context">
-            Mért nettó {{ formatDuration(task.measuredNetMs) }} · Elszámolt nettó {{ formatDuration(task.netMs) }}
-            @if (task.status === 'closed') { <span class="correction-hint">Bruttó átfutás {{ formatDuration(task.grossMs) }}</span> }
-            @if (task.active) { <span class="correction-hint">A korrekcióhoz szüneteltesd vagy állítsd le a mérést.</span> }
+            Measured time {{ formatDuration(task.measuredNetMs) }} · Recorded net time {{ formatDuration(task.netMs) }}
+            @if (task.status === 'closed') { <span class="correction-hint">Total elapsed time {{ formatDuration(task.grossMs) }}</span> }
+            @if (task.active) { <span class="correction-hint">Pause or stop the timer before adjusting the recorded time.</span> }
           </p>
           @if (taskForm.net !== null) {
-            <label class="full-width">Korrekció indoka
+            <label class="full-width">Reason for adjustment
               <input name="reason" required maxlength="500" [(ngModel)]="taskForm.reason">
             </label>
           }
         }
       </fieldset>
-      <app-rich-text-editor label="Megjegyzés" ariaLabel="Feladat megjegyzése" minHeight="110px"
+      <app-rich-text-editor label="Notes" ariaLabel="Task notes" minHeight="110px"
         [readonly]="!editableTask" [disabled]="saving" [(html)]="taskForm.note"></app-rich-text-editor>
       @if (taskInEditor?.netCorrections?.length) {
         <details class="corrections">
-          <summary>Időkorrekciók ({{ taskInEditor!.netCorrections.length }})</summary>
+          <summary>Time adjustments ({{ taskInEditor!.netCorrections.length }})</summary>
           @for (correction of taskInEditor!.netCorrections; track $index) {
             <div class="correction">
-              <span>{{ correction.at | date:'yyyy.MM.dd. HH:mm' }} · {{ correction.userName || peopleById.get(correction.userId) || 'Korábbi felhasználó' }}</span>
+              <span>{{ correction.at | date:'yyyy.MM.dd. HH:mm' }} · {{ correction.userName || peopleById.get(correction.userId) || 'Former user' }}</span>
               <strong>{{ formatDuration(correction.previousMs) }} → {{ formatDuration(correction.netMs) }}</strong>
               <span>{{ correction.reason }}</span>
             </div>
@@ -275,51 +275,51 @@
     </mat-dialog-content>
     <mat-dialog-actions align="end">
       @if (taskInEditor && canDelete) {
-        <button type="button" mat-button class="delete-action" [disabled]="saving || taskInEditor.active" (click)="deleteTask(taskInEditor)">Törlés</button>
+        <button type="button" mat-button class="delete-action" [disabled]="saving || taskInEditor.active" (click)="deleteTask(taskInEditor)">Delete</button>
       }
-      <button type="button" mat-button mat-dialog-close [disabled]="saving">{{ editableTask ? 'Mégse' : 'Bezárás' }}</button>
+      <button type="button" mat-button mat-dialog-close [disabled]="saving">{{ editableTask ? 'Cancel' : 'Close' }}</button>
       @if (editableTask) {
-        <button type="submit" mat-flat-button color="primary" [disabled]="saving || taskNgForm.invalid">Mentés</button>
+        <button type="submit" mat-flat-button color="primary" [disabled]="saving || taskNgForm.invalid">Save</button>
       }
     </mat-dialog-actions>
   </form>
 </ng-template>
 
 <ng-template #projectEditor>
-  <form #projectNgForm="ngForm" (ngSubmit)="projectNgForm.valid && saveProject()" lang="hu">
-    <h2 mat-dialog-title>{{ projectInEditor ? (editableProject ? 'Személyes projekt szerkesztése' : 'Személyes projekt részletei') : projectEditorMode === 'work' ? 'Új projekt' : 'Új személyes projekt' }}</h2>
+  <form #projectNgForm="ngForm" (ngSubmit)="projectNgForm.valid && saveProject()" lang="en">
+    <h2 mat-dialog-title>{{ projectInEditor ? (editableProject ? 'Edit personal project' : 'Personal project details') : projectEditorMode === 'work' ? 'New project' : 'New personal project' }}</h2>
     <mat-dialog-content>
-      @if (projectEditorMode === 'work') { <p class="dialog-context">A projekt a Munkatáblán is megjelenik.</p> }
+      @if (projectEditorMode === 'work') { <p class="dialog-context">The project will also appear in Project Tracker.</p> }
       @if (projectInEditor?.status === 'closed') {
-        <p class="dialog-context">Nettó {{ formatDuration(projectInEditor!.closedNetMs) }} · Bruttó {{ formatDuration(projectInEditor!.closedGrossMs) }}</p>
+        <p class="dialog-context">Net time {{ formatDuration(projectInEditor!.closedNetMs) }} · Total elapsed time {{ formatDuration(projectInEditor!.closedGrossMs) }}</p>
       }
       @if (projectEditorLoading) {
-        <div class="board-message"><mat-spinner diameter="28" aria-label="Az űrlap betöltése"></mat-spinner></div>
+        <div class="board-message"><mat-spinner diameter="28" aria-label="Loading the form"></mat-spinner></div>
       }
       <fieldset class="editor-fields" [disabled]="saving || projectEditorLoading || !editableProject">
-        <label class="full-width">Projekt neve
+        <label class="full-width">Project name
           <input name="projectName" required maxlength="200" [(ngModel)]="projectForm.name" cdkFocusInitial>
         </label>
         @if (projectEditorMode === 'work') {
-          <label class="full-width">Ügyfél
+          <label class="full-width">Client
             <select name="client" [(ngModel)]="projectForm.client">
-              <option value="">Nincs ügyfél</option>
+              <option value="">No client</option>
               @for (client of clients; track client.id) { <option [value]="client.id">{{ client.name }}</option> }
             </select>
           </label>
-          <label class="full-width">Leírás
+          <label class="full-width">Description
             <textarea name="description" rows="3" [(ngModel)]="projectForm.note"></textarea>
           </label>
         } @else {
-          <label class="full-width">Ügyfél
+          <label class="full-width">Client
             <input name="customer" [(ngModel)]="projectForm.customer">
           </label>
           @if (availableWorks.length) {
-            <label class="full-width">Munkatábla-projekt összekapcsolása
+            <label class="full-width">Link to a Project Tracker project
               <select name="relatedWork" [(ngModel)]="projectForm.work">
-                <option value="">Nincs összekapcsolva</option>
+                <option value="">No linked project</option>
                 @if (projectInEditor?.workItemId && !hasWork(projectInEditor!.workItemId!)) {
-                  <option [value]="projectInEditor!.workItemId">{{ projectInEditor!.workItem?.name }} · archivált</option>
+                  <option [value]="projectInEditor!.workItemId">{{ projectInEditor!.workItem?.name }} · archived</option>
                 }
                 @for (work of availableWorks; track work.id) { <option [value]="work.id">{{ work.workNumber }} · {{ work.name }}</option> }
               </select>
@@ -330,15 +330,15 @@
       @if (projectEditorMode === 'work') {
         <app-work-field-values [fields]="fields" [changes]="fieldChanges" [files]="fieldFiles"/>
       } @else {
-        <app-rich-text-editor label="Megjegyzés" ariaLabel="Projekt megjegyzése" minHeight="110px"
+        <app-rich-text-editor label="Notes" ariaLabel="Project notes" minHeight="110px"
           [disabled]="saving" [readonly]="!editableProject" [(html)]="projectForm.note"></app-rich-text-editor>
       }
       @if (editorError) { <p class="editor-error" role="alert">{{ editorError }}</p> }
     </mat-dialog-content>
     <mat-dialog-actions align="end">
-      <button type="button" mat-button mat-dialog-close [disabled]="saving">{{ editableProject ? 'Mégse' : 'Bezárás' }}</button>
+      <button type="button" mat-button mat-dialog-close [disabled]="saving">{{ editableProject ? 'Cancel' : 'Close' }}</button>
       @if (editableProject) {
-        <button type="submit" mat-flat-button color="primary" [disabled]="saving || projectEditorLoading || projectNgForm.invalid">Mentés</button>
+        <button type="submit" mat-flat-button color="primary" [disabled]="saving || projectEditorLoading || projectNgForm.invalid">Save</button>
       }
     </mat-dialog-actions>
   </form>

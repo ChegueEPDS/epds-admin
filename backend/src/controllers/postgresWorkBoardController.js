@@ -4,6 +4,7 @@ const store = require('../repositories/postgres/workBoardRepository');
 const fileStorage = require('../services/fileStorageService');
 const workFields = require('../services/workFields');
 const tenantCurrency = require('../services/tenantCurrency');
+const { workBoardSort } = require('../services/workBoardSort');
 const { WORK_STATUSES } = require('../models/workItem');
 
 const TERMINAL = new Set(['completed_billable','invoiced','paid','closed','cancelled','lost']);
@@ -29,7 +30,8 @@ function presentDoc(d){return {id:d.id,workItemId:d.workItemId,category:d.catego
 async function run(res,fn){try{await fn();}catch(e){console.error('[work-board-pg]',e);res.status(e.statusCode||500).json({error:e.statusCode?e.message:'Project Tracker operation failed'});}}
 
 exports.listWorks=(req,res)=>run(res,async()=>{const page=Math.max(1,Number(req.query.page)||1),limit=Math.min(100,Math.max(1,Number(req.query.limit)||25));
-  const result=await store.list({tenantId:req.scope.tenantId,status:String(req.query.status||(req.query.active==='true'?'active':'all')),search:clean(req.query.search),page,limit});
+  const sort = await workBoardSort(req.scope.tenantId, req.query);
+  const result=await store.list({tenantId:req.scope.tenantId,status:String(req.query.status||(req.query.active==='true'?'active':'all')),search:clean(req.query.search),page,limit,sort});
   const activeValue = await tenantCurrency.summarizeActiveValue(req.scope.tenantId, result.activeAmounts);
   res.json({works:result.works.map(presentWork),pagination:{page,limit,total:result.total,pages:Math.max(1,Math.ceil(result.total/limit))},
     summary: { ...result.summary, totalActiveValue: activeValue.amount, activeValue } });});

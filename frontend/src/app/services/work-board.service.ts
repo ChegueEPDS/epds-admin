@@ -161,12 +161,14 @@ export class WorkBoardService {
     });
   }
 
-  listWorks(options: { page?: number; limit?: number; search?: string; status?: string } = {}): Observable<WorkPage> {
+  listWorks(options: { page?: number; limit?: number; search?: string; status?: string; sort?: string; direction?: 'asc' | 'desc' } = {}): Observable<WorkPage> {
     const params: Record<string, string> = {};
     if (options.page) params['page'] = String(options.page);
     if (options.limit) params['limit'] = String(options.limit);
     if (options.search) params['search'] = options.search;
     if (options.status) params['status'] = options.status;
+    if (options.sort) params['sort'] = options.sort;
+    if (options.direction) params['direction'] = options.direction;
     return this.http.get<WorkPage>(`${this.baseUrl}/works`, { params, withCredentials: true });
   }
   listActiveOptions(): Observable<WorkOption[]> {

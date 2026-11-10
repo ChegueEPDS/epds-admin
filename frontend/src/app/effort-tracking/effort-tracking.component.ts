@@ -20,9 +20,9 @@ import { WorkField, WorkFieldFiles, WorkFieldValues } from '../work-board/work-f
 import { WorkFieldValuesComponent } from '../work-board/work-field-values.component';
 
 const lanes = [
-  { id: 'new', label: 'Új' },
-  { id: 'in_progress', label: 'Folyamatban' },
-  { id: 'closed', label: 'Lezárt' }
+  { id: 'new', label: 'New' },
+  { id: 'in_progress', label: 'In progress' },
+  { id: 'closed', label: 'Closed' }
 ] as const;
 const all = '*';
 const minutesToMs = (minutes: number) => Math.round(minutes * 60_000);
@@ -149,14 +149,14 @@ export class EffortTrackingComponent implements OnInit, OnDestroy {
   get canDelete(): boolean { return this.auth.canDeleteFeature('effortTracking'); }
   get canCreateWork(): boolean { return Boolean(this.scopeKey) && this.canEdit && this.auth.canEditFeature('workBoard'); }
   get anyOpen(): boolean { return this.visibleRows.some(row => !this.collapsed.has(row.id)); }
-  get toggleLabel(): string { return this.anyOpen ? 'Összes összecsukása' : 'Összes kinyitása'; }
+  get toggleLabel(): string { return this.anyOpen ? 'Collapse all' : 'Expand all'; }
   get availableWorks(): WorkOption[] { return this.works; }
   get editableTask(): boolean { return this.canEdit && (!this.taskInEditor || this.canEditTask(this.taskInEditor)); }
   get editableProject(): boolean { return this.canEdit && this.projectInEditor?.status !== 'closed'; }
 
   async load(showLoading = true): Promise<void> {
     if (!this.scopeKey || !this.auth.canAccessFeature('effortTracking')) {
-      this.loadError = 'A tábla megnyitásához válassz hozzáférhető szervezetet.';
+      this.loadError = 'Select a tenant you can access to open the board.';
       this.loading = false;
       return;
     }
@@ -181,7 +181,7 @@ export class EffortTrackingComponent implements OnInit, OnDestroy {
       this.rebuildBoard();
     } catch (error) {
       if (version !== this.scopeVersion || id !== this.requestId) return;
-      const message = this.message(error, 'Az Effort Tracking tábla betöltése sikertelen.');
+      const message = this.message(error, 'The Effort Tracking board could not be loaded.');
       if (showLoading) this.loadError = message;
       else this.notice(message);
     } finally {
@@ -322,7 +322,7 @@ export class EffortTrackingComponent implements OnInit, OnDestroy {
     };
     if (form.net !== null && !task?.active) {
       if (!form.reason.trim()) {
-        this.editorError = 'Add meg az időkorrekció indokát.';
+        this.editorError = 'Enter a reason for adjusting the recorded time.';
         return;
       }
       payload.netOverrideMs = minutesToMs(form.net);
@@ -337,13 +337,13 @@ export class EffortTrackingComponent implements OnInit, OnDestroy {
         ensureScope();
         this.storeProject(project);
       }
-      if (!project) throw new Error('A feladathoz nem található nyitott projekt.');
+      if (!project) throw new Error('No open project is available for this task.');
       const saved = await firstValueFrom(task ? this.effort.updateTask(task.id, payload) : this.effort.createTask(project.id, payload));
       ensureScope();
       this.storeTask(saved);
       this.collapsed.delete(row.id);
       this.dialogRef?.close();
-    }, 'A feladat mentése sikertelen.', 'Feladat mentve.');
+    }, 'The task could not be saved.', 'Task saved.');
   }
 
   async changeStatus(task: EffortTask, status: EffortTaskStatus): Promise<void> {
@@ -352,7 +352,7 @@ export class EffortTrackingComponent implements OnInit, OnDestroy {
       const saved = await firstValueFrom(this.effort.updateTask(task.id, { status }));
       ensureScope();
       this.storeTask(saved);
-    }, 'A státuszváltás sikertelen.', task.active ? 'Státusz módosítva, a mérés rögzítve.' : 'Státusz módosítva.');
+    }, 'The status could not be updated.', task.active ? 'Status updated and timer recorded.' : 'Status updated.');
   }
 
   drop(event: CdkDragDrop<EffortTaskStatus, EffortTaskStatus, EffortTask>): void {
@@ -367,17 +367,17 @@ export class EffortTrackingComponent implements OnInit, OnDestroy {
       const saved = await firstValueFrom(this.effort.updateTask(task.id, { assigneeId: assignee || null }));
       ensureScope();
       this.storeTask(saved);
-    }, 'A felelős módosítása sikertelen.', 'Felelős módosítva.');
+    }, 'The assignee could not be updated.', 'Assignee updated.');
   }
 
   timerLabel(task: EffortTask): string {
-    return task.activeByCurrentUser ? 'Szünet' : task.timerPaused ? 'Folytatás' : 'Indítás';
+    return task.activeByCurrentUser ? 'Pause' : task.timerPaused ? 'Resume' : 'Start';
   }
 
   async toggleTimer(task: EffortTask): Promise<void> {
     if (!this.canEditTask(task) || task.status !== 'in_progress') return;
     if (this.activeTask && this.activeTask.id !== task.id) {
-      this.notice(`Előbb szüneteltesd vagy állítsd meg a futó mérést: ${this.activeTask.name}.`);
+      this.notice(`Pause or stop the running timer for "${this.activeTask.name}" first.`);
       return;
     }
     const request = task.activeByCurrentUser ? this.effort.stopTask(task.id, true) : this.effort.startTask(task.id);
@@ -385,7 +385,7 @@ export class EffortTrackingComponent implements OnInit, OnDestroy {
       const saved = await firstValueFrom(request);
       ensureScope();
       this.storeTask(saved);
-    }, 'Az időmérő módosítása sikertelen.');
+    }, 'The timer could not be updated.');
   }
 
   async stopTimer(task: EffortTask): Promise<void> {
@@ -394,18 +394,18 @@ export class EffortTrackingComponent implements OnInit, OnDestroy {
       const saved = await firstValueFrom(this.effort.stopTask(task.id));
       ensureScope();
       this.storeTask(saved);
-    }, 'A mérés leállítása sikertelen.', 'Mérés rögzítve.');
+    }, 'The timer could not be stopped.', 'Time recorded.');
   }
 
   async deleteTask(task: EffortTask): Promise<void> {
-    if (!this.canDelete || task.active || !confirm(`Végleg törlöd a feladatot és a hozzá tartozó méréseket?\n\n${task.name}`)) return;
+    if (!this.canDelete || task.active || !confirm(`Permanently delete this task and its time records?\n\n${task.name}`)) return;
     await this.mutate(async (ensureScope) => {
       await firstValueFrom(this.effort.deleteTask(task.id));
       ensureScope();
       const project = this.projectsById.get(task.projectId);
       if (project) this.storeProject({ ...project, tasks: project.tasks.filter(item => item.id !== task.id) });
       this.dialogRef?.close();
-    }, 'A feladat törlése sikertelen.', 'Feladat törölve.');
+    }, 'The task could not be deleted.', 'Task deleted.');
   }
 
   async startProjectEditor(project?: EffortProject): Promise<void> {
@@ -432,7 +432,7 @@ export class EffortTrackingComponent implements OnInit, OnDestroy {
       this.fields = (settings?.fields || []).filter(field => !field.archived && ['basic', 'description', 'documents'].includes(field.card));
     } catch (error) {
       if (this.dialogRef !== dialog) return;
-      this.editorError = this.message(error, 'A projekt űrlapja nem tölthető be.');
+      this.editorError = this.message(error, 'The project form could not be loaded.');
     } finally {
       if (this.dialogRef === dialog) this.projectEditorLoading = false;
     }
@@ -463,13 +463,13 @@ export class EffortTrackingComponent implements OnInit, OnDestroy {
       this.resetFilters();
       this.rebuildBoard();
       this.dialogRef?.close();
-    }, 'A projekt mentése sikertelen.', 'Projekt mentve.');
+    }, 'The project could not be saved.', 'Project saved.');
   }
 
   async changePersonalProject(project: EffortProject, action: 'close' | 'reopen' | 'delete'): Promise<void> {
     if (this.saving || (action === 'delete' ? !this.canDelete : !this.canEdit)) return;
-    if (action === 'delete' && !confirm(`Végleg törlöd a személyes projektet a feladataival és méréseivel együtt?\n\n${project.name}`)) return;
-    if (action === 'close' && !confirm(`Lezárod a személyes projektet és minden feladatát?\n\n${project.name}`)) return;
+    if (action === 'delete' && !confirm(`Permanently delete this personal project and its tasks and time records?\n\n${project.name}`)) return;
+    if (action === 'close' && !confirm(`Close this personal project and all its tasks?\n\n${project.name}`)) return;
     await this.mutate(async (ensureScope) => {
       if (action === 'delete') {
         await firstValueFrom(this.effort.deleteProject(project.id));
@@ -481,7 +481,7 @@ export class EffortTrackingComponent implements OnInit, OnDestroy {
         ensureScope();
         this.storeProject(saved);
       }
-    }, 'A projekt módosítása sikertelen.');
+    }, 'The project could not be updated.');
   }
 
   taskNet(task: EffortTask): number {
@@ -495,7 +495,7 @@ export class EffortTrackingComponent implements OnInit, OnDestroy {
     const hours = Math.floor(total / 3600);
     const minutes = Math.floor(total / 60) % 60;
     const seconds = total % 60;
-    return hours ? `${hours} ó ${minutes} p ${seconds} mp` : `${minutes} p ${seconds} mp`;
+    return hours ? `${hours}h ${minutes}m ${seconds}s` : `${minutes}m ${seconds}s`;
   }
 
   private openDialog(template: TemplateRef<unknown>): void {
