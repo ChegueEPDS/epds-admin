@@ -7,5 +7,6 @@ const router = express.Router();
 router.post('/mail/send', requireAuth, requireTenantFeature('mail', 'edit'), controller.sendMail);
 router.get('/mailbox', requireAuth, requireTenantFeature('mail'), controller.listMailboxMessages);
 router.get('/mailbox/:id', requireAuth, requireTenantFeature('mail'), controller.getMailboxMessage);
+router.post('/mailbox/:id/forward', requireAuth, requireTenantFeature('mail', 'edit'), controller.forwardMailboxMessage);
 
 module.exports = router;

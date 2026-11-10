@@ -2,7 +2,16 @@ const EffortProject = require('../models/effortProject');
 const EffortTask = require('../models/effortTask');
 const { WorkItem } = require('../models/workItem');
 const SubWorkItem = require('../models/subWorkItem');
-const { mapWithConcurrency } = require('../services/scheduledJobLeaseService');
+const User = require('../models/user');
+const {
+  httpError, applyTaskFields, setNetOverride, setStatus, checkStart, startTimer,
+  stopTimer, stopByUser, presentTask, presentProject
+} = require('../services/effortTaskState');
+
+const configuredLimit = Number(process.env.EFFORT_EMBEDDED_SESSION_LIMIT || 100);
+const sessionLimit = Number.isFinite(configuredLimit) ? Math.max(20, Math.floor(configuredLimit)) : 100;
+const taskFields = (req, task) => applyTaskFields(task, req.body || {},
+  (id) => User.findOne({ _id: id, ...scopeQuery(req.scope) }).select('firstName lastName email'));
 
 const TERMINAL_WORK_STATUSES = ['completed_billable', 'invoiced', 'paid', 'closed', 'cancelled', 'lost'];
 
@@ -26,119 +35,6 @@ function normalizeLongText(input) {
 function requestLimit(value, fallback = 100, max = 200) {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? Math.min(max, Math.max(1, Math.floor(parsed))) : fallback;
-}
-
-function httpError(message, statusCode = 400) {
-  const error = new Error(message);
-  error.statusCode = statusCode;
-  return error;
-}
-
-function msBetween(start, end) {
-  const startMs = start ? new Date(start).getTime() : 0;
-  const endMs = end ? new Date(end).getTime() : Date.now();
-  if (!startMs || Number.isNaN(startMs) || Number.isNaN(endMs)) return 0;
-  return Math.max(0, endMs - startMs);
-}
-
-function taskNetMs(task, now = new Date()) {
-  const saved = Number(task.archivedNetMs || 0)
-    + (task.sessions || []).reduce((total, session) => total + Number(session.durationMs || 0), 0);
-  if (task.activeTimer?.startedAt) return saved + msBetween(task.activeTimer.startedAt, now);
-  return saved;
-}
-
-function taskFirstStartedAt(task) {
-  if (task.firstStartedAt) return new Date(task.firstStartedAt);
-  const starts = (task.sessions || [])
-    .map((session) => session.startedAt)
-    .concat(task.activeTimer?.startedAt || [])
-    .map((value) => new Date(value).getTime())
-    .filter((value) => value && !Number.isNaN(value));
-  if (!starts.length) return null;
-  return new Date(Math.min(...starts));
-}
-
-function taskGrossSnapshotMs(task, now = new Date()) {
-  const firstStartedAt = taskFirstStartedAt(task);
-  return firstStartedAt ? msBetween(firstStartedAt, now) : 0;
-}
-
-function taskGrossMs(task) {
-  if (task.status !== 'closed') return 0;
-  return Number(task.closedGrossMs || 0);
-}
-
-function activeByUser(task, userId) {
-  return Boolean(task.activeTimer?.startedAt && String(task.activeTimer.userId || '') === String(userId || ''));
-}
-
-function presentTask(task, now = new Date(), userId = null) {
-  const sessionCount = Number(task.archivedSessionCount || 0) + (task.sessions || []).length;
-  const active = Boolean(task.activeTimer?.startedAt);
-  return {
-    id: String(task._id),
-    projectId: String(task.projectId),
-    name: task.name,
-    note: task.note || '',
-    subWorkItemId: task.subWorkItemId ? String(task.subWorkItemId) : null,
-    subWorkItem: task.subWorkItemSnapshot?.name ? {
-      id: task.subWorkItemId ? String(task.subWorkItemId) : null,
-      subWorkNumber: task.subWorkItemSnapshot.subWorkNumber || '',
-      name: task.subWorkItemSnapshot.name || ''
-    } : null,
-    status: task.status,
-    netMs: task.status === 'closed' ? Number(task.closedNetMs || 0) : taskNetMs(task, now),
-    grossMs: taskGrossMs(task),
-    active,
-    activeByCurrentUser: activeByUser(task, userId),
-    activeStartedAt: task.activeTimer?.startedAt || null,
-    sessionCount,
-    hasStarted: sessionCount > 0 || Boolean(task.activeTimer?.startedAt),
-    closedAt: task.closedAt || null,
-    closedNetMs: Number(task.closedNetMs || 0),
-    closedGrossMs: Number(task.closedGrossMs || 0),
-    createdAt: task.createdAt,
-    updatedAt: task.updatedAt
-  };
-}
-
-function projectGrossMs(project) {
-  if (project.status !== 'closed') return 0;
-  return Number(project.closedGrossMs || 0);
-}
-
-function presentProject(project, tasks = [], now = new Date(), userId = null) {
-  const presentedTasks = tasks.map((task) => presentTask(task, now, userId));
-  const netMs = project.status === 'closed'
-    ? Number(project.closedNetMs || 0)
-    : presentedTasks.reduce((total, task) => total + Number(task.netMs || 0), 0);
-
-  return {
-    id: String(project._id),
-    name: project.name,
-    customer: project.customer || '',
-    comment: project.comment || '',
-    workItemId: project.workItemId ? String(project.workItemId) : null,
-    workItem: project.workItemSnapshot?.name ? {
-      id: project.workItemId ? String(project.workItemId) : null,
-      workNumber: project.workItemSnapshot.workNumber || '',
-      name: project.workItemSnapshot.name || '',
-      customer: project.workItemSnapshot.customer || ''
-    } : null,
-    status: project.status,
-    netMs,
-    grossMs: projectGrossMs(project),
-    closedAt: project.closedAt || null,
-    closedNetMs: Number(project.closedNetMs || 0),
-    closedGrossMs: Number(project.closedGrossMs || 0),
-    taskCount: presentedTasks.length,
-    openTaskCount: presentedTasks.filter((task) => task.status === 'open').length,
-    activeTaskCount: presentedTasks.filter((task) => task.active).length,
-    createdAt: project.createdAt,
-    updatedAt: project.updatedAt,
-    tasks: presentedTasks
-  };
 }
 
 async function getScopedProject(projectId, scope, userId) {
@@ -200,54 +96,6 @@ function setSubWorkReference(task, subWork, project) {
   task.subWorkItemSnapshot = { subWorkNumber: number, name: subWork.name };
 }
 
-function stopTaskTimer(task, now = new Date()) {
-  if (!task.activeTimer?.startedAt || !task.activeTimer?.userId) return false;
-  task.firstStartedAt ||= taskFirstStartedAt(task) || task.activeTimer.startedAt;
-  const durationMs = msBetween(task.activeTimer.startedAt, now);
-  task.sessions.push({
-    userId: task.activeTimer.userId,
-    startedAt: task.activeTimer.startedAt,
-    stoppedAt: now,
-    durationMs
-  });
-  const configuredLimit = Number(process.env.EFFORT_EMBEDDED_SESSION_LIMIT || 100);
-  const maxEmbeddedSessions = Number.isFinite(configuredLimit) ? Math.max(20, Math.floor(configuredLimit)) : 100;
-  while (task.sessions.length > maxEmbeddedSessions) {
-    task.archivedNetMs = Number(task.archivedNetMs || 0) + Number(task.sessions.shift()?.durationMs || 0);
-    task.archivedSessionCount = Number(task.archivedSessionCount || 0) + 1;
-  }
-  task.activeTimer = undefined;
-  return true;
-}
-
-function closeTaskSnapshot(task, userId, now = new Date()) {
-  if (task.status === 'closed') return false;
-  if (task.activeTimer?.startedAt) stopTaskTimer(task, now);
-  task.status = 'closed';
-  task.closedAt = now;
-  task.closedNetMs = taskNetMs(task, now);
-  task.closedGrossMs = taskGrossSnapshotMs(task, now);
-  task.closedBy = userId;
-  task.updatedBy = userId;
-  return true;
-}
-
-async function stopActiveTimersForUser(scope, userId, now, exceptTaskId = null) {
-  const activeTasks = await EffortTask.find({
-    ...scopeQuery(scope),
-    'activeTimer.userId': userId,
-    'activeTimer.startedAt': { $exists: true }
-  });
-
-  for (const task of activeTasks) {
-    if (exceptTaskId && String(task._id) === String(exceptTaskId)) continue;
-    if (stopTaskTimer(task, now)) {
-      task.updatedBy = userId;
-      await task.save();
-    }
-  }
-}
-
 async function withErrors(res, fn) {
   try {
     await fn();
@@ -255,13 +103,17 @@ async function withErrors(res, fn) {
     if (err?.code === 11000 && err?.keyPattern?.['activeTimer.userId']) {
       return res.status(409).json({ error: 'Only one timer can run for a user at a time' });
     }
+    if (err.name === 'VersionError' || err.name === 'DocumentNotFoundError') {
+      return res.status(409).json({ error: 'This task changed elsewhere. Refresh and try again.' });
+    }
     res.status(err.statusCode || 500).json({ error: err.statusCode ? err.message : 'Internal server error' });
   }
 }
 
 exports.listProjects = (req, res) => withErrors(res, async () => {
   const limit = requestLimit(req.query.limit);
-  const projects = await EffortProject.find(ownerScopeQuery(req.scope, req.userId)).sort({ status: 1, updatedAt: -1 }).limit(limit);
+  const query = EffortProject.find(ownerScopeQuery(req.scope, req.userId)).sort({ status: 1, updatedAt: -1 });
+  const projects = await (req.query.board === '1' ? query : query.limit(limit));
   const projectIds = projects.map((project) => project._id);
   const tasks = await EffortTask.find({ ...ownerScopeQuery(req.scope, req.userId), projectId: { $in: projectIds } }).sort({ updatedAt: -1 });
   const tasksByProject = new Map();
@@ -278,6 +130,15 @@ exports.createProject = (req, res) => withErrors(res, async () => {
   const name = normalizeText(req.body?.name);
   if (!name) throw httpError('Project name is required');
 
+  if (req.body?.workItemId) {
+    const existing = await EffortProject.findOne({
+      ...ownerScopeQuery(req.scope, req.userId), workItemId: req.body.workItemId
+    }).sort({ status: -1, createdAt: 1 });
+    if (existing) {
+      const tasks = await EffortTask.find({ ...ownerScopeQuery(req.scope, req.userId), projectId: existing._id });
+      return res.json(presentProject(existing, tasks, new Date(), req.userId));
+    }
+  }
   const work = await getActiveWorkItem(req.body?.workItemId, req.scope);
   const project = new EffortProject({
     name,
@@ -312,17 +173,17 @@ exports.updateProject = (req, res) => withErrors(res, async () => {
   }
   if (Object.prototype.hasOwnProperty.call(req.body || {}, 'customer')) project.customer = normalizeText(req.body.customer);
   if (Object.prototype.hasOwnProperty.call(req.body || {}, 'comment')) project.comment = normalizeLongText(req.body.comment);
-  if (Object.prototype.hasOwnProperty.call(req.body || {}, 'workItemId')) {
+  if (Object.hasOwn(req.body || {}, 'workItemId') && String(req.body.workItemId || '') !== String(project.workItemId || '')) {
     const nextWork = await getActiveWorkItem(req.body.workItemId, req.scope);
-    const workChanged = String(project.workItemId || '') !== String(nextWork?._id || '');
-    if (workChanged) {
-      const linkedTaskExists = await EffortTask.exists({
-        ...ownerScopeQuery(req.scope, req.userId),
-        projectId: project._id,
-        subWorkItemId: { $exists: true }
-      });
-      if (linkedTaskExists) throw httpError('Remove sub-work links from effort tasks before changing the related work', 409);
+    if (nextWork && await EffortProject.exists({ ...ownerScopeQuery(req.scope, req.userId), workItemId: nextWork._id })) {
+      throw httpError('An effort project already exists for this work', 409);
     }
+    const linkedTaskExists = await EffortTask.exists({
+      ...ownerScopeQuery(req.scope, req.userId),
+      projectId: project._id,
+      subWorkItemId: { $exists: true }
+    });
+    if (linkedTaskExists) throw httpError('Remove sub-work links from effort tasks before changing the related work', 409);
     setWorkReference(project, nextWork);
   }
   project.updatedBy = req.userId;
@@ -348,19 +209,21 @@ exports.closeProject = (req, res) => withErrors(res, async () => {
 
   const now = new Date();
   const tasks = await EffortTask.find({ ...ownerScopeQuery(req.scope, req.userId), projectId: project._id }).sort({ status: 1, updatedAt: -1 });
-  await mapWithConcurrency(tasks, 10, async (task) => {
-    if (closeTaskSnapshot(task, req.userId, now)) await task.save();
-  });
-  const freshTasks = tasks;
+  for (const task of tasks) {
+    if (task.status === 'closed') continue;
+    setStatus(task, 'closed', req.userId, now, sessionLimit);
+    task.updatedBy = req.userId;
+    await task.save();
+  }
   project.status = 'closed';
   project.closedAt = now;
-  project.closedNetMs = freshTasks.reduce((total, task) => total + Number(task.closedNetMs || 0), 0);
-  project.closedGrossMs = freshTasks.reduce((total, task) => total + Number(task.closedGrossMs || 0), 0);
+  project.closedNetMs = tasks.reduce((total, task) => total + Number(task.closedNetMs || 0), 0);
+  project.closedGrossMs = tasks.reduce((total, task) => total + Number(task.closedGrossMs || 0), 0);
   project.closedBy = req.userId;
   project.updatedBy = req.userId;
   await project.save();
 
-  res.json(presentProject(project, freshTasks, now, req.userId));
+  res.json(presentProject(project, tasks, now, req.userId));
 });
 
 exports.reopenProject = (req, res) => withErrors(res, async () => {
@@ -394,6 +257,7 @@ exports.createTask = (req, res) => withErrors(res, async () => {
     updatedBy: req.userId
   });
   setSubWorkReference(task, subWork, project);
+  await taskFields(req, task);
   await task.save();
   project.updatedBy = req.userId;
   await project.save();
@@ -401,9 +265,8 @@ exports.createTask = (req, res) => withErrors(res, async () => {
   res.status(201).json(presentTask(task, new Date(), req.userId));
 });
 
-exports.updateTask = (req, res) => withErrors(res, async () => {
+const updateTask = (req, res) => withErrors(res, async () => {
   const task = await getScopedTask(req.params.taskId, req.scope, req.userId);
-  if (task.status === 'closed') throw httpError('Closed task cannot be edited');
   const project = await getScopedProject(task.projectId, req.scope, req.userId);
   if (project.status === 'closed') throw httpError('Closed project must be reopened before editing tasks');
 
@@ -413,12 +276,16 @@ exports.updateTask = (req, res) => withErrors(res, async () => {
     task.name = name;
   }
   if (Object.prototype.hasOwnProperty.call(req.body || {}, 'note')) task.note = normalizeLongText(req.body.note);
-  if (Object.prototype.hasOwnProperty.call(req.body || {}, 'subWorkItemId')) {
+  if (Object.hasOwn(req.body || {}, 'subWorkItemId') && String(req.body.subWorkItemId || '') !== String(task.subWorkItemId || '')) {
     setSubWorkReference(task, await getActiveSubWorkItem(req.body.subWorkItemId, project, req.scope), project);
   }
+  await taskFields(req, task);
+  const now = new Date();
+  if (Object.hasOwn(req.body || {}, 'status')) setStatus(task, req.body.status, req.userId, now, sessionLimit);
+  setNetOverride(task, req.body || {}, now);
   task.updatedBy = req.userId;
   await task.save();
-  res.json(presentTask(task, new Date(), req.userId));
+  res.json(presentTask(task, now, req.userId));
 });
 
 exports.deleteTask = (req, res) => withErrors(res, async () => {
@@ -430,42 +297,51 @@ exports.deleteTask = (req, res) => withErrors(res, async () => {
 
 exports.startTask = (req, res) => withErrors(res, async () => {
   const task = await getScopedTask(req.params.taskId, req.scope, req.userId);
-  if (task.status === 'closed') throw httpError('Closed task cannot be started');
   const project = await getScopedProject(task.projectId, req.scope, req.userId);
   if (project.status === 'closed') throw httpError('Closed project must be reopened before starting tasks');
+  checkStart(task, req.userId);
 
   const now = new Date();
-  await stopActiveTimersForUser(req.scope, req.userId, now, task._id);
-  if (task.activeTimer?.startedAt && !activeByUser(task, req.userId)) {
-    throw httpError('This task is already running for another user', 409);
+  const previous = await EffortTask.findOne({
+    _id: { $ne: task._id }, ...scopeQuery(req.scope),
+    'activeTimer.userId': req.userId, 'activeTimer.startedAt': { $exists: true }
+  });
+  if (previous) {
+    stopTimer(previous, now, { sessionLimit });
+    previous.updatedBy = req.userId;
+    await previous.save();
   }
-  if (!task.activeTimer?.startedAt) {
-    task.activeTimer = { userId: req.userId, startedAt: now };
-    task.firstStartedAt ||= now;
-    task.updatedBy = req.userId;
-    await task.save();
-  }
+  startTimer(task, req.userId, now);
+  task.updatedBy = req.userId;
+  await task.save();
   res.json(presentTask(task, now, req.userId));
 });
 
 exports.stopTask = (req, res) => withErrors(res, async () => {
   const task = await getScopedTask(req.params.taskId, req.scope, req.userId);
   const now = new Date();
-  if (String(task.activeTimer?.userId || '') !== String(req.userId || '')) {
-    throw httpError('This task is not running for the current user', 409);
-  }
-  stopTaskTimer(task, now);
+  stopByUser(task, req.userId, now, { pause: req.body?.pause === true, sessionLimit });
   task.updatedBy = req.userId;
   await task.save();
   res.json(presentTask(task, now, req.userId));
 });
 
-exports.closeTask = (req, res) => withErrors(res, async () => {
-  const task = await getScopedTask(req.params.taskId, req.scope, req.userId);
-  if (task.status === 'closed') return res.json(presentTask(task, new Date(), req.userId));
+exports.updateTask = updateTask;
+exports.closeTask = (req, res) => updateTask({ ...req, body: { status: 'closed' } }, res);
 
-  const now = new Date();
-  closeTaskSnapshot(task, req.userId, now);
-  await task.save();
-  res.json(presentTask(task, now, req.userId));
-});
+// MongoDB also runs on standalone servers. Serialize this owner's writes in
+// the API process, with optimistic task versions guarding concurrent writers.
+const pending = new Map();
+for (const name of Object.keys(exports).filter((name) => !['listProjects', 'getProject'].includes(name))) {
+  const handler = exports[name];
+  exports[name] = async (req, res) => {
+    const key = String(req.userId);
+    const operation = (pending.get(key) || Promise.resolve()).then(() => handler(req, res));
+    pending.set(key, operation);
+    try {
+      await operation;
+    } finally {
+      if (pending.get(key) === operation) pending.delete(key);
+    }
+  };
+}

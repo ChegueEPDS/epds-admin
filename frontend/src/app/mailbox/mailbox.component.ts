@@ -1,13 +1,14 @@
 import { CommonModule } from '@angular/common';
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, TemplateRef } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { firstValueFrom } from 'rxjs';
 import { MatButtonModule } from '@angular/material/button';
 import { MatCardModule } from '@angular/material/card';
+import { MatDialog, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatIconModule } from '@angular/material/icon';
 import { MatInputModule } from '@angular/material/input';
-import { MatListModule } from '@angular/material/list';
+import { MatMenuModule } from '@angular/material/menu';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { MatTabsModule } from '@angular/material/tabs';
@@ -52,10 +53,11 @@ const MAILBOX_PAGE_SIZE = 40;
     FormsModule,
     MatButtonModule,
     MatCardModule,
+    MatDialogModule,
     MatFormFieldModule,
     MatIconModule,
     MatInputModule,
-    MatListModule,
+    MatMenuModule,
     MatProgressSpinnerModule,
     MatSnackBarModule,
     MatTabsModule,
@@ -76,6 +78,13 @@ export class MailboxComponent implements OnInit {
   isLoadingMore = false;
   isDetailLoading = false;
   isSending = false;
+  forwarding: MailItem | null = null;
+  forwardTo = '';
+  forwardComment = '';
+  private nextOlderDate: string | null = null;
+  private listRequest = 0;
+  private detailRequest = 0;
+  private composeDialog?: MatDialogRef<unknown>;
 
   compose = {
     to: '',
@@ -86,6 +95,7 @@ export class MailboxComponent implements OnInit {
   };
   constructor(
     private mailApi: MailApiService,
+    private dialog: MatDialog,
     private snackBar: MatSnackBar,
     public auth: AuthService
   ) {}
@@ -95,21 +105,30 @@ export class MailboxComponent implements OnInit {
   }
 
   async reload(folder: MailFolder = this.folder): Promise<void> {
+    const request = ++this.listRequest;
+    this.detailRequest++;
     this.folder = folder;
     this.isLoading = true;
+    this.isLoadingMore = false;
+    this.isDetailLoading = false;
     this.selected = null;
     this.hasMore = false;
+    this.nextOlderDate = null;
     try {
-      const resp = await firstValueFrom(this.mailApi.listMailbox(folder, MAILBOX_PAGE_SIZE, 0));
+      const resp = await firstValueFrom(this.mailApi.listMailbox(folder, MAILBOX_PAGE_SIZE + 1));
+      if (request !== this.listRequest) return;
       this.mailbox = resp?.mailbox || null;
-      this.items = Array.isArray(resp?.items) ? resp.items as MailItem[] : [];
-      this.hasMore = this.items.length === MAILBOX_PAGE_SIZE;
+      const items = resp.items as MailItem[];
+      this.items = items.slice(0, MAILBOX_PAGE_SIZE);
+      const nextItem = items[MAILBOX_PAGE_SIZE];
+      this.nextOlderDate = nextItem ? this.messageDate(nextItem) || null : null;
+      this.hasMore = Boolean(this.nextOlderDate) || resp.hasMore;
     } catch (e: any) {
+      if (request !== this.listRequest) return;
       this.items = [];
-      this.hasMore = false;
       this.snackBar.open(e?.error?.detail || e?.error?.error || 'Failed to load mailbox.', 'Close', { duration: 4500 });
     } finally {
-      this.isLoading = false;
+      if (request === this.listRequest) this.isLoading = false;
     }
   }
 
@@ -123,59 +142,122 @@ export class MailboxComponent implements OnInit {
     this.searchTerm = '';
   }
 
-  async loadMore(): Promise<void> {
+  async loadMore(days = 1): Promise<void> {
     if (this.isLoading || this.isLoadingMore || !this.hasMore) return;
+    const lastItem = this.items.at(-1);
+    const anchor = this.nextOlderDate || (lastItem && this.messageDate(lastItem));
+    if (!anchor) return;
+    const request = this.listRequest;
+    const folder = this.folder;
     this.isLoadingMore = true;
     try {
-      const resp = await firstValueFrom(this.mailApi.listMailbox(this.folder, MAILBOX_PAGE_SIZE, this.items.length));
-      const nextItems = Array.isArray(resp?.items) ? resp.items as MailItem[] : [];
       const existingIds = new Set(this.items.map((item) => item.id));
-      this.items = [...this.items, ...nextItems.filter((item) => item?.id && !existingIds.has(item.id))];
-      this.mailbox = resp?.mailbox || this.mailbox;
-      this.hasMore = nextItems.length === MAILBOX_PAGE_SIZE;
+      let page = await this.loadDays(folder, anchor, days);
+      if (request !== this.listRequest) return;
+      // The first page may already contain the entire oldest visible day.
+      if (!this.nextOlderDate && days === 1 && page.nextOlderDate &&
+          (page.items as MailItem[]).every((item) => existingIds.has(item.id))) {
+        page = await this.loadDays(folder, page.nextOlderDate, days);
+        if (request !== this.listRequest) return;
+      }
+      const olderItems = (page.items as MailItem[]).filter((item) => {
+        if (existingIds.has(item.id)) return false;
+        existingIds.add(item.id);
+        return true;
+      });
+      this.items = [...this.items, ...olderItems].sort(
+        (a, b) => Date.parse(this.messageDate(b) || '') - Date.parse(this.messageDate(a) || '')
+      );
+      this.mailbox = page.mailbox || this.mailbox;
+      this.nextOlderDate = page.nextOlderDate || null;
+      this.hasMore = page.hasMore;
     } catch (e: any) {
+      if (request !== this.listRequest) return;
       this.snackBar.open(e?.error?.detail || e?.error?.error || 'Failed to load more messages.', 'Close', { duration: 4500 });
     } finally {
-      this.isLoadingMore = false;
+      if (request === this.listRequest) this.isLoadingMore = false;
     }
+  }
+
+  private loadDays(folder: MailFolder, anchor: string, days: number) {
+    const since = new Date(anchor);
+    since.setHours(0, 0, 0, 0);
+    const before = new Date(since);
+    before.setDate(before.getDate() + 1);
+    since.setDate(since.getDate() - (days - 1));
+    return firstValueFrom(this.mailApi.listMailboxRange(folder, since.toISOString(), before.toISOString()));
   }
 
   async openMessage(item: MailItem): Promise<void> {
     if (!item?.id) return;
+    const request = ++this.detailRequest;
     this.isDetailLoading = true;
     try {
       const resp = await firstValueFrom(this.mailApi.getMailboxMessage(item.id));
+      if (request !== this.detailRequest) return;
       this.selected = (resp?.item as MailItem) || item;
     } catch (e: any) {
+      if (request !== this.detailRequest) return;
       this.snackBar.open(e?.error?.detail || e?.error?.error || 'Failed to load message.', 'Close', { duration: 4500 });
     } finally {
-      this.isDetailLoading = false;
+      if (request === this.detailRequest) this.isDetailLoading = false;
     }
   }
 
+  openComposer(template: TemplateRef<unknown>, message: MailItem | null = null): void {
+    if (this.composeDialog || !this.auth.canEditFeature('mail')) return;
+    this.forwarding = message;
+    this.forwardTo = '';
+    this.forwardComment = '';
+    this.composeDialog = this.dialog.open(template, {
+      width: '95vw',
+      height: '95dvh',
+      maxWidth: '95vw',
+      maxHeight: '95dvh',
+      autoFocus: 'input[name="to"]'
+    });
+    this.composeDialog.afterClosed().subscribe(() => { this.composeDialog = undefined; });
+  }
+
   async send(): Promise<void> {
-    if (this.isSending) return;
-    const to = this.parseAddresses(this.compose.to);
-    const cc = this.parseAddresses(this.compose.cc);
-    const bcc = this.parseAddresses(this.compose.bcc);
+    const dialog = this.composeDialog;
+    if (this.isSending || !dialog) return;
+    const original = this.forwarding;
+    const to = this.parseAddresses(original ? this.forwardTo : this.compose.to);
     const subject = this.compose.subject.trim();
     const html = this.compose.html.trim();
-    if (!to.length || !subject || !html) {
-      this.snackBar.open('To, subject and body are required.', 'Close', { duration: 3500 });
+    if (!to.length || (!original && (!subject || !html))) {
+      const error = original ? 'A recipient is required.' : 'To, subject and body are required.';
+      this.snackBar.open(error, 'Close', { duration: 3500 });
       return;
     }
 
     this.isSending = true;
+    dialog.disableClose = true;
     try {
-      await firstValueFrom(this.mailApi.sendMail({ to, subject, html, cc, bcc }));
-      this.snackBar.open('Mail sent.', 'Close', { duration: 3000 });
-      this.compose = { to: '', cc: '', bcc: '', subject: '', html: '' };
-      if (this.folder === 'sentitems') await this.reload('sentitems');
+      if (original) {
+        await firstValueFrom(this.mailApi.forwardMessage(original.id, { to, comment: this.forwardComment.trim() }));
+      } else {
+        const cc = this.parseAddresses(this.compose.cc);
+        const bcc = this.parseAddresses(this.compose.bcc);
+        await firstValueFrom(this.mailApi.sendMail({ to, subject, html, cc, bcc }));
+        this.compose = { to: '', cc: '', bcc: '', subject: '', html: '' };
+      }
+      dialog.close();
+      this.snackBar.open(original ? 'Mail forwarded.' : 'Mail sent.', 'Close', { duration: 3000 });
+      if (this.folder === 'sentitems') void this.reload('sentitems');
     } catch (e: any) {
-      this.snackBar.open(e?.error?.detail || e?.error?.error || 'Send failed.', 'Close', { duration: 4500 });
+      this.snackBar.open(e?.error?.detail || e?.error?.error || (original ? 'Forward failed.' : 'Send failed.'), 'Close', { duration: 4500 });
     } finally {
       this.isSending = false;
+      dialog.disableClose = false;
     }
+  }
+
+  messageDate(item: MailItem): string | undefined {
+    return this.folder === 'sentitems'
+      ? item.sentDateTime || item.receivedDateTime
+      : item.receivedDateTime || item.sentDateTime;
   }
 
   displayAddress(addr?: MailAddress | null): string {
@@ -212,7 +294,7 @@ export class MailboxComponent implements OnInit {
       this.displayAddresses(item.toRecipients),
       this.displayAddresses(item.ccRecipients),
       this.displayAddresses(item.bccRecipients),
-      this.formatDate(item.receivedDateTime || item.sentDateTime)
+      this.formatDate(this.messageDate(item))
     ].join(' ').toLowerCase();
   }
 }

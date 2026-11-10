@@ -260,6 +260,9 @@ async function projectEffort(client) {
     await upsert(client, 'effort_tasks', {
       id: id(doc._id), project_id: id(doc.projectId), tenant_id: await resolveTenantId(client, doc, doc), name: doc.name,
       note: doc.note || '', sub_work_item_id: id(doc.subWorkItemId), sub_work_item_snapshot: json(doc.subWorkItemSnapshot, {}),
+      assignee_id: id(doc.assigneeId), assignee_name: doc.assigneeName || '',
+      estimate_ms: doc.estimateMs ?? null, net_adjustment_ms: Number(doc.netAdjustmentMs || 0),
+      timer_paused: Boolean(doc.timerPaused),
       status: doc.status || 'open', archived_net_ms: Number(doc.archivedNetMs || 0),
       archived_session_count: Number(doc.archivedSessionCount || 0), first_started_at: date(doc.firstStartedAt),
       active_timer_user_id: id(doc.activeTimer?.userId), active_timer_started_at: date(doc.activeTimer?.startedAt),

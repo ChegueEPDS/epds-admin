@@ -244,6 +244,17 @@ CREATE TABLE IF NOT EXISTS effort_tasks (
   updated_at timestamptz NOT NULL
 );
 
+ALTER TABLE effort_tasks
+  ADD COLUMN IF NOT EXISTS assignee_id varchar(24) REFERENCES users(id) ON DELETE SET NULL,
+  ADD COLUMN IF NOT EXISTS assignee_name text NOT NULL DEFAULT '',
+  ADD COLUMN IF NOT EXISTS estimate_ms bigint CHECK (estimate_ms >= 0),
+  ADD COLUMN IF NOT EXISTS net_adjustment_ms bigint NOT NULL DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS timer_paused boolean NOT NULL DEFAULT false;
+
+ALTER TABLE effort_tasks DROP CONSTRAINT IF EXISTS effort_tasks_status_check;
+ALTER TABLE effort_tasks ADD CONSTRAINT effort_tasks_status_check
+  CHECK (status IN ('open', 'new', 'in_progress', 'closed'));
+
 CREATE UNIQUE INDEX IF NOT EXISTS effort_tasks_one_active_timer_per_user
   ON effort_tasks(active_timer_user_id) WHERE active_timer_started_at IS NOT NULL;
 

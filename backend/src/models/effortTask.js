@@ -21,7 +21,12 @@ const EffortTaskSchema = new mongoose.Schema(
       subWorkNumber: { type: String, trim: true, default: '' },
       name: { type: String, trim: true, default: '' }
     },
-    status: { type: String, enum: ['open', 'closed'], default: 'open', index: true },
+    status: { type: String, enum: ['open', 'new', 'in_progress', 'closed'], default: 'new', index: true },
+    assigneeId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+    assigneeName: { type: String, default: '' },
+    estimateMs: { type: Number, min: 0 },
+    netAdjustmentMs: { type: Number, default: 0 },
+    timerPaused: { type: Boolean, default: false },
     sessions: [EffortSessionSchema],
     archivedNetMs: { type: Number, min: 0, default: 0 },
     archivedSessionCount: { type: Number, min: 0, default: 0 },
@@ -37,7 +42,7 @@ const EffortTaskSchema = new mongoose.Schema(
     updatedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     closedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' }
   },
-  { timestamps: true }
+  { timestamps: true, optimisticConcurrency: true }
 );
 
 EffortTaskSchema.index({ tenantId: 1, createdBy: 1, projectId: 1, status: 1, updatedAt: -1 });

@@ -4,99 +4,111 @@
       <h1>Mail</h1>
       <p>{{ mailbox || 'Mailbox not configured' }}</p>
     </div>
-    <button mat-flat-button color="primary" [disabled]="isLoading" (click)="reload(folder)">
+    <button mat-flat-button color="primary" [disabled]="isLoading" (click)="reload()">
       <mat-icon class="material-symbols-outlined">refresh</mat-icon>
       Refresh
     </button>
   </div>
 
-  <mat-tab-group animationDuration="120ms" class="mail-tabs">
-    <mat-tab label="Mailbox">
-      <mat-card class="mailbox-shell">
-        <div class="mailbox-header">
-          <div class="folder-actions">
-            <button mat-stroked-button [class.active-folder]="folder === 'inbox'" [disabled]="isLoading || folder === 'inbox'" (click)="reload('inbox')">
-              <mat-icon class="material-symbols-outlined">inbox</mat-icon>
-              Inbox
-            </button>
-            <button mat-stroked-button [class.active-folder]="folder === 'sentitems'" [disabled]="isLoading || folder === 'sentitems'" (click)="reload('sentitems')">
-              <mat-icon class="material-symbols-outlined">send</mat-icon>
-              Sent
-            </button>
-          </div>
+  <div class="mail-navigation">
+    <nav mat-tab-nav-bar [tabPanel]="mailPanel" aria-label="Mail folders">
+      <button mat-tab-link type="button" [active]="folder === 'inbox'" (click)="folder !== 'inbox' && reload('inbox')">Inbox</button>
+      <button mat-tab-link type="button" [active]="folder === 'sentitems'" (click)="folder !== 'sentitems' && reload('sentitems')">Sent</button>
+    </nav>
+    <button *ngIf="auth.canEditFeature('mail')" mat-flat-button color="primary" type="button" (click)="openComposer(composer)">
+      <mat-icon class="material-symbols-outlined">edit</mat-icon>
+      Compose
+    </button>
+  </div>
 
-          <mat-form-field class="mail-search" appearance="outline" subscriptSizing="dynamic">
-            <mat-icon matPrefix class="material-symbols-outlined">search</mat-icon>
-            <input matInput type="search" placeholder="Search mail" [value]="searchTerm" (input)="searchTerm = $any($event.target).value">
-            <button mat-icon-button matSuffix type="button" aria-label="Clear search" *ngIf="searchTerm" (click)="clearSearch()">
-              <mat-icon class="material-symbols-outlined">close</mat-icon>
-            </button>
-          </mat-form-field>
+  <mat-tab-nav-panel #mailPanel>
+    <mat-card class="mailbox-shell">
+      <div class="mailbox-header">
+        <mat-form-field class="mail-search" appearance="outline" subscriptSizing="dynamic">
+          <mat-icon matPrefix class="material-symbols-outlined">search</mat-icon>
+          <input matInput type="search" aria-label="Search mail" placeholder="Search mail" [value]="searchTerm" (input)="searchTerm = $any($event.target).value">
+          <button mat-icon-button matSuffix type="button" aria-label="Clear search" *ngIf="searchTerm" (click)="clearSearch()">
+            <mat-icon class="material-symbols-outlined">close</mat-icon>
+          </button>
+        </mat-form-field>
+      </div>
+
+      <mat-card-content class="mailbox-content">
+        <div *ngIf="isLoading" class="loading-block">
+          <mat-progress-spinner diameter="42" mode="indeterminate"></mat-progress-spinner>
         </div>
 
-        <mat-card-content class="mailbox-content">
-          <div *ngIf="isLoading" class="loading-block">
-            <mat-progress-spinner diameter="42" mode="indeterminate"></mat-progress-spinner>
-          </div>
+        <div *ngIf="!isLoading" class="mailbox-grid">
+          <section class="list-panel" aria-label="Message list">
+            @let visibleItems = filteredItems;
+            <div class="panel-header">
+              <h3>{{ folder === 'inbox' ? 'Incoming mail' : 'Sent mail' }}</h3>
+              <span aria-live="polite">{{ visibleItems.length }} of {{ items.length }} messages</span>
+            </div>
 
-          <div *ngIf="!isLoading" class="mailbox-grid">
-            <section class="list-panel" aria-label="Message list">
-              <div class="panel-header">
-                <h3>{{ folder === 'inbox' ? 'Incoming mail' : 'Sent mail' }}</h3>
-                <span>{{ filteredItems.length }} of {{ items.length }} messages</span>
-              </div>
-
-              <div *ngIf="filteredItems.length; else emptyState" class="message-list">
-                <button type="button" class="message-row" *ngFor="let row of filteredItems" (click)="openMessage(row)" [class.unread]="folder === 'inbox' && row.isRead === false" [class.selected]="selected?.id === row.id">
-                  <span class="message-row-content">
-                    <span class="message-row-top">
-                      <span class="message-subject">{{ row.subject || '(No subject)' }}</span>
-                      <span class="message-date">{{ formatDate(row.receivedDateTime || row.sentDateTime) }}</span>
-                    </span>
-                    <span class="message-preview">{{ row.bodyPreview || '-' }}</span>
+            <div class="message-list">
+              <button type="button" class="message-row" *ngFor="let row of visibleItems" (click)="openMessage(row)" [class.unread]="folder === 'inbox' && row.isRead === false" [class.selected]="selected?.id === row.id">
+                <span class="message-row-content">
+                  <span class="message-row-top">
+                    <span class="message-subject">{{ row.subject || '(No subject)' }}</span>
+                    <span class="message-date">{{ formatDate(messageDate(row)) }}</span>
                   </span>
-                </button>
-
-                <div class="load-more-row" *ngIf="hasMore">
-                  <button mat-stroked-button type="button" [disabled]="isLoadingMore" (click)="loadMore()">
-                    <mat-progress-spinner *ngIf="isLoadingMore" diameter="18" mode="indeterminate"></mat-progress-spinner>
-                    <mat-icon *ngIf="!isLoadingMore" class="material-symbols-outlined">expand_more</mat-icon>
-                    Load more
-                  </button>
-                </div>
+                  <span class="message-preview">{{ row.bodyPreview || '-' }}</span>
+                </span>
+              </button>
+              <div class="empty-state" *ngIf="!visibleItems.length">
+                {{ searchTerm ? 'No messages match your search.' : 'No messages found.' }}
               </div>
-              <ng-template #emptyState>
-                <div class="empty-state">{{ searchTerm ? 'No messages match your search.' : 'No messages found.' }}</div>
-              </ng-template>
-            </section>
+            </div>
 
-            <section class="detail-panel" aria-label="Message reader">
-              <div *ngIf="isDetailLoading" class="loading-block">
-                <mat-progress-spinner diameter="36" mode="indeterminate"></mat-progress-spinner>
-              </div>
-              <div *ngIf="!isDetailLoading && selected; else noSelection" class="detail-body">
+            <div class="load-more-row" *ngIf="hasMore">
+              <button mat-stroked-button type="button" [disabled]="isLoadingMore" (click)="loadMore()">
+                <mat-progress-spinner *ngIf="isLoadingMore" diameter="18" mode="indeterminate"></mat-progress-spinner>
+                <mat-icon *ngIf="!isLoadingMore" class="material-symbols-outlined">expand_more</mat-icon>
+                Load more
+              </button>
+              <button mat-stroked-button type="button" [disabled]="isLoadingMore" [matMenuTriggerFor]="moreDays">
+                More days
+                <mat-icon iconPositionEnd class="material-symbols-outlined">arrow_drop_down</mat-icon>
+              </button>
+              <mat-menu #moreDays="matMenu">
+                <button mat-menu-item type="button" (click)="loadMore(3)">Load 3 days</button>
+                <button mat-menu-item type="button" (click)="loadMore(7)">Load 7 days</button>
+                <button mat-menu-item type="button" (click)="loadMore(30)">Load 30 days</button>
+              </mat-menu>
+            </div>
+          </section>
+
+          <section class="detail-panel" aria-label="Message reader">
+            <div *ngIf="isDetailLoading; else messageDetail" class="loading-block">
+              <mat-progress-spinner diameter="36" mode="indeterminate"></mat-progress-spinner>
+            </div>
+            <ng-template #messageDetail>
+              <div *ngIf="selected as message; else noSelection" class="detail-body">
                 <div class="message-head">
-                  <h3>{{ selected.subject || '(No subject)' }}</h3>
+                  <div class="message-title">
+                    <h3>{{ message.subject || '(No subject)' }}</h3>
+                    <button *ngIf="auth.canEditFeature('mail')" mat-stroked-button type="button" (click)="openComposer(composer, message)">
+                      <mat-icon class="material-symbols-outlined">forward</mat-icon>
+                      Forward
+                    </button>
+                  </div>
                   <div class="message-meta-grid">
                     <span>From</span>
-                    <strong>{{ displayAddress(selected.from || selected.sender) }}</strong>
+                    <strong>{{ displayAddress(message.from || message.sender) }}</strong>
                     <span>To</span>
-                    <strong>{{ displayAddresses(selected.toRecipients) }}</strong>
+                    <strong>{{ displayAddresses(message.toRecipients) }}</strong>
                     <span>CC</span>
-                    <strong>{{ displayAddresses(selected.ccRecipients) }}</strong>
+                    <strong>{{ displayAddresses(message.ccRecipients) }}</strong>
                     <span>Sent</span>
-                    <strong>{{ formatDate(selected.sentDateTime) }}</strong>
+                    <strong>{{ formatDate(message.sentDateTime) }}</strong>
                     <span>Received</span>
-                    <strong>{{ formatDate(selected.receivedDateTime) }}</strong>
+                    <strong>{{ formatDate(message.receivedDateTime) }}</strong>
                     <span>Attachments</span>
-                    <strong>{{ selected.hasAttachments ? 'Yes' : 'No' }}</strong>
+                    <strong>{{ message.hasAttachments ? 'Yes' : 'No' }}</strong>
                   </div>
                 </div>
-
-                <div class="html-body" *ngIf="selected.body?.contentType?.toLowerCase() === 'html'; else textBody" [innerHTML]="selected.body?.content || ''"></div>
-                <ng-template #textBody>
-                  <pre class="text-body">{{ selected.body?.content || selected.bodyPreview || '' }}</pre>
-                </ng-template>
+                <ng-container *ngTemplateOutlet="messageBody; context: { $implicit: message }"></ng-container>
               </div>
               <ng-template #noSelection>
                 <div class="empty-state empty-reader">
@@ -104,50 +116,77 @@
                   <span>Select a message to view it.</span>
                 </div>
               </ng-template>
-            </section>
-          </div>
-        </mat-card-content>
-      </mat-card>
-    </mat-tab>
-
-    <mat-tab label="Compose" *ngIf="auth.canEditFeature('mail')">
-      <mat-card class="compose-card">
-        <mat-card-content>
-          <form class="compose-form" (ngSubmit)="send()">
-            <mat-form-field appearance="outline">
-              <mat-label>To</mat-label>
-              <input matInput name="to" [(ngModel)]="compose.to" placeholder="name@example.com; second@example.com" required>
-            </mat-form-field>
-            <mat-form-field appearance="outline">
-              <mat-label>CC</mat-label>
-              <input matInput name="cc" [(ngModel)]="compose.cc">
-            </mat-form-field>
-            <mat-form-field appearance="outline">
-              <mat-label>BCC</mat-label>
-              <input matInput name="bcc" [(ngModel)]="compose.bcc">
-            </mat-form-field>
-            <mat-form-field appearance="outline" class="subject-field">
-              <mat-label>Subject</mat-label>
-              <input matInput name="subject" [(ngModel)]="compose.subject" required>
-            </mat-form-field>
-            <app-rich-text-editor
-              class="body-field"
-              label="Body"
-              ariaLabel="Mail body"
-              placeholder="Write your message..."
-              minHeight="260px"
-              [(html)]="compose.html"
-            ></app-rich-text-editor>
-            <div class="compose-actions">
-              <button mat-flat-button color="primary" type="submit" [disabled]="isSending">
-                <mat-progress-spinner *ngIf="isSending" diameter="18" mode="indeterminate"></mat-progress-spinner>
-                <mat-icon *ngIf="!isSending" class="material-symbols-outlined">send</mat-icon>
-                Send
-              </button>
-            </div>
-          </form>
-        </mat-card-content>
-      </mat-card>
-    </mat-tab>
-  </mat-tab-group>
+            </ng-template>
+          </section>
+        </div>
+      </mat-card-content>
+    </mat-card>
+  </mat-tab-nav-panel>
 </section>
+
+<ng-template #messageBody let-message>
+  <div class="html-body" *ngIf="message.body?.contentType?.toLowerCase() === 'html'; else textBody" [innerHTML]="message.body?.content || ''"></div>
+  <ng-template #textBody>
+    <pre class="text-body">{{ message.body?.content || message.bodyPreview || '' }}</pre>
+  </ng-template>
+</ng-template>
+
+<ng-template #composer>
+  <h2 mat-dialog-title>{{ forwarding ? 'Forward message' : 'Compose mail' }}</h2>
+  <form class="compose-dialog" (ngSubmit)="send()">
+    <mat-dialog-content class="compose-content">
+      <div class="compose-form" *ngIf="!forwarding; else forwardForm">
+        <mat-form-field appearance="outline">
+          <mat-label>To</mat-label>
+          <input matInput name="to" [(ngModel)]="compose.to" placeholder="name@example.com; second@example.com" required>
+        </mat-form-field>
+        <mat-form-field appearance="outline">
+          <mat-label>CC</mat-label>
+          <input matInput name="cc" [(ngModel)]="compose.cc">
+        </mat-form-field>
+        <mat-form-field appearance="outline">
+          <mat-label>BCC</mat-label>
+          <input matInput name="bcc" [(ngModel)]="compose.bcc">
+        </mat-form-field>
+        <mat-form-field appearance="outline" class="full-width">
+          <mat-label>Subject</mat-label>
+          <input matInput name="subject" [(ngModel)]="compose.subject" required>
+        </mat-form-field>
+        <app-rich-text-editor
+          class="full-width"
+          label="Body"
+          ariaLabel="Mail body"
+          placeholder="Write your message..."
+          minHeight="clamp(240px, 44dvh, 560px)"
+          [(html)]="compose.html"
+        ></app-rich-text-editor>
+      </div>
+
+      <ng-template #forwardForm>
+        <div class="forward-form" *ngIf="forwarding as original">
+          <mat-form-field appearance="outline">
+            <mat-label>To</mat-label>
+            <input matInput name="to" [(ngModel)]="forwardTo" placeholder="name@example.com; second@example.com" required>
+          </mat-form-field>
+          <mat-form-field appearance="outline">
+            <mat-label>Message (optional)</mat-label>
+            <textarea matInput name="comment" [(ngModel)]="forwardComment" rows="4"></textarea>
+          </mat-form-field>
+          <section class="forward-preview" aria-label="Original message">
+            <h3>{{ original.subject || '(No subject)' }}</h3>
+            <p>{{ displayAddress(original.from || original.sender) }}</p>
+            <ng-container *ngTemplateOutlet="messageBody; context: { $implicit: original }"></ng-container>
+          </section>
+        </div>
+      </ng-template>
+    </mat-dialog-content>
+    <mat-dialog-actions align="end" class="compose-actions">
+      <button mat-button mat-dialog-close type="button" [disabled]="isSending">Cancel</button>
+      <button mat-flat-button color="primary" type="submit" [disabled]="isSending">
+        <mat-progress-spinner *ngIf="isSending" diameter="18" mode="indeterminate"></mat-progress-spinner>
+        <mat-icon *ngIf="!isSending" class="material-symbols-outlined">{{ forwarding ? 'forward' : 'send' }}</mat-icon>
+        {{ forwarding ? 'Forward' : 'Send' }}
+      </button>
+    </mat-dialog-actions>
+  </form>
+</ng-template>

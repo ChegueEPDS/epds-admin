@@ -96,27 +96,64 @@ class GraphMailService {
   }
 
   async listMailboxMessages({ folder = 'inbox', top = 25, skip = 0 } = {}) {
+    const { request } = this.mailboxListRequest(folder);
+    const resp = await request
+      .top(Math.min(Math.max(Number(top) || 25, 1), 100))
+      .skip(Math.max(Number(skip) || 0, 0))
+      .get();
+    return { items: Array.isArray(resp?.value) ? resp.value : [], hasMore: Boolean(resp?.['@odata.nextLink']) };
+  }
+
+  async listMailboxMessagesInRange({ folder, since, before }) {
+    const { request, dateField } = this.mailboxListRequest(folder);
+    // The first message before the range tells the UI where to resume across quiet days.
+    let page = await request.filter(`${dateField} lt ${before.toISOString()}`).top(100).get();
+    const items = [];
+    const startTime = since.getTime();
+    while (page) {
+      for (const item of page.value || []) {
+        if (Date.parse(item[dateField]) < startTime) {
+          return { items, hasMore: true, nextOlderDate: item[dateField] };
+        }
+        items.push(item);
+      }
+      const nextLink = page['@odata.nextLink'];
+      page = nextLink ? await this.client.api(nextLink).get() : null;
+    }
+    return { items, hasMore: false, nextOlderDate: null };
+  }
+
+  mailboxListRequest(folder) {
     const sender = this.defaultSender;
     if (!sender) throw new Error('MAIL_SENDER_UPN is not set');
     const normalizedFolder = String(folder || 'inbox').trim().toLowerCase();
     if (!new Set(['inbox', 'sentitems']).has(normalizedFolder)) throw new Error('Unsupported folder');
-    const resp = await this.client
+    const dateField = normalizedFolder === 'sentitems' ? 'sentDateTime' : 'receivedDateTime';
+    const request = this.client
       .api(`/users/${encodeURIComponent(sender)}/mailFolders/${normalizedFolder}/messages`)
       .select('id,subject,from,sender,toRecipients,receivedDateTime,sentDateTime,isRead,importance,bodyPreview,hasAttachments,conversationId')
-      .top(Math.min(Math.max(Number(top) || 25, 1), 100))
-      .skip(Math.max(Number(skip) || 0, 0))
-      .orderby('receivedDateTime DESC')
-      .get();
-    return Array.isArray(resp?.value) ? resp.value : [];
+      .orderby(`${dateField} DESC`);
+    return { request, dateField };
+  }
+
+  mailboxMessagePath(id) {
+    const sender = this.defaultSender;
+    if (!sender) throw new Error('MAIL_SENDER_UPN is not set');
+    return `/users/${encodeURIComponent(sender)}/messages/${encodeURIComponent(String(id))}`;
   }
 
   async getMailboxMessage(id) {
-    const sender = this.defaultSender;
-    if (!sender) throw new Error('MAIL_SENDER_UPN is not set');
     return this.client
-      .api(`/users/${encodeURIComponent(sender)}/messages/${encodeURIComponent(String(id))}`)
+      .api(this.mailboxMessagePath(id))
       .select('id,subject,from,sender,toRecipients,ccRecipients,bccRecipients,receivedDateTime,sentDateTime,isRead,importance,bodyPreview,hasAttachments,body,internetMessageId,conversationId')
       .get();
+  }
+
+  async forwardMailboxMessage(id, { to, comment }) {
+    await this.client.api(`${this.mailboxMessagePath(id)}/forward`).post({
+      toRecipients: this.recipients(to),
+      comment
+    });
   }
 }
 
