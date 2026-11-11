@@ -84,6 +84,7 @@ export class HomeComponent implements OnInit, OnDestroy {
   ) {}
 
   ngOnInit(): void {
+    if (this.auth.isFinanceTenant()) return;
     void this.loadSystemStatus();
     this.refreshTimer = setInterval(() => void this.loadSystemStatus(), 120000);
   }

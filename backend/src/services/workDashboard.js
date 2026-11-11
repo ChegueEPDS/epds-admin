@@ -6,6 +6,8 @@ const { WorkItem } = require('../models/workItem');
 const SubWorkItem = require('../models/subWorkItem');
 const { latestRates, convertTotals } = require('./mnbExchangeRates');
 const { getDefaultCurrency } = require('./tenantCurrency');
+const { workCalendar, workPeriodStart } = require('./workTurnover');
+const Tenant = require('../models/tenant');
 
 const stages = {
   inquiry: 'Lead', offer: 'Lead', to_start: 'Active', in_progress: 'Active', on_hold: 'On Hold',
@@ -25,11 +27,8 @@ const checkNames = ['No owner', 'No backup', 'No status', 'No client', 'No servi
   'Payment status missing', 'Paid amount missing', 'Invoiced amount missing', "'Not Invoiced' but amount invoiced",
   'Marked Paid but balance open', 'Paid > invoiced', 'No deadline', 'No next action', 'Action overdue',
   'Not updated >14 days', 'Payment overdue', 'Stage formula overwritten'];
-const calendar = new Intl.DateTimeFormat('sv-SE', {
-  timeZone: 'Europe/Budapest', year: 'numeric', month: '2-digit', day: '2-digit'
-});
 const isoDay = /^\d{4}-\d{2}-\d{2}$/;
-const day = (value) => !value ? null : isoDay.test(value) ? value : calendar.format(new Date(value));
+const day = (value) => !value ? null : isoDay.test(value) ? value : workCalendar.format(new Date(value));
 const dayNumber = (value) => Date.parse(value) / 86400000;
 const fail = (message) => Object.assign(new Error(message), { statusCode: 400 });
 
@@ -69,7 +68,7 @@ async function reportWorks(tenantId) {
   if (databaseEngine() === 'postgresql') {
     const { rows } = await query(`SELECT w.id,w.work_number AS "workNumber",w.name,w.status,w.customer,w.responsible,w.currency,w.deadline,w.reporting,
       w.responsible_user_id AS "ownerId",w.entity_id AS "entityId",w.service_type_id AS "serviceTypeId",
-      w.total_amount AS "totalAmount",w.updated_at AS "updatedAt",w.invoice_number AS "invoiceNumber",
+      w.total_amount AS "totalAmount",w.created_at AS "createdAt",w.updated_at AS "updatedAt",w.invoice_number AS "invoiceNumber",
       w.invoice_date AS "invoiceDate",w.invoice_payment_deadline AS "paymentDue",p.paid AS "subPaid",p.invoiced AS "subInvoice"
       FROM work_items w LEFT JOIN (
         SELECT work_item_id,sum(paid_amount) FILTER (WHERE paid_amount>0) AS paid,
@@ -81,7 +80,7 @@ async function reportWorks(tenantId) {
   }
   const scope = { tenantId: new mongoose.Types.ObjectId(tenantId), archivedAt: { $exists: false } };
   const [works, subPayments] = await Promise.all([
-    WorkItem.find(scope).select('workNumber name status customer responsible responsibleUserId entityId serviceTypeId currency deadline totalAmount reporting updatedAt invoiceNumber invoiceDate invoicePaymentDeadline').sort('_id').lean(),
+    WorkItem.find(scope).select('workNumber name status customer responsible responsibleUserId entityId serviceTypeId currency deadline totalAmount reporting createdAt updatedAt invoiceNumber invoiceDate invoicePaymentDeadline').sort('_id').lean(),
     SubWorkItem.aggregate([{ $match: { ...scope, status: { $nin: ['cancelled', 'lost'] } } },
       { $group: { _id: '$workItemId', paid: { $sum: { $toDecimal: '$paidAmount' } },
         invoiced: { $max: { $or: [
@@ -182,8 +181,15 @@ function financialChart(rows, currency, fx) {
   });
 }
 
-function buildDashboard(works, config, currency, fx, asOf = day(new Date())) {
-  const rows = works.map((work) => prepareWork(work, asOf, dayNumber(asOf), config, fx.snapshot));
+function periodRows(works, config, fx, asOf, periodStart) {
+  return works.filter((work) => {
+    const created = day(work.createdAt);
+    return created && created >= periodStart && created <= asOf;
+  }).map((work) => prepareWork(work, asOf, dayNumber(asOf), config, fx.snapshot));
+}
+
+function buildDashboard(works, config, currency, fx, asOf = dashboardDate(), periodStart = workPeriodStart(asOf)) {
+  const rows = periodRows(works, config, fx, asOf, periodStart);
   const reportedStages = rows.some((row) => row.stage === 'Unknown') ? [...stageNames, 'Unknown'] : stageNames;
   const count = (items, predicate) => items.filter(predicate).length;
   const money = (items, key = 'contract') => totals(items, key, currency, fx);
@@ -230,7 +236,7 @@ function buildDashboard(works, config, currency, fx, asOf = day(new Date())) {
   }) : null;
   const ownerTotal = ownerStats(rows);
   return {
-    asOf, currency, rateDate: fx.snapshot?.date || null, refreshFailed: fx.refresh?.failed === true, paymentGaps,
+    asOf, periodStart, currency, rateDate: fx.snapshot?.date || null, refreshFailed: fx.refresh?.failed === true, paymentGaps,
     aedRateDerived: fx.snapshot?.rates.AED?.source === 'cbuae-usd-peg' &&
       (currency === 'AED' || rows.some((row) => row.currency === 'AED')),
     summary: { ...ownerTotal, receivable: money(rows, 'receivable'), unbilled: money(rows, 'unbilled') },
@@ -246,12 +252,12 @@ function dashboardDate() {
   return day(new Date());
 }
 
-async function dashboard(tenantId, config, currency, fx, asOf) {
-  return buildDashboard(await reportWorks(tenantId), config, currency, fx, asOf);
+async function dashboard(tenantId, config, currency, fx, asOf, periodStart) {
+  return buildDashboard(await reportWorks(tenantId), config, currency, fx, asOf, periodStart);
 }
 
-function dashboardDrilldown(works, config, currency, fx, filter, asOf = day(new Date())) {
-  const rows = works.map((work) => prepareWork(work, asOf, dayNumber(asOf), config, fx.snapshot));
+function dashboardDrilldown(works, config, currency, fx, filter, asOf = dashboardDate(), periodStart = workPeriodStart(asOf)) {
+  const rows = periodRows(works, config, fx, asOf, periodStart);
   let matched;
   let financeKey;
   if (filter.kind === 'deadline' && deadlineNames.includes(filter.value)) {
@@ -276,8 +282,12 @@ function dashboardDrilldown(works, config, currency, fx, filter, asOf = day(new 
 }
 
 async function dashboardWorks(tenantId, config, filter) {
-  const [works, currency, fx] = await Promise.all([reportWorks(tenantId), getDefaultCurrency(tenantId), latestRates()]);
-  return dashboardDrilldown(works, config, currency, fx, filter);
+  const [works, currency, fx, tenant] = await Promise.all([reportWorks(tenantId), getDefaultCurrency(tenantId), latestRates(),
+    databaseEngine() === 'postgresql'
+      ? query('SELECT work_turnover_day AS "workTurnoverDay" FROM tenants WHERE id=$1', [tenantId]).then(({ rows }) => rows[0])
+      : Tenant.findById(tenantId).select('workTurnoverDay').lean()]);
+  const asOf = dashboardDate();
+  return dashboardDrilldown(works, config, currency, fx, filter, asOf, workPeriodStart(asOf, tenant?.workTurnoverDay));
 }
 
 module.exports = { workReporting, dashboard, dashboardDate, dashboardWorks, buildDashboard, dashboardDrilldown };

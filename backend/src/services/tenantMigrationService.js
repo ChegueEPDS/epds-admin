@@ -156,7 +156,7 @@ async function normalizeTenantTypes() {
   await seedKnownTenants();
 
   await Tenant.updateMany(
-    { $or: [{ type: { $exists: false } }, { type: { $nin: ['company', 'client'] } }] },
+    { $or: [{ type: { $exists: false } }, { type: { $nin: ['company', 'client', 'finance'] } }] },
     { $set: { type: 'company' } }
   );
 
@@ -167,6 +167,7 @@ async function normalizeTenantTypes() {
       tenant.displayName = tenant.name;
       changed = true;
     }
+    if (tenant.type === 'finance') continue;
     for (const key of ['mail', 'domainHealth', 'licenses', 'effortTracking', 'webhookTester']) {
       const value = tenant.features?.[key];
       if (typeof value === 'boolean') {

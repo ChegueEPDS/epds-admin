@@ -3,7 +3,7 @@ import { Injectable, signal } from '@angular/core';
 import { EMPTY, Observable, Subject, catchError, defer, expand, map, merge, switchMap, tap, timer } from 'rxjs';
 import { environment } from '../../environments/environment';
 import { WorkFieldFiles, WorkFieldSettings, WorkFieldValues, WorkReporting, WorkSettingsChange } from '../work-board/work-fields';
-import { AuthService } from './auth.service';
+import { AuthService, FinanceTenant } from './auth.service';
 
 export type WorkStatus = 'inquiry' | 'offer' | 'to_start' | 'in_progress' | 'on_hold' | 'completed_billable' | 'invoiced' | 'paid' | 'closed' | 'cancelled' | 'lost';
 
@@ -22,11 +22,22 @@ export type WorkItem = {
   contributors: string[]; status: WorkStatus; deadline: string | null; description: string; currency: string;
   totalAmount: number; costAmount: number; marginPercent: number; allocatedAmount: number; allocatedPercentage: number;
   remainingAmount: number; paidAmount: number; subcontractor: string; paymentDeadlineDays: number; offerDate: string | null;
-  completionDate: string | null; invoiceDate: string | null; invoicePaymentDeadline: string | null; invoiceNumber: string;
+  completionDate: string | null; paidAt: string | null; invoiceDate: string | null; invoicePaymentDeadline: string | null; invoiceNumber: string;
   contractSigned: boolean; performanceCertificate: boolean; archivedAt: string | null; subWorkCount: number; subWorks: SubWorkItem[];
   createdAt: string; updatedAt: string;
   customFields?: WorkFieldValues; fieldRevision?: number;
 };
+
+export type FinanceWorkStatus = 'completed_billable' | 'invoiced' | 'paid';
+export type FinanceWork = Pick<WorkItem, 'id' | 'workNumber' | 'name' | 'customer' | 'currency' |
+  'totalAmount' | 'completionDate' | 'paymentDeadlineDays' | 'invoiceNumber' | 'invoiceDate' | 'invoicePaymentDeadline' | 'paidAt'> & {
+  status: FinanceWorkStatus;
+  reporting: Pick<WorkReporting, 'invoicedAmount' | 'paidAmount' | 'paymentStatus'>;
+  fieldRevision: number;
+};
+export type FinanceWorkChanges = Pick<FinanceWork, 'fieldRevision'> &
+  Partial<Pick<FinanceWork, 'status' | 'completionDate' | 'invoiceNumber' | 'invoiceDate' | 'invoicePaymentDeadline' | 'paidAt' | 'reporting'>>;
+type WorkListOptions = { page?: number; limit?: number; search?: string; status?: string; sort?: string; direction?: 'asc' | 'desc' };
 
 export type WorkOption = {
   id: string; workNumber: string; name: string; customer: string; status: WorkStatus;
@@ -49,6 +60,7 @@ export type DashboardWorks = {
     currency: string; amount: string | null; incomplete: boolean; missingRate: boolean }[];
 };
 export type WorkDashboard = {
+  periodStart: string;
   asOf: string; currency: string; rateDate: string | null; refreshFailed: boolean; paymentGaps: number;
   aedRateDerived?: boolean;
   summary: DashboardOwner & { receivable: ActiveWorkValue; unbilled: ActiveWorkValue };
@@ -95,11 +107,11 @@ export class WorkBoardService {
         expand((result, index) => result.refreshing && index < 5
           ? timer(300 * 2 ** index).pipe(switchMap(() => this.fetchDashboard(true)))
           : EMPTY),
-        tap((result) => this.dashboardCache.update((state) => ({
-          report: result.snapshotAt ? result : state.report,
+        tap((result) => this.dashboardCache.set({
+          report: result.snapshotAt ? result : undefined,
           loading: result.refreshing,
           error: result.refreshError ? 'The dashboard could not be refreshed.' : ''
-        }))),
+        })),
         catchError((error) => {
           this.dashboardCache.update((state) => ({
             ...state, loading: false,
@@ -124,8 +136,7 @@ export class WorkBoardService {
   }
 
   ensureDashboard(): void {
-    const { report, loading, error } = this.dashboardCache();
-    if (!report && !loading && !error) this.requestDashboard(false);
+    if (!this.dashboardCache().loading) this.requestDashboard(false);
   }
 
   refreshDashboard(): void {
@@ -161,7 +172,7 @@ export class WorkBoardService {
     });
   }
 
-  listWorks(options: { page?: number; limit?: number; search?: string; status?: string; sort?: string; direction?: 'asc' | 'desc' } = {}): Observable<WorkPage> {
+  private listParams(options: WorkListOptions): Record<string, string> {
     const params: Record<string, string> = {};
     if (options.page) params['page'] = String(options.page);
     if (options.limit) params['limit'] = String(options.limit);
@@ -169,7 +180,30 @@ export class WorkBoardService {
     if (options.status) params['status'] = options.status;
     if (options.sort) params['sort'] = options.sort;
     if (options.direction) params['direction'] = options.direction;
-    return this.http.get<WorkPage>(`${this.baseUrl}/works`, { params, withCredentials: true });
+    return params;
+  }
+
+  listWorks(options: WorkListOptions = {}): Observable<WorkPage> {
+    return this.http.get<WorkPage>(`${this.baseUrl}/works`, { params: this.listParams(options), withCredentials: true });
+  }
+
+  private financeWorksUrl(tenantId: string): string {
+    return `${environment.apiBaseUrl}/finance/tenants/${encodeURIComponent(tenantId)}/works`;
+  }
+
+  listFinanceWorks(tenantId: string, options: WorkListOptions) {
+    return this.http.get<{ tenant: FinanceTenant; works: FinanceWork[]; pagination: WorkPage['pagination'] }>(
+      this.financeWorksUrl(tenantId), { params: this.listParams(options), withCredentials: true });
+  }
+
+  getFinanceWork(tenantId: string, workId: string): Observable<FinanceWork> {
+    return this.http.get<{ work: FinanceWork }>(`${this.financeWorksUrl(tenantId)}/${encodeURIComponent(workId)}`,
+      { withCredentials: true }).pipe(map(({ work }) => work));
+  }
+
+  updateFinanceWork(tenantId: string, workId: string, changes: FinanceWorkChanges): Observable<FinanceWork> {
+    return this.http.patch<{ work: FinanceWork }>(`${this.financeWorksUrl(tenantId)}/${encodeURIComponent(workId)}`, changes,
+      { withCredentials: true }).pipe(map(({ work }) => work));
   }
   listActiveOptions(): Observable<WorkOption[]> {
     return this.http.get<{ works: WorkOption[] }>(`${this.baseUrl}/options`, { withCredentials: true }).pipe(map((res) => res.works || []));

@@ -18,10 +18,28 @@ mat-form-field {
   padding: 2px 0 4px;
 }
 
-.feature-list h3 {
+.feature-list h3,
+.turnover-settings h3 {
   margin: 0 0 2px;
   font-size: 14px;
   line-height: 1.2;
+}
+
+.turnover-settings {
+  display: grid;
+  gap: 8px;
+}
+
+.turnover-date {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+  gap: 12px;
+}
+
+.turnover-settings p {
+  margin: 0;
+  color: var(--brand-muted);
+  font-size: 12px;
 }
 
 .feature-row {

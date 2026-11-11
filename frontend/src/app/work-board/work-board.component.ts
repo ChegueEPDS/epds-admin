@@ -1,5 +1,5 @@
-import { CommonModule } from '@angular/common';
-import { Component, OnInit } from '@angular/core';
+import { CommonModule, formatDate } from '@angular/common';
+import { Component, Input, OnDestroy, OnInit } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute } from '@angular/router';
 import { firstValueFrom } from 'rxjs';
@@ -15,16 +15,19 @@ import { MatNativeDateModule } from '@angular/material/core';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { MatSortModule, Sort } from '@angular/material/sort';
 import { AuthService } from '../services/auth.service';
-import { ClientPayload, SubWorkItem, SubWorkPayload, TenantUserOption, WorkBoardClient, WorkBoardService, WorkDocument, WorkItem, WorkPayload, WorkStatus } from '../services/work-board.service';
+import { ClientPayload, FinanceWork, FinanceWorkChanges, FinanceWorkStatus, SubWorkItem, SubWorkPayload, TenantUserOption, WorkBoardClient, WorkBoardService, WorkDocument, WorkItem, WorkPayload, WorkStatus } from '../services/work-board.service';
 import { WorkFieldValuesComponent } from './work-field-values.component';
 import { displayWorkField, isWorkFieldFile, PROJECT_SIZES, REPORT_PAYMENT_STATUSES, WORK_CATALOGS, WorkCatalog, WorkField, WorkFieldCard, WorkFieldFiles, WorkFieldOption, WorkFieldValues, WorkReporting } from './work-fields';
+
+const billingCalendar = new Intl.DateTimeFormat('sv-SE', { timeZone: 'Europe/Budapest' });
+const billingDateFields = ['completionDate', 'invoiceDate', 'invoicePaymentDeadline', 'paidAt'] as const;
 
 type WorkForm = {
   name: string; clientId: string; responsibleUserId: string; status: WorkStatus; deadline: Date | null; description: string;
   entityId: string; serviceTypeId: string;
   currency: string; totalAmount: number; costAmount: number; subcontractor: string; paymentDeadlineDays: number;
   offerDate: Date | null; completionDate: Date | null; invoiceDate: Date | null; invoicePaymentDeadline: Date | null; invoiceNumber: string;
-  contractSigned: boolean; performanceCertificate: boolean;
+  contractSigned: boolean; performanceCertificate: boolean; paidAt: Date | null;
 };
 type SubWorkForm = {
   name: string; responsibleUserId: string; status: WorkStatus; deadline: Date | null; description: string; plannedHours: number;
@@ -39,7 +42,23 @@ type SubWorkForm = {
   templateUrl: './work-board.component.html',
   styleUrl: './work-board.component.scss'
 })
-export class WorkBoardComponent implements OnInit {
+export class WorkBoardComponent implements OnInit, OnDestroy {
+  @Input() financeTenantId?: string;
+  financeTenantName = '';
+  financeWorks: FinanceWork[] = [];
+  financeWork: FinanceWork | null = null;
+  financeForm: Required<FinanceWorkChanges> | null = null;
+  financeError = '';
+  readonly financeStatuses: { value: FinanceWorkStatus; label: string }[] = [
+    { value: 'completed_billable', label: 'Teljesítve – számlázható' },
+    { value: 'invoiced', label: 'Számlázva' },
+    { value: 'paid', label: 'Fizetve' }
+  ];
+  readonly financePaymentStatuses = [
+    { id: 'not_invoiced', label: 'Számlázásra vár' }, { id: 'invoiced', label: 'Számlázva' },
+    { id: 'partially_paid', label: 'Részben fizetve' }, { id: 'paid', label: 'Fizetve' }
+  ];
+  private destroyed = false;
   works: WorkItem[] = [];
   clients: WorkBoardClient[] = [];
   tenantUsers: TenantUserOption[] = [];
@@ -106,6 +125,11 @@ export class WorkBoardComponent implements OnInit {
   constructor(private board: WorkBoardService, private snackBar: MatSnackBar, public auth: AuthService, private route: ActivatedRoute) {}
   ngOnInit(): void {
     const id = this.route.snapshot.queryParamMap.get('work');
+    if (this.financeTenantId) {
+      this.statusFilter = 'all';
+      void this.loadFinance(this.financeTenantId, id);
+      return;
+    }
     void this.load().then(async () => {
       if (!id || this.showWorkForm || this.detailView) return;
       try {
@@ -115,11 +139,132 @@ export class WorkBoardComponent implements OnInit {
     });
   }
 
-  get filteredWorks(): WorkItem[] { return this.works; }
+  ngOnDestroy(): void {
+    this.destroyed = true;
+    this.loadRequestId++;
+    if (this.searchTimer) clearTimeout(this.searchTimer);
+  }
+
+  get filteredWorks(): (WorkItem | FinanceWork)[] {
+    return this.financeTenantId ? this.financeWorks : this.works;
+  }
+
+  operationalWork(work: WorkItem | FinanceWork): WorkItem | null {
+    return 'subWorks' in work ? work : null;
+  }
+
+  get financeStatusOptions() {
+    const index = this.financeStatuses.findIndex(({ value }) => value === this.financeWork?.status);
+    return index < 0 ? [] : this.financeStatuses.slice(index, index + 2);
+  }
+
+  private async loadFinance(tenantId: string, workId?: string | null): Promise<void> {
+    const requestId = ++this.loadRequestId;
+    this.loading = true;
+    this.financeError = '';
+    try {
+      const result = await firstValueFrom(this.board.listFinanceWorks(tenantId, {
+        page: this.page, limit: this.pageSize, search: this.search.trim(), status: this.statusFilter,
+        sort: this.sort.active, direction: this.sort.direction
+      }));
+      if (requestId !== this.loadRequestId) return;
+      this.financeTenantName = result.tenant.name;
+      this.financeWorks = result.works;
+      this.page = result.pagination.page;
+      this.totalWorks = result.pagination.total;
+      this.totalPages = result.pagination.pages;
+      this.referencesLoaded = true;
+      if (this.page > this.totalPages) {
+        this.page = this.totalPages;
+        await this.loadFinance(tenantId, workId);
+        return;
+      }
+    } catch (error: any) {
+      if (requestId !== this.loadRequestId) return;
+      this.financeWorks = [];
+      this.financeError = error?.error?.error || 'A pénzügyi munkák betöltése sikertelen.';
+      return;
+    } finally {
+      if (requestId === this.loadRequestId) this.loading = false;
+    }
+    if (workId) {
+      try {
+        const work = this.financeWorks.find(({ id }) => id === workId) || await firstValueFrom(this.board.getFinanceWork(tenantId, workId));
+        if (requestId === this.loadRequestId && !this.detailView) this.selectWork(work);
+      } catch (error) {
+        if (requestId === this.loadRequestId) this.error(error, 'A munka megnyitása sikertelen.');
+      }
+    }
+  }
+
+  changeFinanceStatus(status: FinanceWorkStatus): void {
+    const form = this.financeForm;
+    const work = this.financeWork;
+    if (!form || !work || status === form.status) return;
+    if (status === work.status) {
+      if (form.status === 'invoiced') form.invoiceDate = this.billingDay(work.invoiceDate);
+      if (form.status === 'paid') form.paidAt = this.billingDay(work.paidAt);
+    } else {
+      if (status === 'invoiced') form.invoiceDate ||= this.today();
+      if (status === 'paid') form.paidAt ||= this.today();
+    }
+    form.status = status;
+  }
+
+  changeFinanceCompletionDate(value: string | null): void {
+    const form = this.financeForm;
+    const work = this.financeWork;
+    if (!form || !work) return;
+    const previousDue = this.paymentDue(form.completionDate, work.paymentDeadlineDays);
+    if (!form.invoicePaymentDeadline || form.invoicePaymentDeadline === previousDue) {
+      form.invoicePaymentDeadline = this.paymentDue(value, work.paymentDeadlineDays);
+    }
+    form.completionDate = value;
+  }
+
+  async saveFinanceWork(): Promise<void> {
+    if (!this.financeTenantId || !this.financeWork || !this.financeForm || this.saving) return;
+    const form = this.financeForm;
+    const work = this.financeWork;
+    const changes: FinanceWorkChanges = { fieldRevision: form.fieldRevision };
+    if (form.status !== work.status) changes.status = form.status;
+    if (form.invoiceNumber.trim() !== work.invoiceNumber) changes.invoiceNumber = form.invoiceNumber.trim();
+    for (const field of billingDateFields) {
+      const date = form[field] || null;
+      if (date !== this.billingDay(work[field])) changes[field] = date;
+    }
+    const reporting = { ...form.reporting };
+    for (const field of ['invoicedAmount', 'paidAmount', 'paymentStatus'] as const) {
+      if (reporting[field] === work.reporting[field]) delete reporting[field];
+    }
+    if (Object.keys(reporting).length) changes.reporting = reporting;
+    if (Object.keys(changes).length === 1) {
+      this.backToTable();
+      return;
+    }
+
+    this.saving = true;
+    try {
+      await firstValueFrom(this.board.updateFinanceWork(this.financeTenantId, work.id, changes));
+      if (this.destroyed) return;
+      this.backToTable();
+      await this.load();
+      if (!this.destroyed) this.notice('A pénzügyi adatok mentve.');
+    } catch (error: any) {
+      if (!this.destroyed) {
+        this.error(error, 'A pénzügyi adatok mentése sikertelen.');
+        if (error?.status === 409 || error?.status === 404) {
+          this.backToTable();
+          await this.load();
+        }
+      }
+    } finally { this.saving = false; }
+  }
   get pageStart(): number { return this.totalWorks ? (this.page - 1) * this.pageSize + 1 : 0; }
   get pageEnd(): number { return Math.min(this.page * this.pageSize, this.totalWorks); }
 
   async load(selectId?: string): Promise<void> {
+    if (this.financeTenantId) return this.loadFinance(this.financeTenantId);
     const requestId = ++this.loadRequestId;
     this.loading = true;
     try {
@@ -169,18 +314,42 @@ export class WorkBoardComponent implements OnInit {
     void this.load();
   }
   pageSizeChanged(): void { this.page = 1; this.expandedWorkIds = new Set<string>(); void this.load(); }
-  selectWork(work: WorkItem): void { this.selectedWork = work; this.cancelForms(); this.detailView = true; void this.loadDocuments(work.id); }
-  toggleWorkExpansion(work: WorkItem, event?: Event): void {
+  selectWork(work: WorkItem | FinanceWork): void {
+    this.detailView = true;
+    if ('subWorks' in work) {
+      this.selectedWork = work;
+      this.cancelForms();
+      void this.loadDocuments(work.id);
+    } else {
+      this.financeWork = work;
+      this.financeForm = {
+        status: work.status, fieldRevision: work.fieldRevision, invoiceNumber: work.invoiceNumber,
+        completionDate: this.billingDay(work.completionDate),
+        invoiceDate: this.billingDay(work.invoiceDate),
+        invoicePaymentDeadline: this.billingDay(work.invoicePaymentDeadline)
+          ?? this.paymentDue(this.billingDay(work.completionDate), work.paymentDeadlineDays),
+        paidAt: this.billingDay(work.paidAt),
+        reporting: { ...work.reporting }
+      };
+    }
+  }
+  toggleWorkExpansion(work: Pick<WorkItem, 'id'>, event?: Event): void {
     event?.stopPropagation();
     const next = new Set(this.expandedWorkIds);
     if (next.has(work.id)) next.delete(work.id);
     else next.add(work.id);
     this.expandedWorkIds = next;
   }
-  isWorkExpanded(work: WorkItem): boolean { return this.expandedWorkIds.has(work.id); }
-  trackWork(_: number, work: WorkItem): string { return work.id; }
+  isWorkExpanded(work: Pick<WorkItem, 'id'>): boolean { return this.expandedWorkIds.has(work.id); }
+  trackWork(_: number, work: WorkItem | FinanceWork): string { return work.id; }
   trackSubWork(_: number, subWork: SubWorkItem): string { return subWork.id; }
-  backToTable(): void { this.cancelForms(); this.detailView = false; this.documents = []; }
+  backToTable(): void {
+    this.cancelForms();
+    this.detailView = false;
+    this.documents = [];
+    this.financeWork = null;
+    this.financeForm = null;
+  }
   startCreateWork(): void {
     this.workForm = this.emptyWorkForm(); this.fieldChanges = {}; this.fieldFiles = {};
     this.reportForm = {};
@@ -193,15 +362,44 @@ export class WorkBoardComponent implements OnInit {
       name: w.name, clientId: w.clientId || '', responsibleUserId: w.responsibleUserId || '', status: w.status, deadline: this.dateValue(w.deadline), description: w.description,
       entityId: w.entityId || '', serviceTypeId: w.serviceTypeId || '',
       currency: w.currency, totalAmount: w.totalAmount, costAmount: w.costAmount, subcontractor: w.subcontractor,
-      paymentDeadlineDays: w.paymentDeadlineDays, offerDate: this.dateValue(w.offerDate), completionDate: this.dateValue(w.completionDate),
-      invoiceDate: this.dateValue(w.invoiceDate), invoicePaymentDeadline: this.dateValue(w.invoicePaymentDeadline), invoiceNumber: w.invoiceNumber,
-      contractSigned: w.contractSigned, performanceCertificate: w.performanceCertificate
+      paymentDeadlineDays: w.paymentDeadlineDays, offerDate: this.dateValue(w.offerDate), completionDate: this.billingFormDate(w.completionDate),
+      invoiceDate: this.billingFormDate(w.invoiceDate), invoicePaymentDeadline: this.billingFormDate(w.invoicePaymentDeadline), invoiceNumber: w.invoiceNumber,
+      contractSigned: w.contractSigned, performanceCertificate: w.performanceCertificate, paidAt: this.billingFormDate(w.paidAt)
     };
     this.fieldChanges = {};
     this.fieldFiles = {};
     this.reportForm = { ...w.reporting };
     this.editingWork = true; this.showWorkForm = true;
   }
+  changeWorkStatus(status: WorkStatus): void {
+    const form = this.workForm;
+    if (status === form.status) return;
+    const existing = this.editingWork ? this.selectedWork : null;
+    const today = this.localDate(this.today());
+    if (status === 'completed_billable' && !form.completionDate) {
+      this.changeWorkBillingInputs(today, form.paymentDeadlineDays);
+    } else if (!this.showFrom('completion', status) && !existing?.completionDate) {
+      this.changeWorkBillingInputs(null, form.paymentDeadlineDays);
+    }
+    if (status === 'invoiced') form.invoiceDate ||= today;
+    else if (!this.showFrom('invoice', status) && !existing?.invoiceDate) form.invoiceDate = null;
+    if (status === 'paid') form.paidAt ||= today;
+    else if (form.status === 'paid' && !existing?.paidAt) form.paidAt = null;
+    form.status = status;
+  }
+
+  changeWorkBillingInputs(completion: Date | null, days: number): void {
+    const form = this.workForm;
+    const previousDue = this.paymentDue(this.billingDay(form.completionDate), form.paymentDeadlineDays);
+    const currentDue = this.billingDay(form.invoicePaymentDeadline);
+    if (!currentDue || currentDue === previousDue) {
+      const due = this.paymentDue(this.billingDay(completion), days);
+      form.invoicePaymentDeadline = due ? this.localDate(due) : null;
+    }
+    form.completionDate = completion;
+    form.paymentDeadlineDays = days;
+  }
+
   async saveWork(): Promise<void> {
     if (!this.workForm.name.trim()) return this.notice('Work name is required.');
     const active = this.customFields.filter((field) => this.fieldRelevant(field, this.workForm.status));
@@ -219,7 +417,15 @@ export class WorkBoardComponent implements OnInit {
       const reporting = { ...this.reportForm };
       if (!this.projectSizeGrouping) delete reporting.projectSize;
       if (reporting.nextAction !== undefined) reporting.nextAction = reporting.nextAction.trim();
-      const payload = { ...this.workForm, name: this.workForm.name.trim(),
+      const { completionDate, invoiceDate, invoicePaymentDeadline, paidAt, ...workData } = this.workForm;
+      const formDates = { completionDate, invoiceDate, invoicePaymentDeadline, paidAt };
+      const previous = this.editingWork ? this.selectedWork : null;
+      const dates: Partial<Pick<WorkItem, typeof billingDateFields[number]>> = {};
+      for (const field of billingDateFields) {
+        const date = this.billingDay(formDates[field]);
+        if (date !== this.billingDay(previous?.[field])) dates[field] = date ? date + 'T00:00:00.000Z' : null;
+      }
+      const payload = { ...workData, ...dates, name: workData.name.trim(),
         reporting: this.reportingEnabled ? reporting : undefined,
         customFields: Object.fromEntries(Object.entries(this.fieldChanges).filter(([id]) => ids.has(id))),
         fieldRevision: this.editingWork ? this.selectedWork?.fieldRevision : undefined } as WorkPayload;
@@ -359,7 +565,7 @@ export class WorkBoardComponent implements OnInit {
     } catch (error: any) { this.error(error, 'Client could not be saved.'); }
     finally { this.saving = false; }
   }
-  statusLabel(status: WorkStatus): string { return this.statuses.find((item) => item.value === status)?.label || status; }
+  statusLabel(status: WorkStatus): string { return (this.financeTenantId ? this.financeStatuses : this.statuses).find((item) => item.value === status)?.label || status; }
   backupLabel(id?: string): string { return this.tenantUsers.find((user) => user.id === id)?.fullName || '—'; }
   reportPaymentLabel(status?: string): string { return this.reportPaymentStatuses.find((item) => item.id === status)?.label || '—'; }
   get editorValues(): WorkFieldValues { return (this.editingWork && this.selectedWork?.customFields) || {}; }
@@ -388,10 +594,41 @@ export class WorkBoardComponent implements OnInit {
   hasValue(value: unknown): boolean { return value !== null && value !== undefined && value !== '' && Number(value) !== 0; }
   formatMoney(value: number, currency = 'HUF'): string { return new Intl.NumberFormat('hu-HU', { style: 'currency', currency, maximumFractionDigits: currency === 'HUF' ? 0 : 2 }).format(value || 0); }
   isOverdue(value: string | null): boolean { return Boolean(value && new Date(value).getTime() < new Date().setHours(0, 0, 0, 0)); }
+  private today(): string {
+    return billingCalendar.format(new Date());
+  }
+
+  private localDate(day: string): Date {
+    return new Date(day + 'T00:00:00');
+  }
+
+  private paymentDue(completion: string | null, days: number): string | null {
+    if (!completion || !Number.isSafeInteger(days) || days < 0) return null;
+    const date = new Date(completion);
+    date.setUTCDate(date.getUTCDate() + days);
+    return Number.isFinite(date.getTime()) ? date.toISOString().slice(0, 10) : null;
+  }
+
+  billingDay(value: string | Date | null | undefined): string | null {
+    if (!value) return null;
+    const date = new Date(value);
+    if (!Number.isFinite(date.getTime())) return null;
+    return typeof value === 'string' ? billingCalendar.format(date) : formatDate(date, 'yyyy-MM-dd', 'en-US');
+  }
+
+  isBillingOverdue(value: string | null): boolean {
+    const due = this.billingDay(value);
+    return Boolean(due && due < this.today());
+  }
+
+  private billingFormDate(value: string | null): Date | null {
+    const day = this.billingDay(value);
+    return day ? this.localDate(day) : null;
+  }
   private dateValue(value: string | null): Date | null { return value ? new Date(value) : null; }
   private notice(message: string): void { this.snackBar.open(message, 'OK', { duration: 3000 }); }
   private error(error: any, fallback: string): void { this.snackBar.open(error?.error?.error || fallback, 'OK', { duration: 4500 }); }
-  private emptyWorkForm(): WorkForm { return { name: '', clientId: '', entityId: '', serviceTypeId: '', responsibleUserId: '', status: 'inquiry', deadline: null, description: '', currency: this.defaultCurrency, totalAmount: 0, costAmount: 0, subcontractor: '', paymentDeadlineDays: 30, offerDate: null, completionDate: null, invoiceDate: null, invoicePaymentDeadline: null, invoiceNumber: '', contractSigned: false, performanceCertificate: false }; }
+  private emptyWorkForm(): WorkForm { return { name: '', clientId: '', entityId: '', serviceTypeId: '', responsibleUserId: '', status: 'inquiry', deadline: null, description: '', currency: this.defaultCurrency, totalAmount: 0, costAmount: 0, subcontractor: '', paymentDeadlineDays: 30, offerDate: null, completionDate: null, invoiceDate: null, invoicePaymentDeadline: null, invoiceNumber: '', contractSigned: false, performanceCertificate: false, paidAt: null }; }
   private emptySubWorkForm(): SubWorkForm { return { name: '', responsibleUserId: '', status: 'inquiry', deadline: null, description: '', plannedHours: 0, amount: 0, percentage: 0, performanceCertificateRequired: false, performanceCertificateSigned: false, invoiceNumber: '', invoiceDate: null, invoicePaymentDeadline: null, paidAmount: 0, paidAt: null }; }
   private emptyClientForm(): ClientPayload { return { taxNumber: '', name: '', country: 'HU', postalCode: '', city: '', address: '', email: '', phone: '' }; }
 }

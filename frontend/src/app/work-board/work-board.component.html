@@ -1,12 +1,17 @@
-<section class="board-page" [class.editor-mode]="showWorkForm">
+<section class="board-page" [class.editor-mode]="showWorkForm || financeForm">
   <header class="page-header">
     <div>
-      <h1>{{ showWorkForm ? (editingWork ? 'Edit work' : 'New work') : (detailView ? 'Work details' : 'Work table') }}</h1>
-      <p *ngIf="detailView">Complete operational and financial record.</p>
+      @if (financeTenantId) {
+        <h1>{{ financeTenantName || 'Pénzügy' }}</h1>
+        <p>Project Tracker · Table</p>
+      } @else {
+        <h1>{{ showWorkForm ? (editingWork ? 'Edit work' : 'New work') : (detailView ? 'Work details' : 'Work table') }}</h1>
+        <p *ngIf="detailView">Complete operational and financial record.</p>
+      }
     </div>
     <div class="page-actions">
-      <button mat-stroked-button type="button" *ngIf="detailView || showWorkForm" (click)="backToTable()">
-        <mat-icon class="material-symbols-outlined">arrow_back</mat-icon>Back to table
+      <button mat-stroked-button type="button" *ngIf="detailView || showWorkForm" (click)="backToTable()" [disabled]="!!financeForm && saving">
+        <mat-icon class="material-symbols-outlined">arrow_back</mat-icon>{{ financeTenantId ? 'Vissza a táblához' : 'Back to table' }}
       </button>
       <ng-container *ngIf="!detailView && !showWorkForm && auth.canEditFeature('workBoard')">
         <button mat-stroked-button type="button" (click)="openClientPanel()"><mat-icon class="material-symbols-outlined">business</mat-icon>Clients</button>
@@ -67,7 +72,7 @@
           }
         }
         <mat-form-field appearance="outline"><mat-label>Responsible</mat-label><mat-select name="workResponsible" [(ngModel)]="workForm.responsibleUserId"><mat-option value="">No responsible</mat-option><mat-option *ngFor="let user of tenantUsers" [value]="user.id">{{ user.fullName }}</mat-option></mat-select></mat-form-field>
-        <mat-form-field appearance="outline"><mat-label>Status</mat-label><mat-select name="workStatus" [(ngModel)]="workForm.status"><mat-option *ngFor="let status of statuses" [value]="status.value">{{ status.label }}</mat-option></mat-select></mat-form-field>
+        <mat-form-field appearance="outline"><mat-label>Status</mat-label><mat-select name="workStatus" [ngModel]="workForm.status" (ngModelChange)="changeWorkStatus($event)"><mat-option *ngFor="let status of statuses" [value]="status.value">{{ status.label }}</mat-option></mat-select></mat-form-field>
         <mat-form-field appearance="outline" class="wide"><mat-label>Description</mat-label><textarea matInput rows="3" name="workDescription" [(ngModel)]="workForm.description"></textarea></mat-form-field>
       </div>
       <ng-container *ngTemplateOutlet="customEditor; context: {$implicit: 'basic'}"></ng-container>
@@ -93,7 +98,7 @@
         </mat-select></mat-form-field>
         <mat-form-field appearance="outline"><mat-label>Offer date</mat-label><input matInput name="workOfferDate" [(ngModel)]="workForm.offerDate" [matDatepicker]="workOfferDatePicker"><mat-datepicker-toggle matIconSuffix [for]="workOfferDatePicker"></mat-datepicker-toggle><mat-datepicker #workOfferDatePicker></mat-datepicker></mat-form-field>
         <mat-form-field appearance="outline"><mat-label>Deadline</mat-label><input matInput name="workDeadline" [(ngModel)]="workForm.deadline" [matDatepicker]="workDeadlinePicker"><mat-datepicker-toggle matIconSuffix [for]="workDeadlinePicker"></mat-datepicker-toggle><mat-datepicker #workDeadlinePicker></mat-datepicker></mat-form-field>
-        <mat-form-field appearance="outline"><mat-label>Payment deadline</mat-label><input matInput type="number" min="0" name="workPaymentDays" [(ngModel)]="workForm.paymentDeadlineDays"><span matTextSuffix>days</span></mat-form-field>
+        <mat-form-field appearance="outline"><mat-label>Payment deadline</mat-label><input matInput type="number" min="0" name="workPaymentDays" [ngModel]="workForm.paymentDeadlineDays" (ngModelChange)="changeWorkBillingInputs(workForm.completionDate, $event)"><span matTextSuffix>days</span></mat-form-field>
       </div>
       <ng-container *ngTemplateOutlet="customEditor; context: {$implicit: 'offer'}"></ng-container>
     </section>
@@ -109,20 +114,28 @@
     </section>
 
     <section class="form-group" *ngIf="showFrom('completion')">
-      <div class="group-heading"><span>04</span><div><h2>Completion</h2><p>Delivery confirmation and performance certificate.</p></div></div>
+      <div class="group-heading"><span>04</span><div><h2>Completion</h2><p>Delivery confirmation, payment deadline and performance certificate.</p></div></div>
       <div class="form-grid">
-        <mat-form-field appearance="outline"><mat-label>Completion date</mat-label><input matInput name="workCompletionDate" [(ngModel)]="workForm.completionDate" [matDatepicker]="workCompletionDatePicker"><mat-datepicker-toggle matIconSuffix [for]="workCompletionDatePicker"></mat-datepicker-toggle><mat-datepicker #workCompletionDatePicker></mat-datepicker></mat-form-field>
+        <mat-form-field appearance="outline"><mat-label>Completion date</mat-label><input matInput name="workCompletionDate" [ngModel]="workForm.completionDate" (ngModelChange)="changeWorkBillingInputs($event, workForm.paymentDeadlineDays)" [matDatepicker]="workCompletionDatePicker"><mat-datepicker-toggle matIconSuffix [for]="workCompletionDatePicker"></mat-datepicker-toggle><mat-datepicker #workCompletionDatePicker></mat-datepicker></mat-form-field>
+        <mat-form-field appearance="outline"><mat-label>Invoice payment deadline</mat-label><input matInput name="workInvoiceDeadline" [(ngModel)]="workForm.invoicePaymentDeadline" [matDatepicker]="workInvoiceDeadlinePicker"><mat-datepicker-toggle matIconSuffix [for]="workInvoiceDeadlinePicker"></mat-datepicker-toggle><mat-datepicker #workInvoiceDeadlinePicker></mat-datepicker></mat-form-field>
         <div class="check-row"><mat-checkbox name="performanceCertificate" [(ngModel)]="workForm.performanceCertificate">Performance certificate signed</mat-checkbox></div>
       </div>
       <ng-container *ngTemplateOutlet="customEditor; context: {$implicit: 'completion'}"></ng-container>
     </section>
 
     <section class="form-group" *ngIf="showFrom('invoice')">
-      <div class="group-heading"><span>05</span><div><h2>Invoicing</h2><p>Issued invoice and payment due date.</p></div></div>
+      <div class="group-heading"><span>05</span><div><h2>Invoicing</h2><p>Invoice issue and payment dates.</p></div></div>
       <div class="form-grid">
         <mat-form-field appearance="outline"><mat-label>Invoice number</mat-label><input matInput name="workInvoiceNumber" [(ngModel)]="workForm.invoiceNumber"></mat-form-field>
         <mat-form-field appearance="outline"><mat-label>Invoice date</mat-label><input matInput name="workInvoiceDate" [(ngModel)]="workForm.invoiceDate" [matDatepicker]="workInvoiceDatePicker"><mat-datepicker-toggle matIconSuffix [for]="workInvoiceDatePicker"></mat-datepicker-toggle><mat-datepicker #workInvoiceDatePicker></mat-datepicker></mat-form-field>
-        <mat-form-field appearance="outline"><mat-label>Invoice payment deadline</mat-label><input matInput name="workInvoiceDeadline" [(ngModel)]="workForm.invoicePaymentDeadline" [matDatepicker]="workInvoiceDeadlinePicker"><mat-datepicker-toggle matIconSuffix [for]="workInvoiceDeadlinePicker"></mat-datepicker-toggle><mat-datepicker #workInvoiceDeadlinePicker></mat-datepicker></mat-form-field>
+        @if (workForm.status === 'paid' || workForm.paidAt) {
+          <mat-form-field appearance="outline">
+            <mat-label>Payment date</mat-label>
+            <input matInput name="workPaidAt" [(ngModel)]="workForm.paidAt" [matDatepicker]="workPaidAtPicker">
+            <mat-datepicker-toggle matIconSuffix [for]="workPaidAtPicker"></mat-datepicker-toggle>
+            <mat-datepicker #workPaidAtPicker></mat-datepicker>
+          </mat-form-field>
+        }
       </div>
       <ng-container *ngTemplateOutlet="customEditor; context: {$implicit: 'invoice'}"></ng-container>
     </section>
@@ -152,25 +165,126 @@
     <div class="sticky-actions"><button mat-button type="button" (click)="cancelWorkEditor()">Cancel</button><button mat-flat-button color="primary" type="submit" [disabled]="saving">Save work</button></div>
   </form>
 
-  <div class="loading" *ngIf="loading"><mat-spinner diameter="38"></mat-spinner></div>
+  @if (financeWork && financeForm; as form) {
+    <form class="grouped-editor" #billingForm="ngForm" (ngSubmit)="saveFinanceWork()">
+      <section class="form-group">
+        <div class="group-heading">
+          <span><mat-icon class="material-symbols-outlined">receipt_long</mat-icon></span>
+          <div><h2>{{ financeWork.workNumber }} · {{ financeWork.name }}</h2><p>Számlázás és fizetés</p></div>
+        </div>
+        <dl class="record-overview">
+          <div><dt>Ügyfél</dt><dd>{{ financeWork.customer || '—' }}</dd></div>
+          <div><dt>Szerződéses összeg</dt><dd>{{ formatMoney(financeWork.totalAmount, financeWork.currency) }}</dd></div>
+          <div><dt>Fizetési feltétel</dt><dd>{{ financeWork.paymentDeadlineDays }} nap</dd></div>
+        </dl>
+        <div class="form-grid">
+          <mat-form-field appearance="outline">
+            <mat-label>Munka státusza</mat-label>
+            <mat-select name="financeStatus" [ngModel]="form.status" (ngModelChange)="changeFinanceStatus($event)">
+              @for (status of financeStatusOptions; track status.value) {
+                <mat-option [value]="status.value">{{ status.label }}</mat-option>
+              }
+            </mat-select>
+          </mat-form-field>
+          <mat-form-field appearance="outline">
+            <mat-label>Teljesítés dátuma</mat-label>
+            <input matInput type="date" name="financeCompletionDate" [ngModel]="form.completionDate" (ngModelChange)="changeFinanceCompletionDate($event)">
+          </mat-form-field>
+          <mat-form-field appearance="outline">
+            <mat-label>Számlaszám</mat-label><input matInput name="financeInvoiceNumber" maxlength="150" [(ngModel)]="form.invoiceNumber">
+          </mat-form-field>
+          <mat-form-field appearance="outline">
+            <mat-label>Számla dátuma</mat-label><input matInput type="date" name="financeInvoiceDate" [(ngModel)]="form.invoiceDate">
+          </mat-form-field>
+          <mat-form-field appearance="outline">
+            <mat-label>Fizetési határidő</mat-label><input matInput type="date" name="financeInvoiceDeadline" [(ngModel)]="form.invoicePaymentDeadline">
+          </mat-form-field>
+          @if (form.status === 'paid' || form.paidAt) {
+            <mat-form-field appearance="outline">
+              <mat-label>Fizetés dátuma</mat-label><input matInput type="date" name="financePaidAt" [(ngModel)]="form.paidAt">
+            </mat-form-field>
+          }
+          <mat-form-field appearance="outline">
+            <mat-label>Számlázott összeg</mat-label>
+            <input matInput type="number" min="0" step="0.01" name="financeInvoicedAmount" [(ngModel)]="form.reporting.invoicedAmount">
+            <span matTextSuffix>{{ financeWork.currency }}</span>
+          </mat-form-field>
+          <mat-form-field appearance="outline">
+            <mat-label>Fizetett összeg</mat-label>
+            <input matInput type="number" min="0" step="0.01" name="financePaidAmount" [(ngModel)]="form.reporting.paidAmount">
+            <span matTextSuffix>{{ financeWork.currency }}</span>
+          </mat-form-field>
+          <mat-form-field appearance="outline">
+            <mat-label>Fizetési állapot</mat-label>
+            <mat-select name="financePaymentStatus" [(ngModel)]="form.reporting.paymentStatus">
+              <mat-option value="">Nincs megadva</mat-option>
+              @for (status of financePaymentStatuses; track status.id) {
+                <mat-option [value]="status.id">{{ status.label }}</mat-option>
+              }
+            </mat-select>
+          </mat-form-field>
+        </div>
+      </section>
+      <div class="sticky-actions">
+        <button mat-button type="button" (click)="backToTable()" [disabled]="saving">Mégse</button>
+        <button mat-flat-button color="primary" type="submit" [disabled]="saving || billingForm.invalid">Mentés</button>
+      </div>
+    </form>
+  }
 
-  <ng-container *ngIf="!loading && !showWorkForm">
+  @if (financeError) {
+    <div class="empty large" role="alert">
+      <strong>{{ financeError }}</strong>
+      <button mat-stroked-button type="button" (click)="load()">Újrapróbálás</button>
+    </div>
+  }
+
+  <div class="loading" *ngIf="loading && (detailView || !referencesLoaded)"><mat-spinner diameter="38"></mat-spinner></div>
+
+  <ng-container *ngIf="!financeError && !showWorkForm && (!loading || (!detailView && referencesLoaded))">
     <ng-container *ngIf="!detailView">
       <div class="table-toolbar">
-        <mat-form-field appearance="outline" subscriptSizing="dynamic"><mat-label>Search works</mat-label><mat-icon class="material-symbols-outlined" matPrefix>search</mat-icon><input matInput [(ngModel)]="search" (ngModelChange)="filtersChanged(true)"></mat-form-field>
-        <mat-form-field appearance="outline" subscriptSizing="dynamic"><mat-label>Status</mat-label><mat-select [(ngModel)]="statusFilter" (selectionChange)="filtersChanged()"><mat-option value="active">Active</mat-option><mat-option value="all">All</mat-option><mat-option value="deleted">Deleted</mat-option><mat-option *ngFor="let status of statuses" [value]="status.value">{{ status.label }}</mat-option></mat-select></mat-form-field>
-        <span class="result-count">{{ totalWorks }} work{{ totalWorks === 1 ? '' : 's' }}</span>
+        <mat-form-field appearance="outline" subscriptSizing="dynamic"><mat-label>{{ financeTenantId ? 'Keresés a munkák között' : 'Search works' }}</mat-label><mat-icon class="material-symbols-outlined" matPrefix>search</mat-icon><input matInput [(ngModel)]="search" (ngModelChange)="filtersChanged(true)"></mat-form-field>
+        <mat-form-field appearance="outline" subscriptSizing="dynamic">
+          <mat-label>{{ financeTenantId ? 'Státusz' : 'Status' }}</mat-label>
+          <mat-select [(ngModel)]="statusFilter" (selectionChange)="filtersChanged()">
+            <mat-option *ngIf="!financeTenantId" value="active">Active</mat-option>
+            <mat-option value="all">{{ financeTenantId ? 'Összes pénzügyi munka' : 'All' }}</mat-option>
+            <mat-option *ngIf="!financeTenantId" value="deleted">Deleted</mat-option>
+            <mat-option *ngFor="let status of financeTenantId ? financeStatuses : statuses" [value]="status.value">{{ status.label }}</mat-option>
+          </mat-select>
+        </mat-form-field>
+        <span class="result-count">{{ totalWorks }} {{ financeTenantId ? 'munka' : (totalWorks === 1 ? 'work' : 'works') }}</span>
       </div>
       <div class="work-table-wrap">
-        <table class="work-table">
-          <thead><tr><th>Work no.</th><th>Client / work</th><th *ngFor="let catalog of visibleCatalogs" scope="col">{{ catalog.label }}</th><th>Responsible</th><th>Status</th><th>Deadline</th><th class="numeric">Value</th><th class="numeric">Sub-works</th><th *ngFor="let field of fieldColumns" scope="col">{{ field.label }}</th><th aria-label="Actions"></th></tr></thead>
-          <tbody>
+        <table class="work-table" [attr.aria-busy]="loading">
+          <thead matSort matSortDisableClear [matSortActive]="sort.active" [matSortDirection]="sort.direction" (matSortChange)="sortChanged($event)">
+            <tr>
+              <th scope="col" mat-sort-header="workNumber" sortActionDescription="Sort by work number">{{ financeTenantId ? 'Munkaszám' : 'Work no.' }}</th>
+              <th scope="col" mat-sort-header="name" sortActionDescription="Sort by work name">{{ financeTenantId ? 'Ügyfél / munka' : 'Client / work' }}</th>
+              <th *ngFor="let catalog of visibleCatalogs" scope="col" [mat-sort-header]="catalog.reference" [sortActionDescription]="'Sort by ' + catalog.label">{{ catalog.label }}</th>
+              <th *ngIf="!financeTenantId" scope="col" mat-sort-header="responsible" sortActionDescription="Sort by responsible person">Responsible</th>
+              <th scope="col" mat-sort-header="status" sortActionDescription="Sort by status">{{ financeTenantId ? 'Státusz' : 'Status' }}</th>
+              <th *ngIf="!financeTenantId" scope="col" mat-sort-header="deadline" sortActionDescription="Sort by deadline">Deadline</th>
+              <th scope="col" class="numeric" mat-sort-header="totalAmount" arrowPosition="before" sortActionDescription="Sort by displayed amount">{{ financeTenantId ? 'Szerződéses összeg' : 'Value' }}</th>
+              <th *ngIf="!financeTenantId" scope="col" class="numeric" mat-sort-header="subWorkCount" arrowPosition="before" sortActionDescription="Sort by sub-work count">Sub-works</th>
+              <th *ngFor="let field of fieldColumns" scope="col" [mat-sort-header]="'field:' + field.id" [sortActionDescription]="'Sort by ' + field.label">{{ field.label }}</th>
+              @if (financeTenantId) {
+                <th scope="col">Számlaszám</th>
+                <th scope="col">Fizetési határidő</th>
+              }
+              <th scope="col" aria-label="Actions"></th>
+            </tr>
+          </thead>
+          <tbody [attr.inert]="loading ? '' : null">
             <ng-container *ngFor="let work of filteredWorks; trackBy: trackWork">
-              <tr class="work-main-row" [class.expanded]="isWorkExpanded(work)" [class.deleted]="work.archivedAt" (dblclick)="selectWork(work)" title="Double-click to open work details">
+              @let operational = operationalWork(work);
+              <tr class="work-main-row" [class.expanded]="isWorkExpanded(work)" [class.deleted]="operational?.archivedAt"
+                  (dblclick)="selectWork(work)" [attr.title]="financeTenantId ? 'Dupla kattintás a pénzügyi adatok megnyitásához' : 'Double-click to open work details'">
                 <td>
                   <div class="work-number-cell">
                     <button
-                      class="expand-trigger"
+                      *ngIf="operational" class="expand-trigger"
                       type="button"
                       [attr.aria-expanded]="isWorkExpanded(work)"
                       [attr.aria-controls]="'subworks-' + work.id"
@@ -181,34 +295,41 @@
                     <strong class="work-number">{{ work.workNumber }}</strong>
                   </div>
                 </td>
-                <td><strong>{{ work.name }}</strong><small>{{ work.customer || 'No client' }}</small></td>
-                <td *ngFor="let catalog of visibleCatalogs">{{ catalogLabel(catalog.key, work[catalog.reference]) }}</td>
-                <td>{{ work.responsible || '—' }}</td>
-                <td><span class="status" [attr.data-status]="work.archivedAt ? 'deleted' : work.status">{{ work.archivedAt ? 'Deleted' : statusLabel(work.status) }}</span></td>
-                <td [class.overdue]="isOverdue(work.deadline)">{{ work.deadline ? (work.deadline | date:'yyyy.MM.dd') : '—' }}</td>
+                <td><strong>{{ work.name }}</strong><small>{{ work.customer || (financeTenantId ? '—' : 'No client') }}</small></td>
+                @if (operational) {
+                  <td *ngFor="let catalog of visibleCatalogs">{{ catalogLabel(catalog.key, operational[catalog.reference]) }}</td>
+                  <td>{{ operational.responsible || '—' }}</td>
+                }
+                <td><span class="status" [attr.data-status]="operational?.archivedAt ? 'deleted' : work.status">{{ operational?.archivedAt ? 'Deleted' : statusLabel(work.status) }}</span></td>
+                <td *ngIf="operational" [class.overdue]="isOverdue(operational.deadline)">{{ operational.deadline ? (operational.deadline | date:'yyyy.MM.dd') : '—' }}</td>
                 <td class="numeric">{{ showFrom('offer', work.status) ? formatMoney(work.totalAmount, work.currency) : '—' }}</td>
-                <td class="numeric"><strong>{{ work.subWorkCount }}</strong><small *ngIf="work.totalAmount">{{ work.allocatedPercentage | number:'1.0-1' }}%</small></td>
-                <td *ngFor="let field of fieldColumns" class="custom-field-cell">{{ listField(work, field) }}</td>
-                <td><button mat-icon-button type="button" (click)="$event.stopPropagation(); selectWork(work)" [attr.aria-label]="'Open ' + work.workNumber + ' details'"><mat-icon class="material-symbols-outlined">arrow_forward</mat-icon></button></td>
+                @if (operational) {
+                  <td class="numeric"><strong>{{ operational.subWorkCount }}</strong><small *ngIf="work.totalAmount">{{ operational.allocatedPercentage | number:'1.0-1' }}%</small></td>
+                  <td *ngFor="let field of fieldColumns" class="custom-field-cell">{{ listField(operational, field) }}</td>
+                } @else {
+                  <td>{{ work.invoiceNumber || '—' }}</td>
+                  <td [class.overdue]="work.status !== 'paid' && isBillingOverdue(work.invoicePaymentDeadline)">{{ (billingDay(work.invoicePaymentDeadline) | date:'yyyy.MM.dd') || '—' }}</td>
+                }
+                <td><button mat-icon-button type="button" (click)="$event.stopPropagation(); selectWork(work)" [attr.aria-label]="financeTenantId ? 'Pénzügyi adatok szerkesztése · ' + work.workNumber : 'Open ' + work.workNumber + ' details'"><mat-icon class="material-symbols-outlined">{{ financeTenantId ? 'edit' : 'arrow_forward' }}</mat-icon></button></td>
               </tr>
-              <tr class="work-expanded-row" *ngIf="isWorkExpanded(work)">
+              <tr class="work-expanded-row" *ngIf="operational && isWorkExpanded(operational)">
                 <td [attr.colspan]="8 + visibleCatalogs.length + fieldColumns.length">
-                  <section class="inline-subworks" [id]="'subworks-' + work.id" [attr.aria-label]="work.workNumber + ' sub-works'">
+                  <section class="inline-subworks" [id]="'subworks-' + operational.id" [attr.aria-label]="operational.workNumber + ' sub-works'">
                     <header class="inline-subworks-head">
                       <div>
                         <span class="inline-eyebrow">SUB-WORKS</span>
-                        <h3>{{ work.name }}</h3>
-                        <p>{{ work.subWorkCount }} item · {{ formatMoney(work.allocatedAmount, work.currency) }} allocated<span *ngIf="work.totalAmount"> · {{ work.allocatedPercentage | number:'1.0-2' }}%</span></p>
+                        <h3>{{ operational.name }}</h3>
+                        <p>{{ operational.subWorkCount }} item · {{ formatMoney(operational.allocatedAmount, operational.currency) }} allocated<span *ngIf="operational.totalAmount"> · {{ operational.allocatedPercentage | number:'1.0-2' }}%</span></p>
                       </div>
-                      <button mat-stroked-button type="button" (click)="selectWork(work)">Open full work sheet<mat-icon class="material-symbols-outlined">open_in_new</mat-icon></button>
+                      <button mat-stroked-button type="button" (click)="selectWork(operational)">Open full work sheet<mat-icon class="material-symbols-outlined">open_in_new</mat-icon></button>
                     </header>
 
-                    <div class="inline-allocation" *ngIf="showFrom('offer', work.status)">
-                      <div class="inline-progress"><span [style.width.%]="work.allocatedPercentage > 100 ? 100 : work.allocatedPercentage"></span></div>
-                      <div><span>Allocated {{ formatMoney(work.allocatedAmount, work.currency) }}</span><span [class.danger]="work.remainingAmount < 0">{{ work.remainingAmount >= 0 ? 'Remaining' : 'Over allocated' }} {{ formatMoney(work.remainingAmount < 0 ? -work.remainingAmount : work.remainingAmount, work.currency) }}</span></div>
+                    <div class="inline-allocation" *ngIf="showFrom('offer', operational.status)">
+                      <div class="inline-progress"><span [style.width.%]="operational.allocatedPercentage > 100 ? 100 : operational.allocatedPercentage"></span></div>
+                      <div><span>Allocated {{ formatMoney(operational.allocatedAmount, operational.currency) }}</span><span [class.danger]="operational.remainingAmount < 0">{{ operational.remainingAmount >= 0 ? 'Remaining' : 'Over allocated' }} {{ formatMoney(operational.remainingAmount < 0 ? -operational.remainingAmount : operational.remainingAmount, operational.currency) }}</span></div>
                     </div>
 
-                    <div class="inline-subwork-table-wrap" *ngIf="work.subWorks.length; else inlineNoSubWorks">
+                    <div class="inline-subwork-table-wrap" *ngIf="operational.subWorks.length; else inlineNoSubWorks">
                       <table class="inline-subwork-table">
                         <thead>
                           <tr>
@@ -224,13 +345,13 @@
                           </tr>
                         </thead>
                         <tbody>
-                          <tr *ngFor="let sub of work.subWorks; trackBy: trackSubWork">
+                          <tr *ngFor="let sub of operational.subWorks; trackBy: trackSubWork">
                             <td><strong class="work-number">{{ sub.subWorkNumber }}</strong></td>
                             <td><strong>{{ sub.name }}</strong></td>
                             <td>{{ sub.responsible || '—' }}</td>
                             <td><span class="status" [attr.data-status]="sub.status">{{ statusLabel(sub.status) }}</span></td>
                             <td [class.overdue]="showFrom('offer', sub.status) && isOverdue(sub.deadline)">{{ showFrom('offer', sub.status) && sub.deadline ? (sub.deadline | date:'yyyy.MM.dd') : '—' }}</td>
-                            <td class="numeric">{{ showFrom('offer', sub.status) ? formatMoney(sub.amount, work.currency) : '—' }}</td>
+                            <td class="numeric">{{ showFrom('offer', sub.status) ? formatMoney(sub.amount, operational.currency) : '—' }}</td>
                             <td class="numeric">
                               <ng-container *ngIf="showFrom('offer', sub.status); else noShare">
                                 <strong>{{ sub.percentage | number:'1.0-2' }}%</strong>
@@ -239,7 +360,7 @@
                               <ng-template #noShare>—</ng-template>
                             </td>
                             <td>{{ showFrom('invoice', sub.status) && sub.invoiceNumber ? sub.invoiceNumber : '—' }}</td>
-                            <td class="numeric">{{ showFrom('payment', sub.status) && sub.paidAmount ? formatMoney(sub.paidAmount, work.currency) : '—' }}</td>
+                            <td class="numeric">{{ showFrom('payment', sub.status) && sub.paidAmount ? formatMoney(sub.paidAmount, operational.currency) : '—' }}</td>
                           </tr>
                         </tbody>
                       </table>
@@ -253,7 +374,7 @@
             </ng-container>
           </tbody>
         </table>
-        <div class="empty large" *ngIf="!filteredWorks.length"><mat-icon class="material-symbols-outlined">table_rows</mat-icon><strong>No matching works</strong><span>Change the search or status filter.</span></div>
+        <div class="empty large" *ngIf="!filteredWorks.length"><mat-icon class="material-symbols-outlined">table_rows</mat-icon><strong>{{ financeTenantId ? 'Nincs találat' : 'No matching works' }}</strong><span>{{ financeTenantId ? 'Módosítsd a keresést vagy a státuszszűrőt.' : 'Change the search or status filter.' }}</span></div>
       </div>
       <footer class="table-pagination" *ngIf="totalWorks">
         <div>
@@ -348,7 +469,8 @@
         <section class="detail-group" *ngIf="showFrom('completion', work.status)">
           <div class="record-section-title"><mat-icon class="material-symbols-outlined">task_alt</mat-icon><h3>Completion</h3></div>
           <dl class="data-grid compact-data-grid">
-            <div *ngIf="work.completionDate"><dt>Completion date</dt><dd>{{ work.completionDate | date:'yyyy.MM.dd' }}</dd></div>
+            <div *ngIf="work.completionDate"><dt>Completion date</dt><dd>{{ billingDay(work.completionDate) | date:'yyyy.MM.dd' }}</dd></div>
+            <div *ngIf="!showFrom('invoice', work.status) && work.invoicePaymentDeadline"><dt>Payment deadline</dt><dd>{{ billingDay(work.invoicePaymentDeadline) | date:'yyyy.MM.dd' }}</dd></div>
             <div><dt>Performance certificate</dt><dd>{{ work.performanceCertificate ? 'Signed' : 'Not signed' }}</dd></div>
           </dl>
           <ng-container *ngTemplateOutlet="customDetails; context: {$implicit: 'completion', work: work}"></ng-container>
@@ -358,8 +480,9 @@
           <div class="record-section-title"><mat-icon class="material-symbols-outlined">receipt_long</mat-icon><h3>Invoicing</h3></div>
           <dl class="data-grid compact-data-grid">
             <div *ngIf="work.invoiceNumber"><dt>Invoice number</dt><dd>{{ work.invoiceNumber }}</dd></div>
-            <div *ngIf="work.invoiceDate"><dt>Invoice date</dt><dd>{{ work.invoiceDate | date:'yyyy.MM.dd' }}</dd></div>
-            <div *ngIf="work.invoicePaymentDeadline"><dt>Payment deadline</dt><dd [class.overdue]="isOverdue(work.invoicePaymentDeadline)">{{ work.invoicePaymentDeadline | date:'yyyy.MM.dd' }}</dd></div>
+            <div *ngIf="work.invoiceDate"><dt>Invoice date</dt><dd>{{ billingDay(work.invoiceDate) | date:'yyyy.MM.dd' }}</dd></div>
+            <div *ngIf="work.paidAt"><dt>Payment date</dt><dd>{{ billingDay(work.paidAt) | date:'yyyy.MM.dd' }}</dd></div>
+            <div *ngIf="work.invoicePaymentDeadline"><dt>Payment deadline</dt><dd [class.overdue]="isBillingOverdue(work.invoicePaymentDeadline)">{{ billingDay(work.invoicePaymentDeadline) | date:'yyyy.MM.dd' }}</dd></div>
           </dl>
           <ng-container *ngTemplateOutlet="customDetails; context: {$implicit: 'invoice', work: work}"></ng-container>
         </section>

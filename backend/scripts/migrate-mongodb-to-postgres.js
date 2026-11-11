@@ -36,7 +36,7 @@ function createPool() {
 }
 
 async function applySchema(pool) {
-  const sql = ['001_initial_schema.sql', '009_effort_board.sql']
+  const sql = ['001_initial_schema.sql', '009_effort_board.sql', '010_finance_tenant.sql', '011_work_paid_at.sql', '012_work_turnover.sql']
     .map((file) => fs.readFileSync(path.join(SCHEMA_DIR, file), 'utf8'))
     .join('\n');
   await pool.query(sql);

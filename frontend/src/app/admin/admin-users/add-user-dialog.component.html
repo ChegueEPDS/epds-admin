@@ -26,8 +26,9 @@
 
     <mat-form-field appearance="outline">
       <mat-label>Tenant</mat-label>
-      <mat-select name="tenantId" [(ngModel)]="tenantId" [disabled]="isMicrosoftUser" required>
-        <mat-option *ngFor="let tenant of data.tenants" [value]="tenant.id">
+      <mat-select name="tenantId" [(ngModel)]="tenantId" (ngModelChange)="onTenantChange()" required>
+        <mat-option *ngIf="canRestoreMicrosoftTenant" value="company-default">Alapértelmezett céges tenant a következő belépéskor</mat-option>
+        <mat-option *ngFor="let tenant of selectableTenants" [value]="tenant.id">
           {{ tenantLabel(tenant) }} ({{ tenant.type }})
         </mat-option>
       </mat-select>

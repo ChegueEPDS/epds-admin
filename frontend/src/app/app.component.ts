@@ -83,6 +83,14 @@ export class AppComponent {
     window.location.reload();
   }
 
+  get financeTenantId(): string {
+    return this.currentPath.match(/^\/project-tracker\/finance\/([^/]+)$/)?.[1] || '';
+  }
+
+  changeFinanceTenant(tenantId: string): void {
+    void this.router.navigate(tenantId ? ['/project-tracker', 'finance', tenantId] : ['/home']);
+  }
+
   get isWebhookSectionActive(): boolean {
     return this.currentPath.startsWith('/webhook');
   }

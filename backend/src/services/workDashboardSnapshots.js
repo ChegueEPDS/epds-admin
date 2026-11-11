@@ -6,6 +6,7 @@ const { withJobLease } = require('./scheduledJobLeaseService');
 const { DEFAULT_CURRENCY } = require('./tenantCurrency');
 const { settings } = require('./workFields');
 const { dashboard, dashboardDate } = require('./workDashboard');
+const { workPeriodStart } = require('./workTurnover');
 
 const maintenanceInterval = 5 * 60 * 1000;
 const builds = new Map();
@@ -14,30 +15,34 @@ const collection = () => mongoose.connection.db.collection('work_dashboard_snaps
 async function readState(tenantId) {
   if (databaseEngine() === 'postgresql') {
     const { rows } = await query(`SELECT s.revision, s.snapshot_key AS "snapshotKey", s.report,
-      s.generated_at AS "generatedAt", t.default_currency AS currency, t.work_field_settings->>'version' AS "settingsVersion"
+      s.generated_at AS "generatedAt", t.default_currency AS currency, t.work_turnover_day AS "workTurnoverDay",
+      t.work_field_settings->>'version' AS "settingsVersion"
       FROM tenants t LEFT JOIN work_dashboard_snapshots s ON s.tenant_id=t.id WHERE t.id=$1`, [tenantId]);
     return rows[0];
   }
   const [row, tenant] = await Promise.all([
     collection().findOne({ _id: tenantId }),
-    Tenant.findById(tenantId).select('defaultCurrency workFieldSettings.version').lean()
+    Tenant.findById(tenantId).select('defaultCurrency workTurnoverDay workFieldSettings.version').lean()
   ]);
-  return tenant && { ...row, currency: tenant.defaultCurrency, settingsVersion: tenant.workFieldSettings?.version };
+  return tenant && { ...row, currency: tenant.defaultCurrency, workTurnoverDay: tenant.workTurnoverDay,
+    settingsVersion: tenant.workFieldSettings?.version };
 }
 
 async function readInputs(tenantId) {
   const [state, fx] = await Promise.all([readState(tenantId), latestRates()]);
   if (!state) throw Object.assign(new Error('Tenant not found.'), { statusCode: 404 });
   const asOf = dashboardDate();
+  const periodStart = workPeriodStart(asOf, state.workTurnoverDay);
+  const report = state.report?.periodStart === periodStart ? state.report : null;
   const currency = state.currency || DEFAULT_CURRENCY;
   const revision = String(state.revision ?? 0);
   // Bump the first value when the shape or calculation of the report changes.
-  const key = JSON.stringify([2, revision, Number(state.settingsVersion ?? 0), currency,
-    asOf, fx.snapshot?.date ?? null, fx.refresh?.at ?? null]);
+  const key = JSON.stringify([3, revision, Number(state.settingsVersion ?? 0), currency,
+    asOf, periodStart, fx.snapshot?.date ?? null, fx.refresh?.at ?? null]);
   // MongoDB work writes and invalidation are separate writes. Periodically
   // rebuild to recover from an interrupted invalidation.
   const expired = databaseEngine() !== 'postgresql' && Date.now() - new Date(state.generatedAt).getTime() >= 60 * 60 * 1000;
-  return { state, asOf, currency, fx, revision, key, fresh: Boolean(state.report && state.snapshotKey === key && !expired) };
+  return { state, report, asOf, periodStart, currency, fx, revision, key, fresh: Boolean(report && state.snapshotKey === key && !expired) };
 }
 
 async function saveSnapshot(tenantId, { revision, key, state }, report) {
@@ -62,7 +67,7 @@ function queueBuild(tenantId) {
     const inputs = await readInputs(tenantId);
     if (inputs.fresh) return;
     const config = await settings(tenantId);
-    const report = await dashboard(tenantId, config, inputs.currency, inputs.fx, inputs.asOf);
+    const report = await dashboard(tenantId, config, inputs.currency, inputs.fx, inputs.asOf, inputs.periodStart);
     await saveSnapshot(tenantId, inputs, report);
   }).finally(() => builds.delete(tenantId));
   builds.set(tenantId, pending);
@@ -76,17 +81,17 @@ async function getDashboardSnapshot(tenantId, wait) {
       console.error('[work-dashboard] snapshot refresh failed:', error.message);
       return { failed: true };
     });
-    if (wait || !inputs.state.report) {
+    if (wait || !inputs.report) {
       const result = await pending;
       inputs = await readInputs(tenantId);
       if (result.failed && !inputs.fresh) {
-        if (!inputs.state.report) throw Object.assign(new Error('The dashboard could not be calculated.'), { statusCode: 503 });
-        return { ...inputs.state.report, snapshotAt: inputs.state.generatedAt, refreshing: false, refreshError: true };
+        if (!inputs.report) throw Object.assign(new Error('The dashboard could not be calculated.'), { statusCode: 503 });
+        return { ...inputs.report, snapshotAt: inputs.state.generatedAt, refreshing: false, refreshError: true };
       }
     }
   }
-  const { state, fresh } = inputs;
-  return state.report ? { ...state.report, snapshotAt: state.generatedAt, refreshing: !fresh } : { refreshing: true };
+  const { state, report, fresh } = inputs;
+  return report ? { ...report, snapshotAt: state.generatedAt, refreshing: !fresh } : { refreshing: true };
 }
 
 async function markMongoDashboardDirty(scope) {

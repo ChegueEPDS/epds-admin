@@ -18,6 +18,9 @@ export class AuthGuard implements CanActivate {
             const singleFeatureRoute = this.auth.singleFeatureRoute();
             if (singleFeatureRoute) return this.router.createUrlTree([singleFeatureRoute]);
           }
+          if (route.data?.['requiresFinanceWorkspace'] && !this.auth.isFinanceWorkspace()) {
+            return this.router.createUrlTree(['/home']);
+          }
           if (route.data?.['requiresAdminFeatures'] && !this.auth.canAccessAdminFeatures()) {
             return this.router.createUrlTree(['/home']);
           }

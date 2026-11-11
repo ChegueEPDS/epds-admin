@@ -99,6 +99,11 @@ function namePartsFromMicrosoftToken(decodedToken, email) {
 }
 
 async function ensureCompanyTenantForEmail(user, email) {
+  const current = user.tenantId && (usingPostgres()
+    ? await repository('tenant').findById(user.tenantId)
+    : await Tenant.findById(user.tenantId).select('type').lean());
+  if (current?.type === 'finance') return user;
+
   const name = tenantNameFromEmail(email);
   const displayName = tenantDisplayNameFromEmail(email, name);
   if (usingPostgres()) return authStore().ensureCompanyTenant(user, { name, displayName });
@@ -120,6 +125,8 @@ async function ensureCompanyTenantForEmail(user, email) {
       seats: { max: 0, used: 0 },
       seatsManaged: 'manual'
     });
+  } else if (tenant.type === 'finance') {
+    throw Object.assign(new Error('A company tenant must be configured for this Microsoft account.'), { statusCode: 403 });
   } else if (!tenant.displayName) {
     tenant.displayName = displayName;
     await tenant.save();

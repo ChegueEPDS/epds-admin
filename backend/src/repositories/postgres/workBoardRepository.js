@@ -1,6 +1,7 @@
 const mongoose = require('mongoose');
 const { query, withTransaction } = require('../../postgres');
 const { pgOrderBy } = require('../../services/workBoardSort');
+const { alignedWorkYear } = require('../../services/workTurnover');
 
 const id = () => String(new mongoose.Types.ObjectId());
 const TERMINAL = ['completed_billable', 'invoiced', 'paid', 'closed', 'cancelled', 'lost'];
@@ -19,7 +20,7 @@ function work(row) {
     totalAmount: Number(row.total_amount), costAmount: Number(row.cost_amount),
     subcontractor: row.subcontractor, paymentDeadlineDays: row.payment_deadline_days,
     offerDate: row.offer_date, completionDate: row.completion_date, invoiceDate: row.invoice_date,
-    invoicePaymentDeadline: row.invoice_payment_deadline, invoiceNumber: row.invoice_number,
+    invoicePaymentDeadline: row.invoice_payment_deadline, invoiceNumber: row.invoice_number, paidAt: row.paid_at,
     contractSigned: row.contract_signed, performanceCertificate: row.performance_certificate,
     archivedAt: row.archived_at, createdBy: row.created_by, updatedBy: row.updated_by,
     createdAt: row.created_at, updatedAt: row.updated_at
@@ -74,10 +75,13 @@ async function listBoardOptions(tenantId) {
   return [...byWork.values()];
 }
 
-async function list({ tenantId, status = 'active', search = '', page = 1, limit = 50, sort }) {
+async function list({ tenantId, status = 'active', search = '', page = 1, limit = 50, sort, allowedStatuses }) {
   const params = [tenantId];
   const where = ['tenant_id=$1'];
-  if (status === 'deleted') where.push('archived_at IS NOT NULL');
+  if (allowedStatuses) {
+    params.push(allowedStatuses);
+    where.push('archived_at IS NULL', 'status=ANY($2::text[])');
+  } else if (status === 'deleted') where.push('archived_at IS NOT NULL');
   else {
     where.push('archived_at IS NULL');
     if (status === 'active') { params.push(TERMINAL); where.push(`status<>ALL($${params.length}::text[])`); }
@@ -94,6 +98,7 @@ async function list({ tenantId, status = 'active', search = '', page = 1, limit 
   const rows = await query(`SELECT w.* FROM work_items w WHERE ${clause}
     ORDER BY ${orderBy} LIMIT $${params.length - 1} OFFSET $${params.length}`, params);
   const works = rows.rows.map(work);
+  if (allowedStatuses) return { works, total: count.rows[0].count };
   const children = await listSubWorks(tenantId, works.map((item) => item.id), status === 'deleted');
   const byWork = new Map();
   children.forEach((item) => byWork.set(item.workItemId, [...(byWork.get(item.workItemId) || []), item]));
@@ -107,11 +112,13 @@ async function list({ tenantId, status = 'active', search = '', page = 1, limit 
     }, activeAmounts: summary.rows.map((row) => ({ currency: row.currency, amount: row.active_value })) };
 }
 
-async function findWork(tenantId, workId, includeDeleted = false) {
+async function findWork(tenantId, workId, includeDeleted = false, allowedStatuses) {
+  const statusClause = allowedStatuses ? ' AND status=ANY($3::text[])' : '';
+  const params = allowedStatuses ? [workId, tenantId, allowedStatuses] : [workId, tenantId];
   const result = await query(`SELECT * FROM work_items WHERE id=$1 AND tenant_id=$2
-    AND ${includeDeleted ? 'archived_at IS NOT NULL' : 'archived_at IS NULL'}`, [workId, tenantId]);
+    AND ${includeDeleted ? 'archived_at IS NOT NULL' : 'archived_at IS NULL'}${statusClause}`, params);
   const item = work(result.rows[0]);
-  if (!item) return null;
+  if (!item || allowedStatuses) return item;
   item.subWorks = await listSubWorks(tenantId, [workId], includeDeleted);
   return item;
 }
@@ -128,23 +135,28 @@ async function nextSequence(client, tenantId, year) {
 
 async function createWork(tenantId, actorId, input) {
   return withTransaction(async (client) => {
-    const year = Number(input.year || new Date().getFullYear());
+    const { rows: [tenant] } = await client.query(`SELECT work_turnover_day, align_work_sequence, now() AS created_at
+      FROM tenants WHERE id=$1`, [tenantId]);
+    const year = tenant.align_work_sequence
+      ? alignedWorkYear(tenant.created_at, tenant.work_turnover_day)
+      : Number(input.year || alignedWorkYear(tenant.created_at));
     const sequence = await nextSequence(client, tenantId, year);
     const workId = id();
+    const workNumber = tenant.align_work_sequence ? null : input.workNumber;
     const result = await client.query(`INSERT INTO work_items
       (id,tenant_id,year,sequence_number,work_number,name,client_id,customer,responsible_user_id,responsible,
        contributors,status,deadline,description,currency,total_amount,cost_amount,subcontractor,payment_deadline_days,
        offer_date,completion_date,invoice_date,invoice_payment_deadline,invoice_number,contract_signed,
-       performance_certificate,created_by,updated_by,created_at,updated_at,custom_fields,entity_id,service_type_id,reporting)
-      VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11::jsonb,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$27,now(),now(),$28::jsonb,$29,$30,$31::jsonb) RETURNING *`,
-    [workId, tenantId, year, sequence, input.workNumber || `${String(year).slice(-2)}-${String(sequence).padStart(4, '0')}`,
+       performance_certificate,created_by,updated_by,created_at,updated_at,custom_fields,entity_id,service_type_id,reporting,paid_at)
+      VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11::jsonb,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$27,now(),now(),$28::jsonb,$29,$30,$31::jsonb,$32) RETURNING *`,
+    [workId, tenantId, year, sequence, workNumber || `${String(year).slice(-2)}-${String(sequence).padStart(4, '0')}`,
       input.name, input.clientId || null, input.customer || '', input.responsibleUserId || null, input.responsible || '',
       JSON.stringify(input.contributors || []), input.status || 'inquiry', input.deadline || null, input.description || '',
       input.currency || 'HUF', Number(input.totalAmount || 0), Number(input.costAmount || 0), input.subcontractor || '',
       Number(input.paymentDeadlineDays ?? 30), input.offerDate || null, input.completionDate || null,
       input.invoiceDate || null, input.invoicePaymentDeadline || null, input.invoiceNumber || '',
       Boolean(input.contractSigned), Boolean(input.performanceCertificate), actorId, JSON.stringify(input.customFields || {}),
-      input.entityId || null, input.serviceTypeId || null, JSON.stringify(input.reporting || {})]);
+      input.entityId || null, input.serviceTypeId || null, JSON.stringify(input.reporting || {}), input.paidAt || null]);
     return work(result.rows[0]);
   });
 }
@@ -155,7 +167,7 @@ const WORK_MUTABLE = new Map([
   ['responsible','responsible'],['status','status'],['deadline','deadline'],['description','description'],
   ['currency','currency'],['totalAmount','total_amount'],['costAmount','cost_amount'],['subcontractor','subcontractor'],
   ['paymentDeadlineDays','payment_deadline_days'],['offerDate','offer_date'],['completionDate','completion_date'],
-  ['invoiceDate','invoice_date'],['invoicePaymentDeadline','invoice_payment_deadline'],['invoiceNumber','invoice_number'],
+  ['invoiceDate','invoice_date'],['invoicePaymentDeadline','invoice_payment_deadline'],['invoiceNumber','invoice_number'],['paidAt','paid_at'],
   ['contractSigned','contract_signed'],['performanceCertificate','performance_certificate']
 ]);
 
@@ -169,9 +181,10 @@ async function updateWork(tenantId, workId, actorId, input, expectedRevision) {
   if (Object.hasOwn(input, 'reporting')) { params.push(JSON.stringify(input.reporting)); sets.push(`reporting=$${params.length}::jsonb`); }
   if (Object.hasOwn(input, 'customFields')) {
     params.push(JSON.stringify(input.customFields));
-    sets.push(`custom_fields=$${params.length}::jsonb`, 'field_revision=field_revision+1');
+    sets.push(`custom_fields=$${params.length}::jsonb`);
   }
   if (!sets.length) return findWork(tenantId, workId);
+  if (expectedRevision !== undefined || Object.hasOwn(input, 'customFields')) sets.push('field_revision=field_revision+1');
   params.push(actorId); sets.push(`updated_by=$${params.length}`, 'updated_at=now()');
   let revision = '';
   if (expectedRevision !== undefined) {

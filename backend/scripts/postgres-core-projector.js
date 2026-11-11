@@ -1,4 +1,5 @@
 const { EJSON } = require('bson');
+const { DEFAULT_WORK_TURNOVER_DAY } = require('../src/services/workTurnover');
 
 const id = (value) => value == null ? null : String(value);
 const date = (value) => value ? new Date(value) : null;
@@ -106,6 +107,7 @@ async function projectTenants(client) {
     type: doc.type || 'company', owner_user_id: null,
     seats_max: Number(doc.seats?.max || 0), seats_used: Number(doc.seats?.used || 0),
     seats_managed: doc.seatsManaged || 'stripe', features: json(doc.features, {}),
+    work_turnover_day: doc.workTurnoverDay ?? DEFAULT_WORK_TURNOVER_DAY, align_work_sequence: doc.alignWorkSequence === true,
     profession_rbac_enabled: Boolean(doc.professionRbacEnabled), ...stamps(doc)
   });
   return docs;
@@ -201,7 +203,7 @@ async function projectWorks(client) {
     deadline: date(doc.deadline), description: doc.description || '', currency: doc.currency || 'HUF',
     total_amount: Number(doc.totalAmount || 0), cost_amount: Number(doc.costAmount || 0),
     subcontractor: doc.subcontractor || '', payment_deadline_days: Number(doc.paymentDeadlineDays ?? 30),
-    offer_date: date(doc.offerDate), completion_date: date(doc.completionDate), invoice_date: date(doc.invoiceDate),
+    offer_date: date(doc.offerDate), completion_date: date(doc.completionDate), invoice_date: date(doc.invoiceDate), paid_at: date(doc.paidAt),
     invoice_payment_deadline: date(doc.invoicePaymentDeadline), invoice_number: doc.invoiceNumber || '',
     contract_signed: Boolean(doc.contractSigned), performance_certificate: Boolean(doc.performanceCertificate),
     archived_at: date(doc.archivedAt), created_by: id(doc.createdBy), updated_by: id(doc.updatedBy), ...stamps(doc)

@@ -28,6 +28,9 @@ async function ensureCompanyTenant(user, { name, displayName }) {
     name, displayName, type: 'company', features: DEFAULT_FEATURES,
     ownerUserId: user._id, seats: { max: 0, used: 0 }, seatsManaged: 'manual'
   });
+  else if (tenant.type === 'finance') {
+    throw Object.assign(new Error('A company tenant must be configured for this Microsoft account.'), { statusCode: 403 });
+  }
   else if (!tenant.displayName) tenant = await tenantRepository.save({ ...tenant, displayName });
   if (String(user.tenantId || '') !== String(tenant._id)) user = await userRepository.save({ ...user, tenantId: tenant._id });
   return user;

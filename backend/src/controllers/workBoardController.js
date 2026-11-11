@@ -3,10 +3,13 @@ const { WorkItem, WORK_STATUSES } = require('../models/workItem');
 const SubWorkItem = require('../models/subWorkItem');
 const ClientCompany = require('../models/clientCompany');
 const User = require('../models/user');
+const Tenant = require('../models/tenant');
 const WorkSequence = require('../models/workSequence');
 const { WorkDocument, WORK_DOCUMENT_CATEGORIES } = require('../models/workDocument');
 const fileStorage = require('../services/fileStorageService');
 const workFields = require('../services/workFields');
+const { workBillingDates } = require('../services/workBillingDates');
+const { alignedWorkYear } = require('../services/workTurnover');
 const tenantCurrency = require('../services/tenantCurrency');
 const { workBoardSort, mongoSortStages } = require('../services/workBoardSort');
 const { markMongoDashboardDirty } = require('../services/workDashboardSnapshots');
@@ -111,6 +114,7 @@ function validateStatus(value) {
 function workPayload(body, existing = {}) {
   const name = cleanText(body?.name ?? existing.name);
   if (!name) throw httpError('Work name is required');
+  const billingDate = (key) => optionalDate(Object.hasOwn(body || {}, key) ? body[key] : existing[key]);
   return {
     name,
     customer: cleanText(body?.customer ?? existing.customer),
@@ -125,9 +129,10 @@ function workPayload(body, existing = {}) {
     subcontractor: cleanText(body?.subcontractor ?? existing.subcontractor),
     paymentDeadlineDays: Math.max(0, numberValue(body?.paymentDeadlineDays, existing.paymentDeadlineDays ?? 30)),
     offerDate: optionalDate(body?.offerDate ?? existing.offerDate),
-    completionDate: optionalDate(body?.completionDate ?? existing.completionDate),
-    invoiceDate: optionalDate(body?.invoiceDate ?? existing.invoiceDate),
-    invoicePaymentDeadline: optionalDate(body?.invoicePaymentDeadline ?? existing.invoicePaymentDeadline),
+    completionDate: billingDate('completionDate'),
+    invoiceDate: billingDate('invoiceDate'),
+    paidAt: billingDate('paidAt'),
+    invoicePaymentDeadline: billingDate('invoicePaymentDeadline'),
     invoiceNumber: cleanText(body?.invoiceNumber ?? existing.invoiceNumber),
     contractSigned: Boolean(body?.contractSigned ?? existing.contractSigned),
     performanceCertificate: Boolean(body?.performanceCertificate ?? existing.performanceCertificate)
@@ -229,6 +234,7 @@ function presentWork(work, subWorks = []) {
     offerDate: work.offerDate || null,
     completionDate: work.completionDate || null,
     invoiceDate: work.invoiceDate || null,
+    paidAt: work.paidAt || null,
     invoicePaymentDeadline: work.invoicePaymentDeadline || null,
     invoiceNumber: work.invoiceNumber || '',
     contractSigned: Boolean(work.contractSigned),
@@ -392,15 +398,20 @@ exports.getWork = (req, res) => withErrors(res, async () => {
 exports.createWork = (req, res) => withErrors(res, async () => {
   const currency = cleanText(req.body?.currency) || await tenantCurrency.getDefaultCurrency(req.scope.tenantId);
   const payload = workPayload({ ...req.body, currency });
+  Object.assign(payload, workBillingDates(payload));
   const client = await resolveClient(req.body?.clientId, req.scope);
   const responsibleUser = await resolveResponsible(req.body?.responsibleUserId, req.scope);
-  const year = Math.max(2000, Math.min(9999, numberValue(req.body?.year, new Date().getFullYear())));
+  const tenant = await Tenant.findById(req.scope.tenantId).select('workTurnoverDay alignWorkSequence').lean();
+  const createdAt = new Date();
+  const year = tenant?.alignWorkSequence
+    ? alignedWorkYear(createdAt, tenant.workTurnoverDay)
+    : Math.max(2000, Math.min(9999, numberValue(req.body?.year, alignedWorkYear(createdAt))));
   const latest = await WorkItem.findOne({ ...scopeQuery(req.scope), year }).sort({ sequenceNumber: -1 }).select('sequenceNumber').lean();
   const sequenceNumber = await allocateSequence(req.scope.tenantId, `work:${year}`, latest?.sequenceNumber);
   const work = new WorkItem({
     ...payload, ...scopeQuery(req.scope), year, sequenceNumber,
     workNumber: `${String(year).slice(-2)}-${String(sequenceNumber).padStart(4, '0')}`,
-    createdBy: req.userId, updatedBy: req.userId
+    createdAt, createdBy: req.userId, updatedBy: req.userId
   });
   applyWorkReferences(work, client, responsibleUser);
   await workFields.saveValues(req, payload.status, {}, (values, selections) => {
@@ -417,7 +428,8 @@ exports.updateWork = (req, res) => withErrors(res, async () => {
   if (req.body?.fieldRevision !== undefined && req.body.fieldRevision !== (work.__v || 0)) {
     throw httpError('The work changed. Reload and try again.', 409);
   }
-  Object.assign(work, workPayload(req.body, work), { updatedBy: req.userId });
+  const payload = workPayload(req.body, work);
+  Object.assign(work, payload, workBillingDates(payload, work), { updatedBy: req.userId });
   if (Object.prototype.hasOwnProperty.call(req.body || {}, 'clientId')) {
     const client = await resolveClient(req.body.clientId, req.scope);
     work.clientId = client?._id || undefined;

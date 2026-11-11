@@ -4,6 +4,7 @@
     <h1>Project dashboard</h1>
     <div class="dashboard-status">
       @if (state.report; as d) {
+        <p class="muted">Period {{ d.periodStart | date:'yyyy.MM.dd.' }} – {{ d.asOf | date:'yyyy.MM.dd.' }}</p>
         <p class="muted">Snapshot {{ d.snapshotAt | date:'yyyy.MM.dd. HH:mm' }} · {{ d.currency }}
           @if (d.rateDate) { · MNB rates {{ d.rateDate | date:'yyyy.MM.dd.' }} }
           @if (d.aedRateDerived) { · AED via the CBUAE USD peg }

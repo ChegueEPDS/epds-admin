@@ -5,6 +5,7 @@ const DomainMonitor = require('../models/domainMonitor');
 const LicenseCustomer = require('../models/licenseCustomer');
 const { ASSIGNABLE_ROLES, SUPERADMIN_EMAIL } = require('../services/userSeedService');
 const { DEFAULT_CURRENCY, validateDefaultCurrency } = require('../services/tenantCurrency');
+const { DEFAULT_WORK_TURNOVER_DAY, workTurnoverError } = require('../services/workTurnover');
 
 const INTERNAL_LICENSE_TENANTS = ['epds', 'developer', 'epds-admin'];
 
@@ -23,7 +24,7 @@ function normalizeTenantDisplayName(input, fallback) {
 
 function normalizeTenantType(input) {
   const type = String(input || 'company').trim().toLowerCase();
-  return ['company', 'client'].includes(type) ? type : null;
+  return ['company', 'client', 'finance'].includes(type) ? type : null;
 }
 
 function normalizeTenantFeatures(input = {}) {
@@ -54,6 +55,7 @@ function applyTenantFeaturePolicy(name, type, features) {
     ...features,
     webhookTester: { enabled: Boolean(features.webhookTester?.enabled), edit: false, delete: false }
   };
+  if (type === 'finance') return normalizeTenantFeatures();
   if (type === 'client') {
     return {
       mail: { enabled: false, edit: false, delete: false },
@@ -130,7 +132,10 @@ function presentTenant(tenant) {
     displayName: tenant.displayName || tenant.name,
     type: tenant.type,
     defaultCurrency: tenant.defaultCurrency || DEFAULT_CURRENCY,
+    workTurnoverDay: tenant.workTurnoverDay ?? DEFAULT_WORK_TURNOVER_DAY,
+    alignWorkSequence: tenant.alignWorkSequence === true,
     features: normalizeTenantFeatures(tenant.features || {}),
+    financeAccess: tenant.features?.financeAccess?.enabled === true,
     ownerUserId: tenant.ownerUserId ? String(tenant.ownerUserId) : null,
     createdAt: tenant.createdAt,
     updatedAt: tenant.updatedAt
@@ -257,6 +262,17 @@ exports.updateUser = async (req, res) => {
         if (password.length < 8) return res.status(400).json({ error: 'Password must be at least 8 characters' });
         user.password = await bcrypt.hash(password, 12);
       }
+    } else if (req.body?.tenantId && req.body.tenantId !== String(user.tenantId)) {
+      const current = user.tenantId ? await Tenant.findById(user.tenantId).select('type').lean() : null;
+      if (req.body.tenantId === 'company-default' && current?.type === 'finance') {
+        user.tenantId = undefined;
+      } else if (/^[a-f\d]{24}$/i.test(req.body.tenantId)) {
+        const target = await Tenant.findById(req.body.tenantId).select('type').lean();
+        if (target?.type === 'finance' && role === 'Finance') user.tenantId = target._id;
+        else return res.status(400).json({ error: 'Select a Finance tenant and the Finance role.' });
+      } else {
+        return res.status(400).json({ error: 'Invalid tenant selection.' });
+      }
     }
 
     await user.save();
@@ -288,6 +304,9 @@ exports.createTenant = async (req, res) => {
     if (!type) return res.status(400).json({ error: 'Valid tenant type is required' });
     const currency = req.body?.defaultCurrency === undefined ? DEFAULT_CURRENCY : validateDefaultCurrency(req.body.defaultCurrency);
     if (!currency) return res.status(400).json({ error: 'Select an available default currency.' });
+    const { workTurnoverDay, alignWorkSequence } = req.body || {};
+    const turnoverError = workTurnoverError({ workTurnoverDay, alignWorkSequence });
+    if (turnoverError) return res.status(400).json({ error: turnoverError });
 
     const existing = await Tenant.findOne({ name });
     if (existing) return res.status(409).json({ error: 'Tenant already exists' });
@@ -297,7 +316,9 @@ exports.createTenant = async (req, res) => {
       displayName,
       type,
       defaultCurrency: currency,
-      features,
+      workTurnoverDay,
+      alignWorkSequence,
+      features: { ...features, financeAccess: { enabled: type !== 'finance' && req.body?.financeAccess === true } },
       seats: { max: 0, used: 0 },
       seatsManaged: 'manual'
     });
@@ -321,6 +342,13 @@ exports.updateTenant = async (req, res) => {
     if (!name) return res.status(400).json({ error: 'Tenant name is required' });
     if (!type) return res.status(400).json({ error: 'Valid tenant type is required' });
 
+    const { workTurnoverDay, alignWorkSequence } = req.body || {};
+    const turnoverError = workTurnoverError({ workTurnoverDay, alignWorkSequence });
+    if (turnoverError) return res.status(400).json({ error: turnoverError });
+
+    if ((type === 'finance') !== (tenant.type === 'finance')) {
+      return res.status(400).json({ error: 'Create a separate Finance tenant.' });
+    }
     const existing = await Tenant.findOne({ name, _id: { $ne: tenant._id } });
     if (existing) return res.status(409).json({ error: 'Tenant already exists' });
 
@@ -332,7 +360,10 @@ exports.updateTenant = async (req, res) => {
       if (!currency) return res.status(400).json({ error: 'Select an available default currency.' });
       tenant.defaultCurrency = currency;
     }
-    tenant.features = features;
+    if (workTurnoverDay !== undefined) tenant.workTurnoverDay = workTurnoverDay;
+    if (alignWorkSequence !== undefined) tenant.alignWorkSequence = alignWorkSequence;
+    const financeAccess = req.body?.financeAccess ?? tenant.features?.financeAccess?.enabled;
+    tenant.features = { ...features, financeAccess: { enabled: type !== 'finance' && financeAccess === true } };
     await tenant.save();
     await syncTenantReferences(tenant);
     return res.json({ tenant: presentTenant(tenant) });

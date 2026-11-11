@@ -20,6 +20,7 @@ const domainHealthRoutes = require('./routes/domainHealthRoutes');
 const licenseRoutes = require('./routes/licenseRoutes');
 const effortRoutes = require('./routes/effortRoutes');
 const workBoardRoutes = require('./routes/workBoardRoutes');
+const financeRoutes = require('./routes/financeRoutes');
 const { startMnbExchangeRates } = require('./services/mnbExchangeRates');
 const { startWorkDashboardSnapshots } = require('./services/workDashboardSnapshots');
 const integrationApiRoutes = require('./routes/integrationApiRoutes');
@@ -94,6 +95,7 @@ app.use('/api', domainHealthRoutes);
 app.use('/api', licenseRoutes);
 app.use('/api', effortRoutes);
 app.use('/api', workBoardRoutes);
+app.use('/api', financeRoutes);
 app.use('/api', integrationApiRoutes);
 
 app.use((err, req, res, next) => {

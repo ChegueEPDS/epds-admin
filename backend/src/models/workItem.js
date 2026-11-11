@@ -41,6 +41,7 @@ const WorkItemSchema = new mongoose.Schema(
     offerDate: { type: Date },
     completionDate: { type: Date },
     invoiceDate: { type: Date },
+    paidAt: { type: Date },
     invoicePaymentDeadline: { type: Date },
     invoiceNumber: { type: String, trim: true, default: '' },
     contractSigned: { type: Boolean, default: false },

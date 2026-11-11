@@ -10,20 +10,26 @@ export type AdminTenant = {
   displayName?: string;
   type: TenantType;
   defaultCurrency?: string;
+  workTurnoverDay?: string;
+  alignWorkSequence?: boolean;
+  financeAccess?: boolean;
   features: TenantFeatures;
   ownerUserId?: string | null;
   createdAt?: string;
   updatedAt?: string;
 };
 
-export type TenantType = 'company' | 'client';
+export type TenantType = 'company' | 'client' | 'finance';
 
 export type TenantPayload = {
   name: string;
   displayName?: string;
   type: TenantType;
   defaultCurrency?: string;
+  workTurnoverDay?: string;
+  alignWorkSequence?: boolean;
   features: TenantFeatures;
+  financeAccess?: boolean;
 };
 
 export type AdminUser = {

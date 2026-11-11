@@ -3,6 +3,7 @@ const { pipeline } = require('stream/promises');
 const store = require('../repositories/postgres/workBoardRepository');
 const fileStorage = require('../services/fileStorageService');
 const workFields = require('../services/workFields');
+const { workBillingDates } = require('../services/workBillingDates');
 const tenantCurrency = require('../services/tenantCurrency');
 const { workBoardSort } = require('../services/workBoardSort');
 const { WORK_STATUSES } = require('../models/workItem');
@@ -50,7 +51,7 @@ exports.createWork=(req,res)=>run(res,async()=>{if(!clean(req.body?.name))throw 
   if (!WORK_STATUSES.includes(status)) throw fail('Invalid work status');
   const currency = clean(req.body.currency).toUpperCase() || await tenantCurrency.getDefaultCurrency(req.scope.tenantId);
   const w = await workFields.saveValues(req, status, {}, (customFields, selections) => store.createWork(req.scope.tenantId, req.userId, {
-    ...req.body, ...selections, status, currency, customFields, name: clean(req.body.name), customer: client?.name || '',
+    ...req.body, ...selections, ...workBillingDates({ ...req.body, status }), status, currency, customFields, name: clean(req.body.name), customer: client?.name || '',
     responsible: user ? `${user.firstName} ${user.lastName}`.trim() : ''
   }));
   res.status(201).json({ work: presentWork({ ...w, subWorks: [] }) });
@@ -63,8 +64,9 @@ exports.updateWork=(req,res)=>run(res,async()=>{const input={...req.body};if(Obj
   if (input.fieldRevision !== undefined && input.fieldRevision !== existing.fieldRevision) throw fail('The work changed. Reload and try again.', 409);
   const status = input.status ?? existing.status;
   if (!WORK_STATUSES.includes(status)) throw fail('Invalid work status');
+  const dates = workBillingDates({ ...input, status }, existing);
   const updated = await workFields.saveValues(req, status, existing, async (customFields, selections) => {
-    const result = await store.updateWork(tenantId, existing.id, req.userId, { ...input, ...selections, status, customFields }, existing.fieldRevision);
+    const result = await store.updateWork(tenantId, existing.id, req.userId, { ...input, ...selections, ...dates, status, customFields }, existing.fieldRevision);
     if (!result) throw fail('The work changed. Reload and try again.', 409);
     return result;
   });

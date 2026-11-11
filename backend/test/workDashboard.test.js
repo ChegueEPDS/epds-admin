@@ -1,10 +1,12 @@
 const assert = require('node:assert/strict');
 const { test } = require('node:test');
 const { buildDashboard, dashboardDrilldown, workReporting } = require('../src/services/workDashboard');
+const { workPeriodStart, alignedWorkYear, workTurnoverError } = require('../src/services/workTurnover');
 
 const config = { projectSizeGrouping: true, entities: [{ id: 'eu', label: 'EU' }], serviceTypes: [{ id: 'training', label: 'Training' }] };
 const fx = { snapshot: { date: '2026-11-09', rates: { EUR: { quote: '400', unit: 1 } } } };
-const work = { name: 'Work', currency: 'EUR', customer: 'Client', responsible: 'Owner', ownerId: 'owner', entityId: 'eu', serviceTypeId: 'training' };
+const work = { name: 'Work', currency: 'EUR', customer: 'Client', responsible: 'Owner', ownerId: 'owner',
+  entityId: 'eu', serviceTypeId: 'training', createdAt: '2026-01-01' };
 
 test('workbook dashboard scopes, next-action checks and payment amounts use the work records', () => {
   const dashboard = buildDashboard([
@@ -35,8 +37,8 @@ test('workbook dashboard scopes, next-action checks and payment amounts use the 
 
 test('project size switches off without discarding the assigned size and keeps Excel boundaries', async () => {
   const rows = [4999.99, 5000, 19999.99, 20000].map((totalAmount) => ({ ...work, status: 'in_progress', totalAmount }));
-  assert.deepEqual(buildDashboard(rows, config, 'EUR', fx).sizes.map((row) => row.count), [1, 2, 1, 0]);
-  assert.equal(buildDashboard(rows, { ...config, projectSizeGrouping: false }, 'EUR', fx).sizes, null);
+  assert.deepEqual(buildDashboard(rows, config, 'EUR', fx, '2026-11-09').sizes.map((row) => row.count), [1, 2, 1, 0]);
+  assert.equal(buildDashboard(rows, { ...config, projectSizeGrouping: false }, 'EUR', fx, '2026-11-09').sizes, null);
   const req = { scope: { tenantType: 'company' }, body: { reporting: { nextAction: 'Review' } } };
   assert.deepEqual(await workReporting(req, { projectSize: 'Large' }, false), { projectSize: 'Large', nextAction: 'Review' });
   await assert.rejects(workReporting({ ...req, body: { reporting: { projectSize: 'Large' } } }, {}, false), /disabled/);
@@ -75,4 +77,36 @@ test('each chart and its drilldown use the same work scope and report missing fi
   assert.equal(paidWorks.works.find((row) => row.id === 'overpaid').missingRate, true);
   assert.equal(paidWorks.works.find((row) => row.id === 'missing').incomplete, true);
   assert.throws(() => drill({ kind: 'finance', value: 'other' }), /valid dashboard segment/);
+});
+
+test('the dashboard and drilldown start at the same inclusive Budapest turnover day', () => {
+  const dates = {
+    before: '2025-12-31T22:59:59Z', january: '2025-12-31T23:00:00Z',
+    turnover: '2026-03-31T22:00:00Z', today: '2026-11-10T22:59:59Z', future: '2026-11-10T23:00:00Z'
+  };
+  const rows = Object.entries(dates).map(([id, createdAt]) => ({ ...work, id, createdAt, status: 'in_progress', totalAmount: 1 }));
+  const asOf = '2026-11-10';
+  const defaultDashboard = buildDashboard(rows, config, 'EUR', fx, asOf);
+  assert.equal(defaultDashboard.periodStart, '2026-01-01');
+  assert.equal(defaultDashboard.summary.active, 3);
+
+  const start = workPeriodStart(asOf, '04-01');
+  const dashboard = buildDashboard(rows, config, 'EUR', fx, asOf, start);
+  const drilldown = dashboardDrilldown(rows, config, 'EUR', fx, { kind: 'entity', value: 'Active', entityId: 'eu' }, asOf, start);
+  assert.equal(dashboard.periodStart, '2026-04-01');
+  assert.equal(dashboard.summary.activeValue.amount, 2);
+  assert.deepEqual(drilldown.works.map(({ id }) => id), ['turnover', 'today']);
+});
+
+test('the aligned sequence year advances on the local turnover and handles leap days', () => {
+  assert.equal(alignedWorkYear(new Date('2026-03-31T21:59:59Z'), '04-01'), 2025);
+  assert.equal(alignedWorkYear(new Date('2026-03-31T22:00:00Z'), '04-01'), 2026);
+  assert.equal(alignedWorkYear(new Date('2025-12-31T23:00:00Z')), 2026);
+  assert.equal(workPeriodStart('2026-02-27', '02-29'), '2025-02-28');
+  assert.equal(workPeriodStart('2026-02-28', '02-29'), '2026-02-28');
+  assert.equal(workPeriodStart('2028-02-28', '02-29'), '2027-02-28');
+  assert.equal(workPeriodStart('2028-02-29', '02-29'), '2028-02-29');
+  assert.equal(workTurnoverError({ workTurnoverDay: '02-29', alignWorkSequence: false }), null);
+  assert.ok(workTurnoverError({ workTurnoverDay: '04-31' }));
+  assert.ok(workTurnoverError({ alignWorkSequence: 'false' }));
 });

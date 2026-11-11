@@ -68,6 +68,22 @@ export class AddUserDialogComponent {
     return Boolean(this.data.user?.azureId);
   }
 
+  get selectableTenants(): AdminTenant[] {
+    if (!this.isMicrosoftUser) return this.data.tenants;
+    return this.data.tenants.filter((tenant) => tenant.id === this.data.user?.tenantId || tenant.type === 'finance');
+  }
+
+  get canRestoreMicrosoftTenant(): boolean {
+    return this.isMicrosoftUser && this.data.tenants.some((tenant) =>
+      tenant.id === this.data.user?.tenantId && tenant.type === 'finance');
+  }
+
+  onTenantChange(): void {
+    if (this.data.tenants.some((tenant) => tenant.id === this.tenantId && tenant.type === 'finance')) {
+      this.role = 'Finance';
+    }
+  }
+
   get title(): string {
     return this.isEditMode ? 'Edit user' : 'Add user';
   }

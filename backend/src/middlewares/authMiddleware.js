@@ -8,7 +8,7 @@ const Tenant = require('../models/tenant');
 const { databaseEngine } = require('../postgres');
 const tenantRepository = require('../repositories/postgres/tenantRepository');
 
-function requireAuth(req, res, next) {
+function authenticate(req, res, next, allowFinance = false) {
   Promise.resolve()
     .then(async () => {
       const { token, source } = getAccessTokenFromRequest(req);
@@ -16,6 +16,9 @@ function requireAuth(req, res, next) {
       if (!validateCsrf(req, source)) return res.status(403).json({ error: 'Invalid CSRF token' });
 
       const { decoded, session, user } = await authenticateAccessToken(token);
+      if (user.tenantType === 'finance' && !allowFinance) {
+        return res.status(403).json({ error: 'This endpoint is unavailable to Finance tenants' });
+      }
       req.auth = decoded;
       req.session = session;
       req.user = user;
@@ -56,6 +59,9 @@ function requireAuth(req, res, next) {
     })
     .catch(() => res.status(401).json({ error: 'Invalid or expired token' }));
 }
+
+const requireAuth = (req, res, next) => authenticate(req, res, next);
+const requireSessionAuth = (req, res, next) => authenticate(req, res, next, true);
 
 function requireEpdsEmail(req, res, next) {
   const email = String(req.user?.email || '').trim().toLowerCase();
@@ -104,4 +110,4 @@ function requireSuperAdmin(req, res, next) {
   return next();
 }
 
-module.exports = { requireAuth, requireEpdsEmail, requireAdminFeatureAccess, requireSuperAdmin, requireTenantFeature, requireTenantContext };
+module.exports = { requireAuth, requireSessionAuth, requireEpdsEmail, requireAdminFeatureAccess, requireSuperAdmin, requireTenantFeature, requireTenantContext };

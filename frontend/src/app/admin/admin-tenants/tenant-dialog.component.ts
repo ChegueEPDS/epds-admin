@@ -43,14 +43,25 @@ type TenantFeatureOption = {
 export class TenantDialogComponent {
   saving = signal(false);
   name = '';
+  financeAccess = false;
   displayName = '';
   defaultCurrency = 'HUF';
   currencies = ['HUF'];
   private initialCurrency = 'HUF';
+  private initialTurnoverDay = '01-01';
+  private initialSequenceAlignment = false;
+  turnoverMonth = 1;
+  turnoverDay = 1;
+  alignWorkSequence = false;
+  readonly turnoverMonths = ['Január', 'Február', 'Március', 'Április', 'Május', 'Június',
+    'Július', 'Augusztus', 'Szeptember', 'Október', 'November', 'December'];
+  private readonly monthLengths = [31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+  readonly calendarDays = Array.from({ length: 31 }, (_, index) => index + 1);
   type: TenantType = 'company';
   types: { value: TenantType; label: string }[] = [
     { value: 'company', label: 'Company' },
-    { value: 'client', label: 'Client' }
+    { value: 'client', label: 'Client' },
+    { value: 'finance', label: 'Pénzügy' }
   ];
   features: TenantFeatures = {
     mail: { enabled: false, edit: false, delete: false },
@@ -79,8 +90,15 @@ export class TenantDialogComponent {
       this.name = data.tenant.name || '';
       this.displayName = data.tenant.displayName || data.tenant.name || '';
       this.type = data.tenant.type || 'company';
+      this.financeAccess = data.tenant.financeAccess === true;
+      this.types = this.types.filter(({ value }) => (value === 'finance') === (this.type === 'finance'));
       this.defaultCurrency = this.initialCurrency = data.tenant.defaultCurrency || 'HUF';
-      this.features = { ...this.features, ...(data.tenant.features || {}) };
+      this.initialTurnoverDay = data.tenant.workTurnoverDay ?? '01-01';
+      [this.turnoverMonth, this.turnoverDay] = this.initialTurnoverDay.split('-').map(Number);
+      this.alignWorkSequence = this.initialSequenceAlignment = data.tenant.alignWorkSequence === true;
+      for (const { key } of this.featureOptions) {
+        this.features[key] = { ...this.features[key], ...data.tenant.features?.[key] };
+      }
       this.applyFeaturePolicy();
     }
     this.admin.tenantCurrencies().subscribe({
@@ -99,6 +117,15 @@ export class TenantDialogComponent {
 
   get submitLabel(): string {
     return this.isEditMode ? 'Save' : 'Create';
+  }
+
+  get daysInTurnoverMonth(): number {
+    return this.monthLengths[this.turnoverMonth - 1];
+  }
+
+  onTurnoverMonthChange(month: number): void {
+    this.turnoverMonth = month;
+    this.turnoverDay = Math.min(this.turnoverDay, this.daysInTurnoverMonth);
   }
 
   onTypeChange(): void {
@@ -122,7 +149,7 @@ export class TenantDialogComponent {
   }
 
   isFeatureDisabled(feature: TenantFeatureOption): boolean {
-    return this.type === 'client' && feature.key !== 'licenses' && feature.key !== 'domainHealth';
+    return this.type === 'finance' || (this.type === 'client' && feature.key !== 'licenses' && feature.key !== 'domainHealth');
   }
 
   hasPermissionControls(feature: TenantFeatureOption): boolean {
@@ -141,7 +168,11 @@ export class TenantDialogComponent {
     if (this.saving()) return;
     this.saving.set(true);
     this.applyFeaturePolicy();
+    const workTurnoverDay = [this.turnoverMonth, this.turnoverDay].map((value) => String(value).padStart(2, '0')).join('-');
     const payload = { name: this.name, displayName: this.displayName, type: this.type, features: this.features,
+      financeAccess: this.type !== 'finance' && this.features.workBoard.enabled && this.financeAccess,
+      ...(workTurnoverDay !== this.initialTurnoverDay ? { workTurnoverDay } : {}),
+      ...(this.alignWorkSequence !== this.initialSequenceAlignment ? { alignWorkSequence: this.alignWorkSequence } : {}),
       ...(this.defaultCurrency !== this.initialCurrency ? { defaultCurrency: this.defaultCurrency } : {}) };
     const request = this.data.tenant
       ? this.admin.updateTenant(this.data.tenant.id, payload)

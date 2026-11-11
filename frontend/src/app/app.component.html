@@ -59,6 +59,22 @@
       </select>
     </label>
 
+    @if (auth.isFinanceWorkspace()) {
+      @if (auth.financeTenants$ | async; as access) {
+        <label class="tenant-context">
+          <mat-icon class="material-symbols-outlined">apartment</mat-icon>
+          <span class="tenant-context-label">Tenant</span>
+          <select name="financeTenant" [ngModel]="financeTenantId" (ngModelChange)="changeFinanceTenant($event)"
+                  [disabled]="access.loading || access.error || !access.tenants.length" aria-label="Pénzügyi tenant">
+            <option value="">Válassz tenantot</option>
+            @for (tenant of access.tenants; track tenant.id) {
+              <option [value]="tenant.id">{{ tenant.name }}</option>
+            }
+          </select>
+        </label>
+      }
+    }
+
     <button
       mat-icon-button
       class="mobile-menu-trigger"

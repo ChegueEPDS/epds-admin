@@ -1,7 +1,7 @@
 import { Injectable } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Router } from '@angular/router';
-import { BehaviorSubject, Observable, of } from 'rxjs';
+import { BehaviorSubject, Observable, of, startWith, switchMap } from 'rxjs';
 import { catchError, distinctUntilChanged, finalize, map, shareReplay, tap } from 'rxjs/operators';
 import { environment } from '../../environments/environment';
 import { MsalService } from '@azure/msal-angular';
@@ -30,6 +30,9 @@ export type AuthUser = {
   tenantType?: string | null;
   tenantFeatures?: Partial<TenantFeatures>;
 };
+
+export type FinanceTenant = { id: string; name: string };
+type FinanceTenantList = { tenants: FinanceTenant[]; loading?: boolean; error?: boolean };
 
 export type TenantContext = {
   id: string;
@@ -73,6 +76,17 @@ export class AuthService {
 
   private userSubject = new BehaviorSubject<AuthUser | null>(null);
   user$ = this.userSubject.asObservable().pipe(distinctUntilChanged());
+  financeTenants$: Observable<FinanceTenantList> = this.user$.pipe(
+    map((user) => user?.tenantType === 'finance' && user.role === 'Finance' ? (user.id || user.userId) : null),
+    distinctUntilChanged(),
+    switchMap((id) => id
+      ? this.http.get<FinanceTenantList>(`${this.baseUrl}/finance/tenants`, { withCredentials: true }).pipe(
+        startWith({ tenants: [], loading: true }),
+        catchError(() => of({ tenants: [], error: true }))
+      )
+      : of({ tenants: [] })),
+    shareReplay({ bufferSize: 1, refCount: true })
+  );
 
   private isLoggedInSubject = new BehaviorSubject<boolean>(false);
   isLoggedIn$ = this.isLoggedInSubject.asObservable().pipe(distinctUntilChanged());
@@ -200,7 +214,7 @@ export class AuthService {
 
   navigatePostLogin(): void {
     const requestedTarget = this.getRedirectUrl() || '/home';
-    const target = requestedTarget === '/home'
+    const target = this.isFinanceTenant() || requestedTarget === '/home'
       ? this.defaultRouteAfterLogin()
       : requestedTarget;
     this.clearRedirectUrl();
@@ -253,8 +267,17 @@ export class AuthService {
     return this.isSuperAdmin() || Boolean(this.currentUser?.tenantId || this.currentUser?.tenantName);
   }
 
+  isFinanceTenant(): boolean {
+    return this.currentUser?.tenantType === 'finance';
+  }
+
+  isFinanceWorkspace(): boolean {
+    return this.isFinanceTenant() && this.currentUser?.role === 'Finance';
+  }
+
   isWorkFieldTenant(): boolean {
-    return (this.isSuperAdmin() ? this.getTenantContext()?.type : this.currentUser?.tenantType) !== 'client';
+    const type = this.isSuperAdmin() ? this.getTenantContext()?.type : this.currentUser?.tenantType;
+    return type !== 'client' && type !== 'finance';
   }
 
   canManageWorkFields(): boolean {
@@ -264,6 +287,7 @@ export class AuthService {
   }
 
   canAccessFeature(featureKey: TenantFeatureKey): boolean {
+    if (this.isFinanceTenant()) return false;
     if (this.isSuperAdmin()) {
       const context = this.getTenantContext();
       return context ? Boolean(context.features?.[featureKey]?.enabled) : true;
@@ -289,6 +313,7 @@ export class AuthService {
   }
 
   canEditFeature(featureKey: TenantFeatureKey): boolean {
+    if (this.isFinanceTenant()) return false;
     if (this.isSuperAdmin()) {
       const context = this.getTenantContext();
       return context ? Boolean(context.features?.[featureKey]?.enabled && context.features?.[featureKey]?.edit) : true;
@@ -298,6 +323,7 @@ export class AuthService {
   }
 
   canDeleteFeature(featureKey: TenantFeatureKey): boolean {
+    if (this.isFinanceTenant()) return false;
     if (this.isSuperAdmin()) {
       const context = this.getTenantContext();
       return context ? Boolean(context.features?.[featureKey]?.enabled && context.features?.[featureKey]?.delete) : true;

@@ -1,3 +1,37 @@
+@if (auth.isFinanceTenant()) {
+  <section class="page home-page">
+    <div class="home-hero">
+      <div>
+        <p class="eyebrow">PROJECT TRACKER</p>
+        <h1>Pénzügy</h1>
+        <p>Válassz tenantot a számlázási és fizetési adatok megnyitásához.</p>
+      </div>
+    </div>
+
+    @if (auth.financeTenants$ | async; as access) {
+      @if (access.loading) {
+        <p role="status">Tenantok betöltése…</p>
+      } @else if (access.error) {
+        <p role="alert">A tenantok betöltése sikertelen. Frissítsd az oldalt az újrapróbálkozáshoz.</p>
+      } @else if (access.tenants.length) {
+        <div class="feature-grid">
+          @for (tenant of access.tenants; track tenant.id) {
+            <a class="feature-card" [routerLink]="['/project-tracker', 'finance', tenant.id]">
+              <mat-card appearance="outlined">
+                <mat-card-content>
+                  <span class="icon-wrap"><mat-icon class="material-symbols-outlined">apartment</mat-icon></span>
+                  <div><h2>{{ tenant.name }}</h2><p>Project Tracker · Table</p></div>
+                </mat-card-content>
+              </mat-card>
+            </a>
+          }
+        </div>
+      } @else {
+        <p>Nincs hozzád rendelt pénzügyi hozzáférés.</p>
+      }
+    }
+  </section>
+} @else {
 <section class="page home-page">
   <div class="home-hero">
     <div>
@@ -64,3 +98,4 @@
     </mat-card>
   </ng-template>
 </section>
+}
