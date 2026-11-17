@@ -1,4 +1,5 @@
 const TIME_ZONE = 'Europe/Budapest';
+const dayOfMonth = new Intl.DateTimeFormat('en-GB', { timeZone: TIME_ZONE, day: 'numeric' });
 function monthKey(date = new Date()) {
   const parts = new Intl.DateTimeFormat('en-CA', {timeZone:TIME_ZONE,year:'numeric',month:'2-digit'}).formatToParts(date);
   return `${parts.find(part=>part.type==='year').value}-${parts.find(part=>part.type==='month').value}`;
@@ -24,6 +25,10 @@ function previousMonth(now=new Date()) {
   const [year,month]=monthKey(now).split('-').map(Number);
   return `${month===1?year-1:year}-${String(month===1?12:month-1).padStart(2,'0')}`;
 }
+
+function percentile95(sorted) {
+  return sorted.length ? sorted[Math.ceil(sorted.length * .95) - 1] : null;
+}
 // A measurement represents at most two normal monitor intervals; missing time is unknown.
 function calculateMonthlyMetrics(checks,period,maxSampleAgeMs=30*60000) {
   const from=+period.from,to=+period.to;
@@ -32,6 +37,12 @@ function calculateMonthlyMetrics(checks,period,maxSampleAgeMs=30*60000) {
   const incidents=[];
   let active=null;
   const responseTimes=[];
+  const dailyResponses = new Map();
+  let checkCount = 0;
+  let slowdownCount = 0;
+  let slowdownMs = 0;
+  let slowdownEnd = null;
+  let tlsValidTo = null;
   for(let index=0;index<sorted.length;index++) {
     const check=sorted[index];
     const time=+new Date(check.checkedAt);
@@ -39,8 +50,27 @@ function calculateMonthlyMetrics(checks,period,maxSampleAgeMs=30*60000) {
     const end=Math.min(next,time+maxSampleAgeMs,to);
     const start=Math.max(from,time);
     const failure=!check.ok && check.errorType!=='slow_response';
-    if(time>=from && check.ok && Number.isFinite(check.responseMs)) responseTimes.push(check.responseMs);
+    if (time >= from) {
+      checkCount += 1;
+      if (check.tlsValidTo && Number.isFinite(+new Date(check.tlsValidTo))) {
+        tlsValidTo = new Date(check.tlsValidTo).toISOString();
+      }
+      if (check.ok && Number.isFinite(check.responseMs)) {
+        responseTimes.push(check.responseMs);
+        const day = Number(dayOfMonth.format(time));
+        if (!dailyResponses.has(day)) dailyResponses.set(day, []);
+        dailyResponses.get(day).push(check.responseMs);
+      }
+    }
     if(end<=start)continue;
+    const slow = !failure && (check.warningType === 'slow_response' || check.errorType === 'slow_response');
+    if (slow) {
+      if (slowdownEnd !== start) slowdownCount += 1;
+      slowdownEnd = end;
+      slowdownMs += end - start;
+    } else {
+      slowdownEnd = null;
+    }
     if(failure) {
       downMs+=end-start;
       if(active && active.end===start)active.end=end;
@@ -60,7 +90,9 @@ function calculateMonthlyMetrics(checks,period,maxSampleAgeMs=30*60000) {
     incidentCount:incidents.length,
     meanRecoveryMs:recovered.length?Math.round(recovered.reduce((sum,incident)=>sum+incident.end-incident.start,0)/recovered.length):null,
     averageMs:responseTimes.length?Math.round(responseTimes.reduce((a,b)=>a+b,0)/responseTimes.length):null,
-    p95Ms:responseTimes.length?responseTimes[Math.ceil(responseTimes.length*.95)-1]:null,
+    p95Ms:percentile95(responseTimes),
+    checkCount, slowdownCount, slowdownMs, tlsValidTo,
+    dailyP95: [...dailyResponses].map(([day, values]) => ({ day, ms: percentile95(values.sort((a, b) => a - b)) })),
     incidents:incidents.map(incident=>({startedAt:new Date(incident.start).toISOString(),endedAt:new Date(incident.end).toISOString(),durationMs:incident.end-incident.start,reasonCode:incident.reasonCode,recovered:incident.recovered})) };
   metric.assessment=metric.coveragePercent<95
     ? 'Measurement coverage is incomplete. Availability applies only to observed time; missing time is not counted as healthy.'

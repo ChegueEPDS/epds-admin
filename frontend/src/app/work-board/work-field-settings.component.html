@@ -6,6 +6,27 @@
   </header>
   @if (error) { <p class="error" role="alert">{{ error }}</p> }
   @if (notice) { <p role="status">{{ notice }}</p> }
+  @if (config) {
+    <section class="panel" aria-labelledby="field-layout-title">
+      <h2 id="field-layout-title">Work details field order</h2>
+      <div class="row">
+        <mat-form-field appearance="outline" subscriptSizing="dynamic">
+          <mat-label>Card</mat-label>
+          <mat-select [(ngModel)]="layoutCard" [disabled]="busy || !!layoutDraft">
+            @for (card of cards; track card.id) { <mat-option [value]="card.id">{{ card.label }}</mat-option> }
+          </mat-select>
+        </mat-form-field>
+        <div class="actions">
+          <button mat-button type="button" [disabled]="busy || !layoutDraft" (click)="layoutDraft = undefined">Cancel</button>
+          <button mat-stroked-button type="button" [disabled]="busy || !config.fieldOrder?.[layoutCard]?.length"
+            (click)="save({ fieldOrder: { card: layoutCard, order: [] } })">Reset order</button>
+          <button mat-flat-button type="button" [disabled]="busy || !layoutDraft" (click)="saveLayout()">Save layout</button>
+        </div>
+      </div>
+      <app-work-layout-list [items]="layoutItems" [disabled]="busy" [fieldVisibility]="true" (itemsChange)="layoutDraft = $event"/>
+      @if (!layoutItems.length) { <p class="muted">This card has no configurable fields yet.</p> }
+    </section>
+  }
   @if (currencyPreference; as preference) {
     <section class="panel">
       <h2>Currency</h2>

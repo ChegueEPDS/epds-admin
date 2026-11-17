@@ -2,13 +2,16 @@
   <div class="fields">
     @for (field of fields; track field.id) {
       @if (!changes) {
-        <div class="item" [class.wide]="field.type === 'longText'">
-          <small>{{ field.label }}</small>
+        <ng-template #readValue>
           @if (isFile(value(field))) {
             <button class="link" type="button" (click)="download.emit(field)">{{ display(field, value(field)) }}</button>
           } @else {
             <span [style.white-space]="field.type === 'longText' ? 'pre-wrap' : null">{{ display(field, value(field)) }}</span>
           }
+        </ng-template>
+        <div [class.item]="!embedded" [class.wide]="field.type === 'longText'">
+          <dt>{{ field.label }}</dt>
+          <dd><ng-container [ngTemplateOutlet]="readValue"/></dd>
         </div>
       } @else {
         @switch (field.type) {

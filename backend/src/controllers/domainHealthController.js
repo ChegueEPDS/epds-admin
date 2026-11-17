@@ -428,12 +428,13 @@ exports.listMonthlyReports = async (req,res,next) => {
 exports.downloadMonthlyReport = async (req,res,next) => {
   const tenant = monthlyTenant(req,res); if (!tenant) return;
   try {
-    const { ensureMonthlyReport } = require('../services/domainMonthlyReportService');
+    const { ensureMonthlyReport, monthlyDownloadContent } = require('../services/domainMonthlyReportService');
     const report = await ensureMonthlyReport(tenant,req.params.month);
     if (!report) return res.status(404).json({error:'Report not found'});
+    const content = await monthlyDownloadContent(report);
     res.setHeader('Cache-Control','private, no-store');
     res.setHeader('Content-Type','application/pdf');
     res.setHeader('Content-Disposition',`attachment; filename="service-report-${report.month}.pdf"`);
-    res.send(report.content);
+    res.send(content);
   } catch(error) { if(error.statusCode) return res.status(error.statusCode).json({error:error.message}); next(error); }
 };

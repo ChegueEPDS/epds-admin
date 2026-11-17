@@ -7,10 +7,11 @@ import { MatInputModule } from '@angular/material/input';
 import { MatSelectModule } from '@angular/material/select';
 import { firstValueFrom } from 'rxjs';
 import { WorkBoardService, WorkCurrencyPreference } from '../services/work-board.service';
-import { WORK_CATALOGS, WORK_FIELD_CARDS, WORK_FIELD_TYPES, WorkCatalog, WorkField, WorkFieldOption, WorkFieldSettings, WorkSettingsChange } from './work-fields';
+import { WORK_CATALOGS, WORK_FIELD_CARDS, WORK_FIELD_TYPES, WorkCatalog, WorkField, WorkFieldOption, WorkFieldSettings, WorkSettingsChange, WorkFieldCard, LayoutItem, cardLayout, orderLayout } from './work-fields';
+import { WorkLayoutListComponent } from './work-layout-list.component';
 
 @Component({
-  imports: [FormsModule, MatButtonModule, MatCheckboxModule, MatFormFieldModule, MatInputModule, MatSelectModule],
+  imports: [FormsModule, MatButtonModule, MatCheckboxModule, MatFormFieldModule, MatInputModule, MatSelectModule, WorkLayoutListComponent],
   templateUrl: './work-field-settings.component.html',
   styles: [`
     :host { display: block; color: var(--brand-ink); }
@@ -43,6 +44,23 @@ export class WorkFieldSettingsComponent implements OnInit {
   busy = false;
   error = '';
   notice = '';
+  layoutCard: WorkFieldCard = 'basic';
+  layoutDraft?: LayoutItem[];
+
+  get layoutItems(): LayoutItem[] {
+    return this.layoutDraft ?? orderLayout(
+      cardLayout(this.layoutCard, this.config?.fields ?? [], new Set(this.config?.hiddenFields)),
+      this.config?.fieldOrder?.[this.layoutCard]
+    );
+  }
+
+  saveLayout(): void {
+    const items = this.layoutItems;
+    void this.save({ fieldOrder: {
+      card: this.layoutCard, order: items.map(({ id }) => id),
+      hidden: items.filter((item) => item.visible === false).map(({ id }) => id)
+    } });
+  }
 
   ngOnInit(): void { void this.load(); void this.loadCurrency(); }
 
@@ -97,13 +115,15 @@ export class WorkFieldSettingsComponent implements OnInit {
       this.config = await firstValueFrom(this.board.saveFieldSettings(this.config.version, change));
       this.draft = undefined;
       this.catalogDraft = undefined;
+      this.layoutDraft = undefined;
       this.notice = 'field' in change ? 'Field settings saved.' :
-        'catalog' in change ? 'Catalog entry saved.' : 'Project size setting saved.';
+        'catalog' in change ? 'Catalog entry saved.' : 'fieldOrder' in change ? 'Field layout saved.' : 'Project size setting saved.';
     } catch (error) {
       this.showError(error);
       if ((error as { status?: number }).status === 409) {
         this.draft = undefined;
         this.catalogDraft = undefined;
+        this.layoutDraft = undefined;
         await this.load();
       }
     } finally { this.busy = false; }

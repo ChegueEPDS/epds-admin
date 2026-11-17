@@ -5,7 +5,18 @@ const Tenant = require('../models/tenant');
 const storage = require('./fileStorageService');
 const { workReporting } = require('./workDashboard');
 
-const cards = { basic: 0, description: 0, offer: 1, execution: 2, completion: 3, invoice: 4, documents: 0 };
+const cards = { basic: 0, description: 0, offer: 1, execution: 2, completion: 3, invoice: 4, reporting: 0, documents: 0 };
+const builtInFields = {
+  basic: ['name', 'client', 'entityId', 'serviceTypeId', 'responsible', 'status', 'projectSize'],
+  description: ['description'],
+  offer: ['totalAmount', 'currency', 'offerDate', 'deadline', 'paymentDays'],
+  execution: ['cost', 'subcontractor', 'contract', 'margin'],
+  completion: ['completionDate', 'paymentDeadline', 'certificate'],
+  invoice: ['invoiceNumber', 'invoiceDate', 'paidAt', 'paymentDeadline'],
+  reporting: ['backup', 'nextAction', 'actionDue', 'paymentStatus', 'invoiced', 'paid'],
+  documents: []
+};
+const requiredBuiltInFields = new Set(['name', 'status', 'currency']);
 const ranks = { inquiry: 0, offer: 1, to_start: 2, in_progress: 2, on_hold: 2,
   completed_billable: 3, invoiced: 4, paid: 5, closed: 6, cancelled: 6, lost: 1 };
 const types = ['text', 'longText', 'integer', 'decimal', 'date', 'amount', 'list', 'boolean', 'file'];
@@ -56,6 +67,25 @@ function buildSettings(current, input) {
     return { ...current, version: current.version + 1, projectSizeGrouping: input.projectSizeGrouping };
   }
   if (Object.hasOwn(input, 'catalog')) return updateCatalog(current, input);
+  if (Object.hasOwn(input, 'fieldOrder')) {
+    const { card, order, hidden } = input.fieldOrder || {};
+    if (typeof card !== 'string' || !Object.hasOwn(cards, card) || !Array.isArray(order)) throw fail('Invalid field order.');
+    const custom = current.fields.filter((field) => field.card === card && !field.archived);
+    const available = new Set([...builtInFields[card], ...custom.map((field) => field.id)]);
+    if (order.length > available.size || new Set(order).size !== order.length || order.some((id) => !available.has(id))) {
+      throw fail('Invalid field order.');
+    }
+    const next = { ...current, version: current.version + 1, fieldOrder: { ...current.fieldOrder, [card]: order } };
+    if (hidden !== undefined) {
+      const required = new Set([...requiredBuiltInFields, ...custom.filter((field) => field.required).map((field) => field.id)]);
+      if (!Array.isArray(hidden) || hidden.length > available.size || new Set(hidden).size !== hidden.length ||
+          hidden.some((id) => !available.has(id) || required.has(id))) {
+        throw fail('Only optional fields on this card can be hidden.');
+      }
+      next.hiddenFields = [...(current.hiddenFields || []).filter((id) => !available.has(id)), ...hidden];
+    }
+    return next;
+  }
   if (!object(input.field)) throw fail('Field details are required.');
   const draft = input.field;
   const previous = current.fields.find((field) => field.id === draft.id);
@@ -98,9 +128,13 @@ function buildSettings(current, input) {
       current.fields.filter((item) => item.id !== field.id && item.type === 'file' && !item.archived).length >= 8) {
     throw fail('A tenant can have up to 8 active file fields.');
   }
-  return { ...current, version: current.version + 1, fields: previous
+  const next = { ...current, version: current.version + 1, fields: previous
     ? current.fields.map((item) => item.id === field.id ? field : item)
     : [...current.fields, field] };
+  if (field.required && current.hiddenFields?.includes(field.id)) {
+    next.hiddenFields = current.hiddenFields.filter((id) => id !== field.id);
+  }
+  return next;
 }
 
 function catalogSelections(config, work, input) {

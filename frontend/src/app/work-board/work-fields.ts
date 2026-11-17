@@ -5,9 +5,47 @@ export const WORK_FIELD_CARDS = [
   { id: 'execution', label: 'Execution' },
   { id: 'completion', label: 'Completion' },
   { id: 'invoice', label: 'Invoicing' },
+  { id: 'reporting', label: 'Dashboard reporting' },
   { id: 'documents', label: 'Documents' }
 ] as const;
 export type WorkFieldCard = typeof WORK_FIELD_CARDS[number]['id'];
+export type WorkFieldOrder = Partial<Record<WorkFieldCard, string[]>>;
+export type LayoutItem = { id: string; label: string; visible?: boolean; required?: boolean };
+
+const requiredWorkFields = new Set(['name', 'status', 'currency']);
+
+export const WORK_CARD_FIELDS = {
+  basic: { name: 'Name', client: 'Client', entityId: 'Entity', serviceTypeId: 'Service type',
+    responsible: 'Responsible', status: 'Status', projectSize: 'Project size' },
+  description: { description: 'Description' },
+  offer: { totalAmount: 'Total value', currency: 'Currency', offerDate: 'Offer date', deadline: 'Deadline', paymentDays: 'Payment term' },
+  execution: { cost: 'Cost', subcontractor: 'Subcontractor', contract: 'Contract', margin: 'Margin' },
+  completion: { completionDate: 'Completion date', paymentDeadline: 'Invoice payment deadline', certificate: 'Performance certificate' },
+  invoice: { invoiceNumber: 'Invoice number', invoiceDate: 'Invoice date', paidAt: 'Payment date', paymentDeadline: 'Payment deadline' },
+  reporting: { backup: 'Backup', nextAction: 'Next action', actionDue: 'Action due date', paymentStatus: 'Payment status',
+    invoiced: 'Invoiced amount', paid: 'Paid amount' },
+  documents: {}
+} satisfies Record<WorkFieldCard, Record<string, string>>;
+
+export function cardLayout(card: WorkFieldCard, fields: WorkField[], hidden: ReadonlySet<string>): LayoutItem[] {
+  const items = [
+    ...Object.entries(WORK_CARD_FIELDS[card]).map(([id, label]) => ({ id, label, required: requiredWorkFields.has(id) })),
+    ...fields.filter((field) => field.card === card && !field.archived)
+      .map(({ id, label, required }) => ({ id, label, required }))
+  ];
+  return items.map((item) => ({ ...item, visible: item.required || !hidden.has(item.id) }));
+}
+
+export function orderLayout<T extends LayoutItem>(items: T[], order: string[] = []): T[] {
+  const byId = new Map(items.map((item) => [item.id, item]));
+  const ordered: T[] = [];
+  for (const id of order) {
+    const item = byId.get(id);
+    if (item) ordered.push(item);
+    byId.delete(id);
+  }
+  return [...ordered, ...byId.values()];
+}
 
 export const WORK_FIELD_TYPES = [
   { id: 'text', label: 'Text' }, { id: 'longText', label: 'Long text' },
@@ -26,8 +64,8 @@ export const WORK_CATALOGS = [
   { key: 'serviceTypes', reference: 'serviceTypeId', label: 'Service type', title: 'Service types' }
 ] as const;
 export type WorkCatalog = typeof WORK_CATALOGS[number]['key'];
-export type WorkFieldSettings = { version: number; fields: WorkField[]; projectSizeGrouping: boolean } & Record<WorkCatalog, WorkFieldOption[]>;
-export type WorkSettingsChange = { field: WorkField } | { catalog: WorkCatalog; entry: WorkFieldOption } | { projectSizeGrouping: boolean };
+export type WorkFieldSettings = { version: number; fields: WorkField[]; projectSizeGrouping: boolean; fieldOrder?: WorkFieldOrder; hiddenFields?: string[] } & Record<WorkCatalog, WorkFieldOption[]>;
+export type WorkSettingsChange = { field: WorkField } | { catalog: WorkCatalog; entry: WorkFieldOption } | { projectSizeGrouping: boolean } | { fieldOrder: { card: WorkFieldCard; order: string[]; hidden?: string[] } };
 
 export const PROJECT_SIZES = ['Small', 'Medium', 'Large'] as const;
 export const REPORT_PAYMENT_STATUSES = [

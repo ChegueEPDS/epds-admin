@@ -183,9 +183,15 @@ app-work-board .work-table tbody tr:focus { outline: none; background: rgba(165,
 app-work-board .work-table tbody tr.deleted { color: var(--brand-muted); background: color-mix(in srgb, var(--brand-panel) 92%, var(--brand-border)); }
 app-work-board .status[data-status=deleted] { background: #fee2e2; color: #991b1b; }
 app-work-board .work-table tbody tr:last-child td { border-bottom: 0; }
-app-work-board .work-table td:nth-child(2) { min-width: 230px; max-width: 340px; }
-app-work-board .work-table td:nth-child(2) strong,
-app-work-board .work-table td:nth-child(2) small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+app-work-board .work-table .work-name-cell { min-width: 230px; max-width: 340px; }
+app-work-board .work-table .work-name-cell strong,
+app-work-board .work-table .work-name-cell small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+app-work-board .table-view-settings { margin-bottom: 8px; border: 1px solid var(--brand-border); border-radius: 8px; background: var(--brand-panel); }
+app-work-board .table-view-settings summary { cursor: pointer; padding: 10px 12px; font-size: .85rem; font-weight: 700; }
+app-work-board .table-view-content { display: grid; gap: 12px; padding: 0 12px 12px; }
+app-work-board .table-view-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+app-work-board .work-row-actions { white-space: nowrap; }
+app-work-board .compact-data-grid .record-full-width { grid-column: 1 / -1; }
 app-work-board .work-table td strong + small,
 app-work-board .work-table td.numeric small { display: block; margin-top: 4px; color: var(--brand-muted); }
 app-work-board .work-table .numeric { text-align: right; }

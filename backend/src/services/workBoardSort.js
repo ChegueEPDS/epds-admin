@@ -12,7 +12,7 @@ async function workBoardSort(tenantId, { sort, direction }) {
   if (typeof sort === 'string' && (Object.hasOwn(catalogs, sort) || sort.startsWith('field:'))) {
     const config = await workFields.settings(tenantId);
     if (Object.hasOwn(catalogs, sort)) return { key: sort, descending, options: config[catalogs[sort]] };
-    const field = config.fields.find((entry) => entry.id === sort.slice(6) && entry.showInList && !entry.archived);
+    const field = config.fields.find((entry) => entry.id === sort.slice(6) && !entry.archived);
     if (field) return { key: 'field', descending, field, statuses: WORK_STATUSES.filter((status) => workFields.relevant(field, status)) };
   }
   return { key: 'workNumber', descending: true };

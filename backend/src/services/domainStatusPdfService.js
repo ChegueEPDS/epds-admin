@@ -536,5 +536,7 @@ async function generatePublicStatusPdf(report) {
 }
 
 module.exports = {
-  generatePublicStatusPdf
+  generatePublicStatusPdf,
+  drawPageChrome,
+  drawBrandLogo
 };

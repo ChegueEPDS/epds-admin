@@ -4,6 +4,25 @@ const { buildSettings, planValues, catalogSelections } = require('../src/service
 
 const field = (id, type, extra) => ({ id, label: id, type, card: 'basic', ...extra });
 
+test('card visibility protects required fields and preserves other cards when saving', () => {
+  const optional = field('reference', 'text', { multiple: false });
+  const required = field('approval', 'boolean', { required: true });
+  const initial = { version: 0, fields: [optional, required], hiddenFields: ['deadline'] };
+  const update = (hidden) => ({
+    version: 0, fieldOrder: { card: 'basic', order: ['client', 'reference', 'name'], hidden }
+  });
+  for (const id of ['name', 'status', 'approval', 'deadline', 'foreign-field']) {
+    assert.throws(() => buildSettings(initial, update([id])), { statusCode: 400 });
+  }
+  const saved = buildSettings(initial, update(['client', 'reference']));
+  assert.deepEqual(saved.hiddenFields, ['deadline', 'client', 'reference']);
+  assert.deepEqual(saved.fieldOrder.basic, ['client', 'reference', 'name']);
+  const reset = buildSettings(saved, { version: 1, fieldOrder: { card: 'basic', order: [] } });
+  assert.deepEqual(reset.hiddenFields, saved.hiddenFields);
+  const madeRequired = buildSettings(reset, { version: 2, field: { ...optional, required: true } });
+  assert.deepEqual(madeRequired.hiddenFields, ['deadline', 'client']);
+});
+
 test('entities and service types have separate tenant catalogs with stable archived selections', () => {
   const initial = { version: 0, fields: [] };
   const withEntity = buildSettings(initial, { version: 0, catalog: 'entities', entry: { label: 'Engineering' } });

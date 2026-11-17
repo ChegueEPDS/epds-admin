@@ -6,7 +6,6 @@ import { HomeComponent } from './home/home.component';
 import { MailboxComponent } from './mailbox/mailbox.component';
 import { DomainHealthComponent } from './domain-health/domain-health.component';
 import { LicensesComponent } from './licenses/licenses.component';
-import { WorkBoardComponent } from './work-board/work-board.component';
 import { WorkBoardPageComponent } from './work-board/work-board-page.component';
 import { AuthService } from './services/auth.service';
 import { PublicStatusComponent } from './public-status/public-status.component';
@@ -59,7 +58,7 @@ export const routes: Routes = [
     canActivate: [AuthGuard],
     data: { featureKey: 'workBoard' },
     children: [
-      { path: '', pathMatch: 'full', component: WorkBoardComponent },
+      { path: '', pathMatch: 'full', loadComponent: () => import('./work-board/work-board.component').then((m) => m.WorkBoardComponent) },
       {
         path: 'dashboard',
         canActivate: [() => inject(AuthService).isWorkFieldTenant() || inject(Router).createUrlTree(['/project-tracker'])],

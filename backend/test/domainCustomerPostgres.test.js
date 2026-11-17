@@ -36,7 +36,14 @@ test('customer monitoring persists measurements, isolates reports, archives PDFs
     const scoped=await monitor.buildPublicStatusReport({owner:'Client',scope:{role:'User',tenantId:a}});assert.equal(scoped.domains.length,1);assert.equal(scoped.domains[0].domain.name,'Customer A service');
     await repo.createCheck({domainId:domain._id,checkedAt:new Date('2026-10-02T00:00:00Z'),ok:false,status:'error',errorType:'connection'});
     await repo.createCheck({domainId:domain._id,checkedAt:new Date('2026-10-02T00:15:00Z'),ok:true,status:'ok',responseMs:100});
+    const mobileScan = [{strategy:'mobile',ok:true,scores:{performance:95},metrics:{largestContentfulPaint:{numericValue:3100}}}];
+    await repo.createScan({domainId:domain._id,checkedAt:new Date('2026-10-29T00:00:00Z'),scans:mobileScan});
+    await repo.createScan({domainId:domain._id,checkedAt:new Date('2026-11-01T00:00:00Z'),scans:mobileScan});
     const report=await monthly.ensureMonthlyReport(a,'2026-10');assert.equal(report.content.slice(0,4).toString(),'%PDF');assert.equal(report.payload.report.domains.length,1);assert.equal(report.payload.report.domains[0].metrics.incidentCount,1);
+    const service = report.payload.report.domains[0];
+    assert.equal(service.metrics.checkCount, 2);
+    assert.deepEqual(service.metrics.dailyP95, [{day:2,ms:100}]);
+    assert.equal(new Date(service.pageSpeed.checkedAt).toISOString(), '2026-10-29T00:00:00.000Z');
     assert.equal((await monthly.ensureMonthlyReport(a,'2026-10')).key,report.key);
     let sent=0;mail.sendMail=async()=>{sent++;throw Error('Simulated delivery failure');};
     await notifications.deliverPending();assert.ok(sent>0);const pending=await ops.find(report.key);assert.equal(pending.attempts,1);assert.equal(pending.sentAt,null);
@@ -46,6 +53,7 @@ test('customer monitoring persists measurements, isolates reports, archives PDFs
     const routes=require('../src/routes/domainHealthRoutes');const statusRoute=routes.stack.find(layer=>layer.route?.path==='/public/domain-status/:owner');assert.equal(statusRoute.route.stack[0].handle.name,'requireAuth');
     const controller=require('../src/controllers/domainHealthController');
     const response=()=>({statusCode:200,headers:{},status(code){this.statusCode=code;return this;},setHeader(name,value){this.headers[name]=value;},json(body){this.body=body;return this;},send(body){this.body=body;return this;}});
+    const download=response();await controller.downloadMonthlyReport({params:{tenantId:a,month:'2026-10'},scope:{tenantId:a},role:'User'},download,error=>{throw error;});assert.deepEqual(download.body,report.content);
     const denied=response();await controller.downloadMonthlyReport({params:{tenantId:b,month:'2026-10'},scope:{tenantId:a},role:'User'},denied,error=>{throw error;});assert.equal(denied.statusCode,404);
     const selectedAdmin=response();await controller.downloadMonthlyReport({params:{tenantId:b,month:'2026-10'},scope:{tenantId:a},role:'SuperAdmin'},selectedAdmin,error=>{throw error;});assert.equal(selectedAdmin.statusCode,404);
     const customer=response();await controller.getPublicStatusReport({params:{owner:'client'},scope:{tenantId:a,role:'User'}},customer,error=>{throw error;});assert.equal(customer.body.domains.length,1);assert.doesNotMatch(JSON.stringify(customer.body),/a\.example|b\.example|Customer B secret|healthConfig/);assert.equal(customer.headers['Cache-Control'],'private, no-store');

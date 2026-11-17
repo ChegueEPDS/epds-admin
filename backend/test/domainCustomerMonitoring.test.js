@@ -47,6 +47,21 @@ test('monthly metrics count downtime, recovery and unknown gaps separately',()=>
 test('old slow-but-successful responses are not counted as downtime',()=>{
   const period={from:new Date('2026-10-01T00:00:00Z'),to:new Date('2026-10-01T00:15:00Z')};assert.equal(calculateMonthlyMetrics([{...down,errorType:'slow_response',checkedAt:period.from}],period).downMs,0);
 });
+test('monthly slowdowns split at measurement gaps and daily P95 uses Budapest calendar days', () => {
+  const period = { from: new Date('2026-10-01T21:30:00Z'), to: new Date('2026-10-02T00:00:00Z') };
+  const checks = [
+    { checkedAt: '2026-10-01T21:45:00Z', ok: true, responseMs: 500, warningType: 'slow_response' },
+    { checkedAt: '2026-10-01T22:00:00Z', ok: true, responseMs: 700, warningType: 'slow_response' },
+    { checkedAt: '2026-10-01T22:45:00Z', ok: false, errorType: 'slow_response' },
+    { checkedAt: '2026-10-01T23:00:00Z', ok: true, responseMs: 150 }
+  ];
+  const metrics = calculateMonthlyMetrics(checks, period);
+  assert.equal(metrics.checkCount, 4);
+  assert.equal(metrics.slowdownCount, 2);
+  assert.equal(metrics.slowdownMs, 60 * 60000);
+  assert.equal(metrics.downMs, 0);
+  assert.deepEqual(metrics.dailyP95, [{ day: 1, ms: 500 }, { day: 2, ms: 700 }]);
+});
 test('customer notification recipients require tenant IDs and reject header injection',()=>{
   assert.throws(()=>recipientConfiguration('{"bad":["a@example.com"]}'));assert.throws(()=>recipientConfiguration('{"012345678901234567890123":["a@example.com\\nBcc: b@example.com"]}'));
   assert.equal(recipientConfiguration('{"012345678901234567890123":["a@example.com","a@example.com"]}')['012345678901234567890123'].length,1);

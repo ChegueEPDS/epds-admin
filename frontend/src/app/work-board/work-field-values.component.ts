@@ -1,4 +1,5 @@
 import { Component, EventEmitter, Input, Output } from '@angular/core';
+import { NgTemplateOutlet } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
 import { MatFormFieldModule } from '@angular/material/form-field';
@@ -8,14 +9,21 @@ import { displayWorkField, isWorkFieldFile, WorkField, WorkFieldAmount, WorkFiel
 
 @Component({
   selector: 'app-work-field-values',
-  imports: [FormsModule, MatButtonModule, MatFormFieldModule, MatInputModule, MatSelectModule],
+  host: { '[class.embedded]': 'embedded' },
+  imports: [FormsModule, MatButtonModule, MatFormFieldModule, MatInputModule, MatSelectModule, NgTemplateOutlet],
   templateUrl: './work-field-values.component.html',
   styles: [`
     .fields { display: grid; gap: 10px 14px; margin-top: 12px;
       grid-template-columns: repeat(auto-fit, minmax(min(100%, 12rem), 1fr)); }
     .wide { grid-column: 1 / -1; }
+    :host(.embedded) dt { color: var(--brand-muted); font-size: 9px; font-weight: 900; letter-spacing: .05em; text-transform: uppercase; }
+    :host(.embedded) dd { margin: 3px 0 0; font-size: 12px; overflow-wrap: anywhere; }
+    :host(.embedded) .amount { min-width: 0; }
+    :host(.embedded), :host(.embedded) .fields { display: contents; }
     .item { display: grid; gap: 5px; min-width: 0; overflow-wrap: anywhere; }
     small { color: var(--brand-muted); }
+    :host(:not(.embedded)) dt { color: var(--brand-muted); font-size: .85em; }
+    :host(:not(.embedded)) dd { margin: 0; }
     .link { align-self: start; justify-self: start; padding: 0; background: none; border: 0;
       color: var(--brand-accent-ink); font: inherit; text-align: left; text-decoration: underline; cursor: pointer; }
     .file input { max-width: 100%; font: inherit; }
@@ -24,6 +32,7 @@ import { displayWorkField, isWorkFieldFile, WorkField, WorkFieldAmount, WorkFiel
 })
 export class WorkFieldValuesComponent {
   @Input({ required: true }) fields: WorkField[] = [];
+  @Input() embedded = false;
   @Input() values: WorkFieldValues = {};
   @Input() changes?: WorkFieldValues;
   @Input() files?: WorkFieldFiles;

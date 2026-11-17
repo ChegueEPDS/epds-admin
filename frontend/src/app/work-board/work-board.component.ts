@@ -1,4 +1,4 @@
-import { CommonModule, formatDate } from '@angular/common';
+import { CommonModule, formatDate, formatNumber } from '@angular/common';
 import { Component, Input, OnDestroy, OnInit } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute } from '@angular/router';
@@ -17,7 +17,8 @@ import { MatSortModule, Sort } from '@angular/material/sort';
 import { AuthService } from '../services/auth.service';
 import { ClientPayload, FinanceWork, FinanceWorkChanges, FinanceWorkStatus, SubWorkItem, SubWorkPayload, TenantUserOption, WorkBoardClient, WorkBoardService, WorkDocument, WorkItem, WorkPayload, WorkStatus } from '../services/work-board.service';
 import { WorkFieldValuesComponent } from './work-field-values.component';
-import { displayWorkField, isWorkFieldFile, PROJECT_SIZES, REPORT_PAYMENT_STATUSES, WORK_CATALOGS, WorkCatalog, WorkField, WorkFieldCard, WorkFieldFiles, WorkFieldOption, WorkFieldValues, WorkReporting } from './work-fields';
+import { WorkLayoutListComponent } from './work-layout-list.component';
+import { cardLayout, orderLayout, LayoutItem, WorkFieldOrder, displayWorkField, isWorkFieldFile, PROJECT_SIZES, REPORT_PAYMENT_STATUSES, WORK_CATALOGS, WorkCatalog, WorkField, WorkFieldCard, WorkFieldFiles, WorkFieldOption, WorkFieldValues, WorkReporting } from './work-fields';
 
 const billingCalendar = new Intl.DateTimeFormat('sv-SE', { timeZone: 'Europe/Budapest' });
 const billingDateFields = ['completionDate', 'invoiceDate', 'invoicePaymentDeadline', 'paidAt'] as const;
@@ -38,7 +39,7 @@ type SubWorkForm = {
 @Component({
   selector: 'app-work-board',
   standalone: true,
-  imports: [CommonModule, FormsModule, MatButtonModule, MatCheckboxModule, MatDatepickerModule, MatNativeDateModule, MatFormFieldModule, MatIconModule, MatInputModule, MatProgressSpinnerModule, MatSelectModule, MatSnackBarModule, MatSortModule, WorkFieldValuesComponent],
+  imports: [CommonModule, FormsModule, MatButtonModule, MatCheckboxModule, MatDatepickerModule, MatNativeDateModule, MatFormFieldModule, MatIconModule, MatInputModule, MatProgressSpinnerModule, MatSelectModule, MatSnackBarModule, MatSortModule, WorkFieldValuesComponent, WorkLayoutListComponent],
   templateUrl: './work-board.component.html',
   styleUrl: './work-board.component.scss'
 })
@@ -121,9 +122,18 @@ export class WorkBoardComponent implements OnInit, OnDestroy {
   private searchTimer: ReturnType<typeof setTimeout> | null = null;
   private loadRequestId = 0;
   protected referencesLoaded = false;
+  private fieldOrder?: WorkFieldOrder;
+  private hiddenFields = new Set<string>();
+  private columnPreferences: { order?: string[]; visibility?: Record<string, boolean> } = {};
+  columnDraft?: LayoutItem[];
 
   constructor(private board: WorkBoardService, private snackBar: MatSnackBar, public auth: AuthService, private route: ActivatedRoute) {}
   ngOnInit(): void {
+    try {
+      const saved = JSON.parse(localStorage.getItem(this.columnStorageKey()) ?? 'null');
+      if (Array.isArray(saved?.order) && saved.order.every((id: unknown) => typeof id === 'string') &&
+          saved.visibility && typeof saved.visibility === 'object') this.columnPreferences = saved;
+    } catch { /* The table still works without browser storage. */ }
     const id = this.route.snapshot.queryParamMap.get('work');
     if (this.financeTenantId) {
       this.statusFilter = 'all';
@@ -283,6 +293,8 @@ export class WorkBoardComponent implements OnInit, OnDestroy {
         this.reportingEnabled = true;
         this.projectSizeGrouping = settings.projectSizeGrouping === true;
         this.customFields = settings.fields.filter((field) => !field.archived);
+        this.fieldOrder = settings.fieldOrder;
+        this.hiddenFields = new Set(settings.hiddenFields);
         this.catalogs = { entities: settings.entities ?? [], serviceTypes: settings.serviceTypes ?? [] };
       }
       this.referencesLoaded = true;
@@ -402,7 +414,7 @@ export class WorkBoardComponent implements OnInit, OnDestroy {
 
   async saveWork(): Promise<void> {
     if (!this.workForm.name.trim()) return this.notice('Work name is required.');
-    const active = this.customFields.filter((field) => this.fieldRelevant(field, this.workForm.status));
+    const active = this.customFields.filter((field) => this.isFieldVisible(field.id) && this.fieldRelevant(field, this.workForm.status));
     const missing = active.find((field) => {
       if (!field.required || this.fieldFiles[field.id]) return false;
       const value = Object.hasOwn(this.fieldChanges, field.id) ? this.fieldChanges[field.id] : this.editorValues[field.id];
@@ -577,21 +589,117 @@ export class WorkBoardComponent implements OnInit, OnDestroy {
   catalogLabel(catalog: WorkCatalog, id?: string | null): string {
     return this.catalogs[catalog].find((entry) => entry.id === id)?.label || '—';
   }
-  get fieldColumns(): WorkField[] { return this.customFields.filter((field) => field.showInList); }
-  cardFields(card: WorkFieldCard): WorkField[] { return this.customFields.filter((field) => field.card === card); }
+  isFieldVisible(id: string): boolean { return !this.hiddenFields.has(id); }
+  orderedFields(card: WorkFieldCard): LayoutItem[] {
+    return orderLayout(cardLayout(card, this.customFields, this.hiddenFields).filter((item) => item.visible), this.fieldOrder?.[card]);
+  }
+  customField(id: string): WorkField | undefined { return this.customFields.find((field) => field.id === id); }
+  get hasExecutionInputs(): boolean {
+    return this.orderedFields('execution').some(({ id }) => id !== 'margin');
+  }
+  get hasInvoiceInputs(): boolean {
+    return this.orderedFields('invoice').some(({ id }) =>
+      id !== 'paymentDeadline' && (id !== 'paidAt' || this.workForm.status === 'paid' || this.workForm.paidAt));
+  }
+  hasCardDetails(card: WorkFieldCard, work: WorkItem): boolean {
+    return this.orderedFields(card).some(({ id }) => {
+      if (this.customField(id)) return true;
+      const value = this.detailFieldValue(card, id, work);
+      return value !== null && value !== '—';
+    });
+  }
+  detailFieldValue(card: WorkFieldCard, id: string, work: WorkItem): string | null {
+    const report = work.reporting;
+    const date = (value: string | null | undefined, billing = false) =>
+      value ? formatDate(billing ? this.billingDay(value) ?? value : value, 'yyyy.MM.dd', 'en-US') : null;
+    const money = (amount: number) => this.formatMoney(amount, work.currency);
+    switch (id) {
+      case 'name': return work.name;
+      case 'status': return work.archivedAt ? 'Deleted' : this.statusLabel(work.status);
+      case 'client': return work.customer || '—';
+      case 'entityId': return this.hasCatalogOptions('entities') || work.entityId ? this.catalogLabel('entities', work.entityId) : null;
+      case 'serviceTypeId': return this.hasCatalogOptions('serviceTypes') || work.serviceTypeId ? this.catalogLabel('serviceTypes', work.serviceTypeId) : null;
+      case 'responsible': return work.responsible || '—';
+      case 'projectSize': return this.projectSizeGrouping ? report?.projectSize || 'Automatic' : null;
+      case 'description': return work.description || null;
+      case 'totalAmount': return money(work.totalAmount);
+      case 'currency': return work.currency;
+      case 'offerDate': return date(work.offerDate);
+      case 'deadline': return date(work.deadline);
+      case 'paymentDays': return work.paymentDeadlineDays ? work.paymentDeadlineDays + ' days' : null;
+      case 'cost': return money(work.costAmount);
+      case 'margin': return formatNumber(work.marginPercent, 'en-US', '1.0-2') + '%';
+      case 'subcontractor': return work.subcontractor || null;
+      case 'contract': return work.contractSigned ? 'Signed' : 'Not signed';
+      case 'completionDate': return date(work.completionDate, true);
+      case 'paymentDeadline': return card === 'completion' && this.showFrom('invoice', work.status)
+        ? null : date(work.invoicePaymentDeadline, true);
+      case 'certificate': return work.performanceCertificate ? 'Signed' : 'Not signed';
+      case 'invoiceNumber': return work.invoiceNumber || null;
+      case 'invoiceDate': return date(work.invoiceDate, true);
+      case 'paidAt': return date(work.paidAt, true);
+      case 'backup': return this.backupLabel(report?.backupId);
+      case 'nextAction': return report?.nextAction || '—';
+      case 'actionDue': return report?.actionDue || '—';
+      case 'paymentStatus': return this.reportPaymentLabel(report?.paymentStatus);
+      case 'invoiced': return report?.invoicedAmount == null ? '—' : money(report.invoicedAmount);
+      case 'paid': return report?.paidAmount == null ? '—' : money(report.paidAmount);
+      default: return null;
+    }
+  }
+  get defaultColumns(): LayoutItem[] {
+    const columns = [
+      { id: 'workNumber', label: this.financeTenantId ? 'Munkaszám' : 'Work no.' },
+      { id: 'name', label: this.financeTenantId ? 'Ügyfél / munka' : this.isFieldVisible('client') ? 'Client / work' : 'Work' },
+      ...this.visibleCatalogs.map(({ reference, label }) => ({ id: reference, label })),
+      ...this.financeTenantId ? [] : [{ id: 'responsible', label: 'Responsible' }],
+      { id: 'status', label: this.financeTenantId ? 'Státusz' : 'Status' },
+      ...this.financeTenantId ? [] : [{ id: 'deadline', label: 'Deadline' }],
+      { id: 'totalAmount', label: this.financeTenantId ? 'Szerződéses összeg' : 'Value' },
+      ...this.financeTenantId
+        ? [{ id: 'invoiceNumber', label: 'Számlaszám' }, { id: 'paymentDeadline', label: 'Fizetési határidő' }]
+        : [{ id: 'subWorkCount', label: 'Sub-works' }]
+    ].filter(({ id }) => this.isFieldVisible(id)).map((column) => ({ ...column, visible: true }));
+    return [...columns, ...this.customFields.filter(({ id }) => this.isFieldVisible(id))
+      .map((field) => ({ id: 'field:' + field.id, label: field.label, visible: field.showInList }))];
+  }
+  get columnOptions(): LayoutItem[] {
+    return orderLayout(this.defaultColumns, this.columnPreferences.order).map((column) => ({
+      ...column, visible: typeof this.columnPreferences.visibility?.[column.id] === 'boolean'
+        ? this.columnPreferences.visibility[column.id] : column.visible
+    }));
+  }
+  get visibleColumns(): LayoutItem[] {
+    const options = this.columnDraft ?? this.columnOptions;
+    const visible = options.filter((column) => column.visible);
+    return visible.length ? visible : this.defaultColumns.slice(0, 1);
+  }
+  hasWorkNumber(columns: LayoutItem[]): boolean { return columns.some(({ id }) => id === 'workNumber'); }
+  saveColumns(): void {
+    if (!this.columnDraft) return;
+    const draft = this.columnDraft;
+    this.columnPreferences = { order: draft.map(({ id }) => id),
+      visibility: Object.fromEntries(draft.map(({ id, visible }) => [id, visible === true])) };
+    this.columnDraft = undefined;
+    try { localStorage.setItem(this.columnStorageKey(), JSON.stringify(this.columnPreferences)); }
+    catch { this.notice('Column settings are available for this view only.'); }
+  }
+  private columnStorageKey(): string {
+    const user = this.auth.getCurrentUser();
+    const tenant = this.financeTenantId ?? this.auth.getTenantContextId() ?? user?.tenantId;
+    return JSON.stringify(['epds:work-table-columns', user?.id ?? user?.userId, tenant, !!this.financeTenantId]);
+  }
   listField(work: WorkItem, field: WorkField): string {
     return this.fieldRelevant(field, work.status) ? displayWorkField(field, work.customFields?.[field.id]) : '—';
   }
   private fieldRelevant(field: WorkField, status: WorkStatus): boolean {
     const card = field.card;
-    return card === 'basic' || card === 'description' || card === 'documents' || this.showFrom(card, status);
+    return card === 'basic' || card === 'description' || card === 'documents' || card === 'reporting' || this.showFrom(card, status);
   }
   showFrom(stage: 'offer' | 'execution' | 'completion' | 'invoice' | 'payment', status: WorkStatus = this.workForm.status): boolean {
     const required = { offer: 1, execution: 2, completion: 3, invoice: 4, payment: 5 }[stage];
     return this.statusRank[status] >= required;
   }
-  hasText(value: unknown): boolean { return String(value || '').trim().length > 0; }
-  hasValue(value: unknown): boolean { return value !== null && value !== undefined && value !== '' && Number(value) !== 0; }
   formatMoney(value: number, currency = 'HUF'): string { return new Intl.NumberFormat('hu-HU', { style: 'currency', currency, maximumFractionDigits: currency === 'HUF' ? 0 : 2 }).format(value || 0); }
   isOverdue(value: string | null): boolean { return Boolean(value && new Date(value).getTime() < new Date().setHours(0, 0, 0, 0)); }
   private today(): string {

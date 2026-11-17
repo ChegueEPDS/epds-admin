@@ -270,6 +270,8 @@ async function getPublicPageSpeedSummaries(domainIds = [], options = {}) {
 }
 
 module.exports = {
+  buildPageSpeedHistory,
+  lcpStatus,
   buildPublicPageSpeedSummary,
   getPublicPageSpeedSummaries,
   getDomainPageSpeedOverview,
