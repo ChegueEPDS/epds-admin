@@ -7,7 +7,7 @@ const fields = ['taxNumber', 'name', 'country', 'postalCode', 'city', 'address',
 
 function clientCompanyDetails(input = {}) {
   const details = Object.fromEntries(fields.map((field) => [field, clean(input?.[field])]));
-  details.country = details.country.toUpperCase() || 'HU';
+  details.country = details.country.toUpperCase();
   details.email = details.email.toLowerCase();
   const taxKey = normalizeTaxNumber(details.taxNumber);
   if (details.country === 'HU' && !details.taxNumber) throw invalid('taxNumber', 'Tax number is required for Hungarian clients.');

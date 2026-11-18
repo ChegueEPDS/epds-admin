@@ -2,10 +2,10 @@ const mongoose = require('mongoose');
 
 const ClientCompanySchema = new mongoose.Schema(
   {
-    taxNumber: { type: String, required() { return (this.country || 'HU').trim().toUpperCase() === 'HU'; }, trim: true, default: '' },
+    taxNumber: { type: String, required() { return this.country?.trim().toUpperCase() === 'HU'; }, trim: true, default: '' },
     normalizedTaxNumber: { type: String, required: true, unique: true, index: true },
     name: { type: String, required: true, trim: true },
-    country: { type: String, trim: true, default: 'HU' },
+    country: { type: String, trim: true, default: '' },
     postalCode: { type: String, trim: true, default: '' },
     city: { type: String, trim: true, default: '' },
     address: { type: String, trim: true, default: '' },

@@ -304,7 +304,7 @@ async function saveClient(tenantId, actorId, input) {
       (id,tax_number,normalized_tax_number,name,country,postal_code,city,address,email,phone,created_by,updated_by,created_at,updated_at)
       VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$11,now(),now())
       ON CONFLICT(normalized_tax_number) DO UPDATE SET updated_by=$11,updated_at=now() RETURNING *`,
-    [clientId,input.taxNumber,input.normalizedTaxNumber,input.name,input.country||'HU',input.postalCode||'',input.city||'',
+    [clientId,input.taxNumber,input.normalizedTaxNumber,input.name,input.country??'',input.postalCode||'',input.city||'',
       input.address||'',input.email||'',input.phone||'',actorId]);
     await client.query(`INSERT INTO client_company_tenants(client_company_id,tenant_id) VALUES($1,$2) ON CONFLICT DO NOTHING`,[result.rows[0].id,tenantId]);
     return result.rows[0];

@@ -615,7 +615,7 @@ export class WorkBoardComponent implements OnInit, OnDestroy {
     } catch (error) { this.error(error, 'Clients could not be loaded.'); }
     finally { this.clientsLoading = false; }
   }
-  get clientTaxNumberRequired(): boolean { return (this.clientForm.country.trim().toUpperCase() || 'HU') === 'HU'; }
+  get clientTaxNumberRequired(): boolean { return this.clientForm.country.trim().toUpperCase() === 'HU'; }
   changeClientTaxNumber(value: string): void {
     if (this.clientLookupFound) this.clientForm = this.emptyClientForm();
     this.clientForm.taxNumber = value;

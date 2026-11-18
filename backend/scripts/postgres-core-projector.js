@@ -151,7 +151,7 @@ async function projectClients(client) {
   for (const doc of docs) {
     await upsert(client, 'client_companies', {
       id: id(doc._id), tax_number: doc.taxNumber, normalized_tax_number: doc.normalizedTaxNumber,
-      name: doc.name, country: doc.country || 'HU', postal_code: doc.postalCode || '',
+      name: doc.name, country: doc.country ?? '', postal_code: doc.postalCode || '',
       city: doc.city || '', address: doc.address || '', email: doc.email || '', phone: doc.phone || '',
       created_by: id(doc.createdBy), updated_by: id(doc.updatedBy), ...stamps(doc)
     });

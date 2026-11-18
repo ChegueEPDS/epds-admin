@@ -38,7 +38,7 @@ async function exportClients(tenantId, template) {
     revision: version(client)
   }), { sheetName, instructions: [
     'Keep the ID and hidden export version for existing clients. Leave both empty for a new client.',
-    'Enter a company name. Country defaults to HU. Tax number is required only for HU.',
+    'Enter a company name. Leave Country blank if unknown. Tax number is required only when Country is HU.',
     'Format tax numbers and postal codes as text to preserve leading zeros.',
     'Omitted columns preserve existing values. Empty cells in included optional columns clear their values.',
     'Clients shared with other tenants cannot be changed through this import.'

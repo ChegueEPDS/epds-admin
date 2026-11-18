@@ -24,7 +24,7 @@ function presentWork(w){const subs=(w.subWorks||[]).filter(s=>(w.archivedAt||!s.
   return {...w,marginPercent:total>0?(total-Number(w.costAmount||0))/total*100:0,allocatedAmount:allocated,
     allocatedPercentage:total>0?allocated/total*100:0,remainingAmount:total-allocated,paidAmount:paid,
     subWorkCount:subs.length,subWorks:subs.map(s=>presentSub(s,w))};}
-function presentClient(c){return c?{id:String(c.id||c._id),taxNumber:c.tax_number??c.taxNumber??'',name:c.name,country:c.country||'HU',
+function presentClient(c){return c?{id:String(c.id||c._id),taxNumber:c.tax_number??c.taxNumber??'',name:c.name,country:c.country??'',
   postalCode:c.postal_code||c.postalCode||'',city:c.city||'',address:c.address||'',email:c.email||'',phone:c.phone||''}:null;}
 function presentDoc(d){return {id:d.id,workItemId:d.workItemId,category:d.category,categoryLabel:LABELS[d.category]||d.category,
   displayName:d.displayName,fileName:d.fileName,contentType:d.contentType,size:d.size,uploadedByName:d.uploadedByName||'',uploadedAt:d.createdAt};}

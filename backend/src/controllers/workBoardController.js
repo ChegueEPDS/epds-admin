@@ -62,7 +62,7 @@ function userDisplayName(user) {
 
 function presentClient(client) {
   return {
-    id: String(client._id), taxNumber: client.taxNumber || '', name: client.name, country: client.country || 'HU',
+    id: String(client._id), taxNumber: client.taxNumber || '', name: client.name, country: client.country ?? '',
     postalCode: client.postalCode || '', city: client.city || '', address: client.address || '',
     email: client.email || '', phone: client.phone || ''
   };
