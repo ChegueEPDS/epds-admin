@@ -21,6 +21,7 @@ test('Finance access scopes tenants, records and writes to the billing workflow'
 
   const tenantIds = [];
   const userIds = [];
+  const quoteFixtures = new Map();
   let server;
   t.after(async () => {
     if (server) await new Promise((resolve) => server.close(resolve));
@@ -28,11 +29,22 @@ test('Finance access scopes tenants, records and writes to the billing workflow'
     await query('DELETE FROM work_items WHERE tenant_id=ANY($1::text[])', [tenantIds]);
     await query('DELETE FROM users WHERE id=ANY($1::text[])', [userIds]);
     await query('DELETE FROM tenants WHERE id=ANY($1::text[])', [tenantIds]);
+    for (const [id, original] of quoteFixtures) {
+      if (original) await query('UPDATE mnb_exchange_rate_snapshots SET data=$2 WHERE id=$1', [id, original]);
+      else await query('DELETE FROM mnb_exchange_rate_snapshots WHERE id=$1', [id]);
+    }
     await closePostgres();
   });
 
   await query(await readFile(path.join(__dirname, '../postgres/001_initial_schema.sql'), 'utf8'));
   await connectDb();
+  const rateToday = new Intl.DateTimeFormat('sv-SE', { timeZone: 'Europe/Budapest' }).format(new Date());
+  for (const date of new Set(['2026-11-10', rateToday])) {
+    const id = 'history:' + date;
+    quoteFixtures.set(id, (await query('SELECT data FROM mnb_exchange_rate_snapshots WHERE id=$1', [id])).rows[0]?.data);
+    await query('INSERT INTO mnb_exchange_rate_snapshots(id,data) VALUES($1,$2) ON CONFLICT(id) DO UPDATE SET data=EXCLUDED.data',
+      [id, { date, rates: { EUR: { quote: '400', unit: 1 }, USD: { quote: '360', unit: 1 } } }]);
+  }
   const suffix = randomBytes(6).toString('hex');
   async function tenant(label, type, enabled = false, grant = false) {
     const saved = await tenants.save({ name: label + '-' + suffix, displayName: label, type, features: {
@@ -118,6 +130,20 @@ test('Finance access scopes tenants, records and writes to the billing workflow'
   assert.equal(persisted.status, 'paid');
   assert.equal(persisted.costAmount, 5);
   assert.equal(persisted.reporting.nextAction, 'Internal');
+
+  const itemized = await works.createWork(allowed.id, null, { name: 'Dated entries', status: 'completed_billable', currency: 'USD', totalAmount: 100 });
+  const itemizedRoute = list + '/' + itemized.id;
+  const invoiceEntry = { id: '00000000-0000-4000-8000-000000000001', date: '2026-11-10', amount: 50, reference: 'FX-1', rate: { forged: true } };
+  const saveEntry = await request(itemizedRoute, { body: { fieldRevision: itemized.fieldRevision, reporting: { invoices: [invoiceEntry] } } });
+  assert.equal(saveEntry.status, 200);
+  const withEntry = (await saveEntry.json()).work;
+  assert.equal(withEntry.reporting.invoicedAmount, 50);
+  assert.equal(withEntry.reporting.invoices[0].rate.rateDate, '2026-11-10');
+  assert.equal(withEntry.reporting.invoices[0].rate.forged, undefined);
+  assert.equal((await request(itemizedRoute, { body: { fieldRevision: withEntry.fieldRevision,
+    reporting: { invoicedAmount: 75 } } })).status, 400);
+  assert.equal((await request(itemizedRoute, { body: { fieldRevision: withEntry.fieldRevision,
+    reporting: { exchangeRates: { forged: true } } } })).status, 400);
 
   const lifecycle = await works.createWork(allowed.id, null, { name: 'Date defaults', status: 'in_progress', paymentDeadlineDays: 12 });
   const workflowItem = list + '/' + lifecycle.id;

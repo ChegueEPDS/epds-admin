@@ -1,3 +1,4 @@
+const { lockSubWorkRates } = require('../services/workExchangeRates');
 const mongoose = require('mongoose');
 const { WorkItem, WORK_STATUSES } = require('../models/workItem');
 const SubWorkItem = require('../models/subWorkItem');
@@ -190,6 +191,7 @@ function presentSubWork(subWork, work) {
     invoicePaymentDeadline: subWork.invoicePaymentDeadline || null,
     paidAmount: Number(subWork.paidAmount || 0),
     paidAt: subWork.paidAt || null,
+    exchangeRates: subWork.exchangeRates || {},
     createdAt: subWork.createdAt,
     updatedAt: subWork.updatedAt
   };
@@ -305,6 +307,7 @@ async function withErrors(res, fn) {
       return res.status(416).end();
     }
     if (error?.code === 11000) return res.status(409).json({ error: 'Work number already exists; please try again' });
+    if (error?.name === 'VersionError') return res.status(409).json({ error: 'The work changed. Reload and try again.' });
     return res.status(error.statusCode || 500).json({ error: error.statusCode ? error.message : 'Internal server error' });
   }
 }
@@ -415,7 +418,7 @@ exports.createWork = (req, res) => withErrors(res, async () => {
     });
     applyWorkReferences(item, client, responsibleUser);
     return item.save();
-  });
+  }, payload);
   await markMongoDashboardDirty(req.scope);
   res.status(201).json({ work: presentWork(work, []) });
 });
@@ -425,8 +428,10 @@ exports.updateWork = (req, res) => withErrors(res, async () => {
   if (req.body?.fieldRevision !== undefined && req.body.fieldRevision !== (work.__v || 0)) {
     throw httpError('The work changed. Reload and try again.', 409);
   }
+  const previous = work.toObject();
   const payload = workPayload(req.body, work);
-  Object.assign(work, payload, workBillingDates(payload, work), { updatedBy: req.userId });
+  const dates = workBillingDates(payload, previous);
+  Object.assign(work, payload, dates, { updatedBy: req.userId });
   if (Object.prototype.hasOwnProperty.call(req.body || {}, 'clientId')) {
     const client = await resolveClient(req.body.clientId, req.scope);
     work.clientId = client?._id || undefined;
@@ -437,11 +442,11 @@ exports.updateWork = (req, res) => withErrors(res, async () => {
     work.responsibleUserId = responsibleUser?._id || undefined;
     work.responsible = responsibleUser ? presentUser(responsibleUser).fullName : '';
   }
-  await workFields.saveValues(req, work.status, work, (values, selections) => {
+  await workFields.saveValues(req, work.status, previous, (values, selections) => {
     Object.assign(work, selections);
     work.customFields = values;
     return work.save();
-  });
+  }, { ...payload, ...dates });
   await markMongoDashboardDirty(req.scope);
   const subWorks = await SubWorkItem.find({ ...scopeQuery(req.scope), workItemId: work._id, archivedAt: { $exists: false } }).sort({ sequenceNumber: 1 });
   res.json({ work: presentWork(work, subWorks) });
@@ -485,8 +490,10 @@ exports.createSubWork = (req, res) => withErrors(res, async () => {
   const work = await scopedWork(req.params.id, req.scope);
   const latest = await SubWorkItem.findOne({ ...scopeQuery(req.scope), workItemId: work._id }).sort({ sequenceNumber: -1 }).select('sequenceNumber').lean();
   const sequenceNumber = await allocateSequence(req.scope.tenantId, `sub-work:${work._id}`, latest?.sequenceNumber);
+  const subPayload = subWorkPayload(req.body, work);
+  const exchangeRates = await lockSubWorkRates({}, subPayload);
   const subWork = await SubWorkItem.create({
-    ...subWorkPayload(req.body, work), ...scopeQuery(req.scope), workItemId: work._id,
+    ...subPayload, exchangeRates, ...scopeQuery(req.scope), workItemId: work._id,
     sequenceNumber,
     createdBy: req.userId, updatedBy: req.userId
   });
@@ -501,7 +508,9 @@ exports.updateSubWork = (req, res) => withErrors(res, async () => {
   const subWork = await SubWorkItem.findOne({ _id: req.params.subWorkId, ...scopeQuery(req.scope), archivedAt: { $exists: false } });
   if (!subWork) throw httpError('Sub-work not found', 404);
   const work = await scopedWork(subWork.workItemId, req.scope);
-  Object.assign(subWork, subWorkPayload(req.body, work, subWork), { updatedBy: req.userId });
+  const subPayload = subWorkPayload(req.body, work, subWork);
+  const exchangeRates = await lockSubWorkRates(subWork.toObject(), subPayload);
+  Object.assign(subWork, subPayload, { exchangeRates, updatedBy: req.userId });
   if (Object.prototype.hasOwnProperty.call(req.body || {}, 'responsibleUserId')) {
     applySubWorkResponsible(subWork, await resolveResponsible(req.body.responsibleUserId, req.scope));
   }

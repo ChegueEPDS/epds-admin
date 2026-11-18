@@ -151,6 +151,14 @@
             @case ('totalAmount') {
               <mat-form-field appearance="outline"><mat-label>Total value</mat-label><input matInput type="number" min="0" name="workTotal" [(ngModel)]="workForm.totalAmount"></mat-form-field>
             }
+            @case ('contractDate') {
+              @if (reportingEnabled) {
+                <mat-form-field appearance="outline"><mat-label>Order acceptance date</mat-label>
+                  <input matInput type="date" name="orderAcceptanceDate" [(ngModel)]="reportForm.contractDate">
+                  <mat-hint>Defaults to the day the work becomes active.</mat-hint>
+                </mat-form-field>
+              }
+            }
             @case ('currency') {
               <mat-form-field appearance="outline">
                 <mat-label>Currency</mat-label>
@@ -272,16 +280,21 @@
               </mat-select></mat-form-field>
             }
             @case ('invoiced') {
-              <mat-form-field appearance="outline"><mat-label>Invoiced amount</mat-label><input matInput type="number" min="0" step=".01" name="reportedInvoiced" [(ngModel)]="reportForm.invoicedAmount"></mat-form-field>
+              <mat-form-field appearance="outline"><mat-label>Invoiced amount</mat-label><input matInput type="number" min="0" step=".01" name="reportedInvoiced" [(ngModel)]="reportForm.invoicedAmount" [readonly]="reportForm.invoices !== undefined"></mat-form-field>
             }
             @case ('paid') {
-              <mat-form-field appearance="outline"><mat-label>Paid amount</mat-label><input matInput type="number" min="0" step=".01" name="reportedPaid" [(ngModel)]="reportForm.paidAmount"></mat-form-field>
+              <mat-form-field appearance="outline"><mat-label>Paid amount</mat-label><input matInput type="number" min="0" step=".01" name="reportedPaid" [(ngModel)]="reportForm.paidAmount" [readonly]="reportForm.payments !== undefined"></mat-form-field>
             }
             @default { <ng-container *ngTemplateOutlet="customEditor; context: { $implicit: item.id }"/> }
           }
         }
       </div>
     </section>
+    @if (reportingEnabled) {
+      <app-work-financial-entries [reporting]="reportForm" [currency]="workForm.currency"
+        [contractEnabled]="isFieldVisible('contractDate')" [invoicesEnabled]="isFieldVisible('invoiced')" [paymentsEnabled]="isFieldVisible('paid')"
+        [invoiceDate]="billingDay(workForm.invoiceDate)" [paidAt]="billingDay(workForm.paidAt)" [invoiceNumber]="workForm.invoiceNumber"/>
+    }
     <div class="sticky-actions"><button mat-button type="button" (click)="cancelWorkEditor()">Cancel</button><button mat-flat-button color="primary" type="submit" [disabled]="saving">Save work</button></div>
   </form>
 
@@ -326,12 +339,12 @@
           }
           <mat-form-field appearance="outline">
             <mat-label>Számlázott összeg</mat-label>
-            <input matInput type="number" min="0" step="0.01" name="financeInvoicedAmount" [(ngModel)]="form.reporting.invoicedAmount">
+            <input matInput type="number" min="0" step="0.01" name="financeInvoicedAmount" [(ngModel)]="form.reporting.invoicedAmount" [readonly]="form.reporting.invoices !== undefined">
             <span matTextSuffix>{{ financeWork.currency }}</span>
           </mat-form-field>
           <mat-form-field appearance="outline">
             <mat-label>Fizetett összeg</mat-label>
-            <input matInput type="number" min="0" step="0.01" name="financePaidAmount" [(ngModel)]="form.reporting.paidAmount">
+            <input matInput type="number" min="0" step="0.01" name="financePaidAmount" [(ngModel)]="form.reporting.paidAmount" [readonly]="form.reporting.payments !== undefined">
             <span matTextSuffix>{{ financeWork.currency }}</span>
           </mat-form-field>
           <mat-form-field appearance="outline">
@@ -345,6 +358,8 @@
           </mat-form-field>
         </div>
       </section>
+      <app-work-financial-entries [reporting]="form.reporting" [currency]="financeWork.currency" [contractEnabled]="false"
+        [invoiceDate]="form.invoiceDate" [paidAt]="form.paidAt" [invoiceNumber]="form.invoiceNumber"/>
       <div class="sticky-actions">
         <button mat-button type="button" (click)="backToTable()" [disabled]="saving">Mégse</button>
         <button mat-flat-button color="primary" type="submit" [disabled]="saving || billingForm.invalid">Mentés</button>
@@ -540,7 +555,9 @@
                               <ng-template #noShare>—</ng-template>
                             </td>
                             <td>{{ showFrom('invoice', sub.status) && sub.invoiceNumber ? sub.invoiceNumber : '—' }}</td>
-                            <td class="numeric">{{ showFrom('payment', sub.status) && sub.paidAmount ? formatMoney(sub.paidAmount, operational.currency) : '—' }}</td>
+                            <td class="numeric">{{ showFrom('payment', sub.status) && sub.paidAmount ? formatMoney(sub.paidAmount, operational.currency) : '—' }}
+                              @if (sub.exchangeRates?.payments; as rate) { <small>MNB {{ rate.rateDate | date:'yyyy.MM.dd.' }}{{ rate.estimated ? ' · Baseline' : '' }}<app-work-rate-info [rate]="rate"/></small> }
+                            </td>
                           </tr>
                         </tbody>
                       </table>
@@ -600,6 +617,10 @@
         <ng-container *ngTemplateOutlet="cardDetails; context: { $implicit: 'basic', work: work }"/>
       </section>
       <div class="detail-groups-grid">
+        @if (reportingEnabled && work.reporting; as reporting) {
+          <app-work-financial-entries [reporting]="reporting" [currency]="work.currency" [editable]="false"
+            [contractEnabled]="isFieldVisible('contractDate')" [invoicesEnabled]="isFieldVisible('invoiced')" [paymentsEnabled]="isFieldVisible('paid')"/>
+        }
         <section class="detail-group" *ngIf="reportingEnabled && hasCardDetails('reporting', work)">
           <div class="record-section-title"><mat-icon class="material-symbols-outlined">dashboard</mat-icon><h3>Dashboard reporting</h3></div>
           <ng-container *ngTemplateOutlet="cardDetails; context: { $implicit: 'reporting', work: work }"/>

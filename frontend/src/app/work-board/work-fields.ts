@@ -20,7 +20,7 @@ const requiredWorkFields = new Set(['name', 'status', 'currency']);
 export const WORK_CARD_FIELDS = {
   basic: { name: 'Name', client: 'Client', entityId: 'Entity', serviceTypeId: 'Service type',
     responsible: 'Responsible', status: 'Status', projectSize: 'Project size', description: 'Description' },
-  offer: { totalAmount: 'Total value', currency: 'Currency', offerDate: 'Offer date', deadline: 'Deadline', paymentDays: 'Payment term' },
+  offer: { totalAmount: 'Total value', currency: 'Currency', offerDate: 'Offer date', contractDate: 'Order acceptance date', deadline: 'Deadline', paymentDays: 'Payment term' },
   execution: { cost: 'Cost', subcontractor: 'Subcontractor', contract: 'Contract', margin: 'Margin' },
   completion: { completionDate: 'Completion date', paymentDeadline: 'Invoice payment deadline', certificate: 'Performance certificate' },
   invoice: { invoiceNumber: 'Invoice number', invoiceDate: 'Invoice date', paidAt: 'Payment date', paymentDeadline: 'Payment deadline' },
@@ -85,11 +85,19 @@ export const REPORT_PAYMENT_STATUSES = [
   { id: 'not_invoiced', label: 'Not invoiced' }, { id: 'invoiced', label: 'Invoiced' },
   { id: 'partially_paid', label: 'Partially paid' }, { id: 'paid', label: 'Paid' }
 ] as const;
+export type WorkExchangeRate = {
+  currency: string; requestedDate: string; rateDate: string; fixedAt: string; estimated: boolean;
+  snapshot: { date: string; rates: Record<string, { quote: string; unit: number; source?: string }> };
+};
+export type WorkFinancialEntry = { id: string; date: string; amount: number; reference: string; rate?: WorkExchangeRate };
 export type WorkReporting = {
   projectSize?: typeof PROJECT_SIZES[number] | '';
   backupId?: string; nextAction?: string; actionDue?: string;
   invoicedAmount?: number | null; paidAmount?: number | null;
   paymentStatus?: typeof REPORT_PAYMENT_STATUSES[number]['id'] | '';
+  contractDate?: string | null;
+  invoices?: WorkFinancialEntry[]; payments?: WorkFinancialEntry[];
+  exchangeRates?: { contract?: WorkExchangeRate; invoices?: WorkExchangeRate; payments?: WorkExchangeRate };
 };
 export type WorkFieldFile = { id: string; name: string; size: number };
 export type WorkFieldAmount = { amount: number; currency: string };

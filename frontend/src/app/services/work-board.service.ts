@@ -18,6 +18,7 @@ export type SubWorkItem = {
   plannedHours: number; amount: number; currency: string; percentage: number; performanceCertificateRequired: boolean;
   performanceCertificateSigned: boolean; invoiceNumber: string; invoiceDate: string | null;
   invoicePaymentDeadline: string | null; paidAmount: number; paidAt: string | null; createdAt: string; updatedAt: string;
+  exchangeRates?: WorkReporting['exchangeRates'];
 };
 
 export type WorkItem = {
@@ -37,7 +38,7 @@ export type FinanceWorkStatus = 'completed_billable' | 'invoiced' | 'paid';
 export type FinanceWork = Pick<WorkItem, 'id' | 'workNumber' | 'name' | 'customer' | 'currency' |
   'totalAmount' | 'completionDate' | 'paymentDeadlineDays' | 'invoiceNumber' | 'invoiceDate' | 'invoicePaymentDeadline' | 'paidAt'> & {
   status: FinanceWorkStatus;
-  reporting: Pick<WorkReporting, 'invoicedAmount' | 'paidAmount' | 'paymentStatus'>;
+  reporting: Pick<WorkReporting, 'invoicedAmount' | 'paidAmount' | 'paymentStatus' | 'invoices' | 'payments' | 'exchangeRates'>;
   fieldRevision: number;
 };
 export type FinanceWorkChanges = Pick<FinanceWork, 'fieldRevision'> &
@@ -68,7 +69,7 @@ export type DashboardWorks = {
 export type WorkDashboard = {
   periodStart: string;
   asOf: string; currency: string; rateDate: string | null; refreshFailed: boolean; paymentGaps: number;
-  aedRateDerived?: boolean;
+  aedRateDerived?: boolean; legacyRateWorks?: number; estimatedRateWorks?: number;
   summary: DashboardOwner & { receivable: ActiveWorkValue; unbilled: ActiveWorkValue };
   ownerTotal: DashboardOwner; owners: (DashboardOwner & { label: string })[];
   stages: string[]; entities: { id: string; label: string; counts: number[]; total: number }[];

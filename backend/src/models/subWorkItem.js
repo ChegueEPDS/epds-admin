@@ -24,12 +24,13 @@ const SubWorkItemSchema = new mongoose.Schema(
     invoicePaymentDeadline: { type: Date },
     paidAmount: { type: Number, min: 0, default: 0 },
     paidAt: { type: Date },
+    exchangeRates: { type: mongoose.Schema.Types.Mixed, default: () => ({}) },
     archivedAt: { type: Date },
     archivedByWorkAt: { type: Date },
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     updatedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' }
   },
-  { timestamps: true }
+  { timestamps: true, optimisticConcurrency: true }
 );
 
 SubWorkItemSchema.index({ tenantId: 1, workItemId: 1, sequenceNumber: 1 }, { unique: true });

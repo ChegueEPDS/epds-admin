@@ -105,15 +105,77 @@ async function fetchMnbRates() {
   }
 }
 
+function parseHistoricalRates(xml, requestedDate) {
+  const result = parseXml(xml).Envelope?.Body?.GetExchangeRatesResponse?.GetExchangeRatesResult;
+  const days = [].concat(parseXml(result).MNBExchangeRates?.Day || []);
+  const day = days.filter((item) => item['@_date'] <= requestedDate)
+    .sort((a, b) => b['@_date'].localeCompare(a['@_date']))[0];
+  if (!day) throw new Error('MNB historical rate unavailable');
+  return normalizeRates(day['@_date'], [].concat(day.Rate || []).map((row) => ({
+    currency: row['@_curr'], unit: row['@_unit'], quote: row['#text']
+  })));
+}
+
+const historicalRequests = new Map();
+async function ratesOn(date) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !Number.isFinite(Date.parse(date)) ||
+      new Date(date).toISOString().slice(0, 10) !== date || date > budapestTime(new Date()).date) {
+    throw Object.assign(new Error('Select a valid exchange-rate date that is not in the future.'), { statusCode: 400 });
+  }
+  if (historicalRequests.has(date)) return historicalRequests.get(date);
+  const pending = (async () => {
+    const isToday = date === budapestTime(new Date()).date;
+    if (isToday) {
+      const current = (await latestRates()).snapshot;
+      if (current?.date === date && current.rates.EUR && current.rates.USD) return current;
+    }
+    // Historical lookups have their own key. They must never become the latest daily quote.
+    const key = `history:${date}`;
+    const cached = databaseEngine() === 'postgresql'
+      ? (await query('SELECT data FROM mnb_exchange_rate_snapshots WHERE id=$1', [key])).rows[0]?.data
+      : (await collection().findOne({ _id: key }))?.data;
+    if (cached && (!isToday || cached.date === date)) return withAedRate(cached);
+    const start = new Date(date); start.setUTCDate(start.getUTCDate() - 14);
+    const body = `<?xml version="1.0" encoding="utf-8"?><soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/"><soap:Body><GetExchangeRates xmlns="${namespace}"><startDate>${start.toISOString().slice(0, 10)}</startDate><endDate>${date}</endDate><currencyNames>EUR,USD,CHF,GBP,AUD,BRL,CAD,CNY,CZK,DKK,HKD,IDR,ILS,INR,ISK,JPY,KRW,MXN,MYR,NOK,NZD,PHP,PLN,RON,RSD,RUB,SEK,SGD,THB,TRY,UAH,ZAR</currencyNames></GetExchangeRates></soap:Body></soap:Envelope>`;
+    let snapshot;
+    try {
+      const options = { timeout: 10000, maxContentLength: 512 * 1024,
+        maxRedirects: 0, responseType: 'text', headers: { 'Content-Type': 'text/xml; charset=utf-8',
+          SOAPAction: `${namespace}MNBArfolyamServiceSoap/GetExchangeRates` } };
+      // MNB's published WSDL advertises HTTP; its HTTPS SOAP route can return
+      // 404 although the HTTPS information page is available. Only public dates
+      // and currency codes are sent to the official fallback endpoint.
+      let response;
+      try { response = await axios.post(url, body, options); }
+      catch { response = await axios.post('http://www.mnb.hu/arfolyamok.asmx', body, options); }
+      snapshot = parseHistoricalRates(response.data, date);
+      if (!snapshot.rates.EUR || !snapshot.rates.USD) throw new Error('Incomplete historical rates');
+    } catch {
+      throw Object.assign(new Error('The MNB exchange rate for this date is unavailable. No rate was fixed. Please try again.'), { statusCode: 503 });
+    }
+    if (databaseEngine() === 'postgresql') {
+      await query(`INSERT INTO mnb_exchange_rate_snapshots(id,data) VALUES($1,$2)
+        ON CONFLICT(id) DO UPDATE SET data=EXCLUDED.data
+        WHERE mnb_exchange_rate_snapshots.data->>'date' < EXCLUDED.data->>'date'`, [key, snapshot]);
+      return withAedRate((await query('SELECT data FROM mnb_exchange_rate_snapshots WHERE id=$1', [key])).rows[0].data);
+    }
+    await collection().updateOne({ _id: key }, { $setOnInsert: { data: snapshot } }, { upsert: true });
+    await collection().updateOne({ _id: key, 'data.date': { $lt: snapshot.date } }, { $set: { data: snapshot } });
+    return withAedRate((await collection().findOne({ _id: key })).data);
+  })().finally(() => historicalRequests.delete(date));
+  historicalRequests.set(date, pending);
+  return pending;
+}
+
 async function latestRates() {
   if (databaseEngine() === 'postgresql') {
     const { rows: [row] } = await query(`SELECT
-      (SELECT data FROM mnb_exchange_rate_snapshots WHERE id <> 'refresh' ORDER BY id DESC LIMIT 1) AS snapshot,
+      (SELECT data FROM mnb_exchange_rate_snapshots WHERE id ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$' ORDER BY id DESC LIMIT 1) AS snapshot,
       (SELECT data FROM mnb_exchange_rate_snapshots WHERE id = 'refresh') AS refresh`);
     return { ...row, snapshot: withAedRate(row.snapshot) };
   }
   const [latest, metadata] = await Promise.all([
-    collection().findOne({ _id: { $ne: 'refresh' } }, { sort: { _id: -1 } }),
+    collection().findOne({ _id: { $regex: /^\d{4}-\d{2}-\d{2}$/ } }, { sort: { _id: -1 } }),
     collection().findOne({ _id: 'refresh' })
   ]);
   return { snapshot: withAedRate(latest?.data || null), refresh: metadata?.data || null };
@@ -177,23 +239,28 @@ function startMnbExchangeRates() {
 }
 
 function convertTotals(rows, currency, { snapshot, refresh }) {
-  const rate = (code) => {
+  const rate = (code, sourceSnapshot) => {
     if (code === 'HUF') return new Decimal(1);
-    const entry = snapshot?.rates[code];
+    const entry = sourceSnapshot?.rates[code];
     return entry ? new Decimal(entry.quote).div(entry.unit) : null;
   };
-  const target = rate(currency);
   const missing = new Set();
   let amount = new Decimal(0);
   let included = false;
   let converted = false;
+  let usesCurrentRate = false;
+  const dates = new Set();
   for (const row of rows) {
     const value = new Decimal(row.amount);
     if (value.isZero()) continue;
     if (row.currency === currency) {
       amount = amount.plus(value);
     } else {
-      const source = rate(row.currency);
+      const sourceSnapshot = row.snapshot || snapshot;
+      if (!row.snapshot) usesCurrentRate = true;
+      if (sourceSnapshot?.date) dates.add(sourceSnapshot.date);
+      const target = rate(currency, sourceSnapshot);
+      const source = rate(row.currency, sourceSnapshot);
       if (!source || !target) {
         if (!source) missing.add(row.currency);
         if (!target) missing.add(currency);
@@ -207,9 +274,9 @@ function convertTotals(rows, currency, { snapshot, refresh }) {
   const digits = currency === 'HUF' ? 0 : new Intl.NumberFormat('en', { style: 'currency', currency }).resolvedOptions().maximumFractionDigits;
   return {
     amount: included || !missing.size ? amount.toDecimalPlaces(digits, Decimal.ROUND_HALF_UP).toNumber() : null,
-    currency, rateDate: converted || missing.size ? snapshot?.date || null : null,
-    missingCurrencies: [...missing].sort(), refreshFailed: (converted || missing.size > 0) && refresh?.failed === true
+    currency, rateDate: (converted || missing.size) && dates.size === 1 ? [...dates][0] : null,
+    missingCurrencies: [...missing].sort(), refreshFailed: usesCurrentRate && refresh?.failed === true
   };
 }
 
-module.exports = { parseMnbRates, parseMnbDailyPage, fetchMnbRates, latestRates, startMnbExchangeRates, convertTotals, withAedRate, isRefreshDue };
+module.exports = { parseMnbRates, parseMnbDailyPage, parseHistoricalRates, ratesOn, fetchMnbRates, latestRates, startMnbExchangeRates, convertTotals, withAedRate, isRefreshDue };

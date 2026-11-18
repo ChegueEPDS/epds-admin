@@ -9,12 +9,13 @@ const works = require('../repositories/postgres/workBoardRepository');
 const { workBoardSort, mongoSortStages } = require('../services/workBoardSort');
 const { workReporting } = require('../services/workDashboard');
 const { workBillingDates } = require('../services/workBillingDates');
+const { lockWorkRates } = require('../services/workExchangeRates');
 const { markMongoDashboardDirty } = require('../services/workDashboardSnapshots');
 
 const router = express.Router();
 const statuses = ['completed_billable', 'invoiced', 'paid'];
 const sorts = ['workNumber', 'name', 'status', 'totalAmount'];
-const reportingFields = ['invoicedAmount', 'paidAmount', 'paymentStatus'];
+const reportingFields = ['invoicedAmount', 'paidAmount', 'paymentStatus', 'invoices', 'payments'];
 const dateFields = ['completionDate', 'invoiceDate', 'invoicePaymentDeadline', 'paidAt'];
 const editFields = ['fieldRevision', 'status', 'invoiceNumber', ...dateFields, 'reporting'];
 const object = (value) => value && typeof value === 'object' && !Array.isArray(value);
@@ -44,6 +45,9 @@ function presentTenant(tenant) {
 function presentWork(work) {
   const reporting = Object.fromEntries(reportingFields.filter((key) => Object.hasOwn(work.reporting || {}, key))
     .map((key) => [key, work.reporting[key]]));
+  if (work.reporting?.exchangeRates) reporting.exchangeRates = Object.fromEntries(
+    ['invoices', 'payments'].filter((key) => work.reporting.exchangeRates[key])
+      .map((key) => [key, work.reporting.exchangeRates[key]]));
   return {
     id: String(work._id), workNumber: work.workNumber, name: work.name, customer: work.customer || '',
     status: work.status, currency: work.currency || 'HUF',
@@ -128,7 +132,9 @@ async function billingChanges(input, work, tenant) {
     );
   }
   if (!Object.keys(changes).length) throw fail('Adj meg legalább egy pénzügyi mezőt.');
-  return { ...changes, ...workBillingDates(changes, work) };
+  Object.assign(changes, workBillingDates(changes, work));
+  changes.reporting = await lockWorkRates(work, { ...work, ...changes, reporting: changes.reporting || work.reporting });
+  return changes;
 }
 
 router.use('/finance', requireSessionAuth, financeOnly);

@@ -4,6 +4,8 @@ const { databaseEngine, query, withTransaction } = require('../postgres');
 const Tenant = require('../models/tenant');
 const storage = require('./fileStorageService');
 const { workReporting } = require('./workDashboard');
+const { lockWorkRates } = require('./workExchangeRates');
+const { workBillingDates } = require('./workBillingDates');
 const { DEFAULT_WORK_TURNOVER_DAY, workTurnoverError } = require('./workTurnover');
 const { isServiceTypeCode, updatePostgresWorkNumbers, updateMongoWorkNumbers } = require('./workNumbers');
 const { withJobLease } = require('./scheduledJobLeaseService');
@@ -11,7 +13,7 @@ const { withJobLease } = require('./scheduledJobLeaseService');
 const cards = { basic: 0, offer: 1, execution: 2, completion: 3, invoice: 4, reporting: 0, documents: 0 };
 const builtInFields = {
   basic: ['name', 'client', 'entityId', 'serviceTypeId', 'responsible', 'status', 'projectSize', 'description'],
-  offer: ['totalAmount', 'currency', 'offerDate', 'deadline', 'paymentDays'],
+  offer: ['totalAmount', 'currency', 'offerDate', 'contractDate', 'deadline', 'paymentDays'],
   execution: ['cost', 'subcontractor', 'contract', 'margin'],
   completion: ['completionDate', 'paymentDeadline', 'certificate'],
   invoice: ['invoiceNumber', 'invoiceDate', 'paidAt', 'paymentDeadline'],
@@ -375,12 +377,23 @@ function planValues(fields, status, previous, input, files = []) {
   return { values, uploads };
 }
 
-async function saveValues(req, status, work, save) {
+async function saveValues(req, status, work, save, effective = {}) {
   const tenantId = req.scope.tenantId;
   const config = req.scope.tenantType === 'client' ? empty : await settings(tenantId);
   const previous = work.customFields || {};
   const selections = catalogSelections(config, work, req.body || {});
-  const reporting = await workReporting(req, work.reporting || {}, config.projectSizeGrouping);
+  let reporting = await workReporting(req, work.reporting || {}, config.projectSizeGrouping);
+  if (req.scope.tenantType !== 'client') {
+    const next = { ...work, ...req.body, ...effective, status, reporting };
+    if (work.currency && next.currency !== work.currency && (work.id || work._id)) {
+      const workId = String(work.id || work._id);
+      const subPayments = databaseEngine() === 'postgresql'
+        ? (await query('SELECT 1 FROM sub_work_items WHERE work_item_id=$1 AND tenant_id=$2 AND archived_at IS NULL AND paid_amount>0 LIMIT 1', [workId, tenantId])).rowCount
+        : await require('../models/subWorkItem').exists({ workItemId: workId, tenantId, archivedAt: { $exists: false }, paidAmount: { $gt: 0 } });
+      if (subPayments) throw fail('The currency cannot change after a sub-work payment.');
+    }
+    reporting = await lockWorkRates(work, { ...next, ...workBillingDates(next, work) });
+  }
   const { values, uploads } = planValues(config.fields, status, previous, req.body?.customFields, req.files);
   const uploaded = [];
   let result;

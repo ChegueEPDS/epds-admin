@@ -6,8 +6,9 @@
       @if (state.report; as d) {
         <p class="muted">Period {{ d.periodStart | date:'yyyy.MM.dd.' }} – {{ d.asOf | date:'yyyy.MM.dd.' }}</p>
         <p class="muted">Snapshot {{ d.snapshotAt | date:'yyyy.MM.dd. HH:mm' }} · {{ d.currency }}
-          @if (d.rateDate) { · MNB rates {{ d.rateDate | date:'yyyy.MM.dd.' }} }
+          @if (d.rateDate) { · Current MNB rates {{ d.rateDate | date:'yyyy.MM.dd.' }} }
           @if (d.aedRateDerived) { · AED via the CBUAE USD peg }
+          <app-work-rate-info/>
         </p>
       }
       <button mat-stroked-button type="button" [disabled]="state.loading" (click)="refresh()">Refresh</button>
@@ -24,6 +25,8 @@
     @if (value.missingCurrencies.length) { <small class="warning">Rate unavailable · {{ value.missingCurrencies.join(', ') }}</small> }
   </ng-template>
   @if (state.report; as d) {
+    @if (d.legacyRateWorks) { <p class="warning wide">{{ d.legacyRateWorks }} works include amounts without fixed rates. These amounts use current rates. Record the acceptance, invoice or payment date and save the work or sub-work to fix its rate.</p> }
+    @if (d.estimatedRateWorks) { <p class="warning wide">{{ d.estimatedRateWorks }} works include baseline rates because an original event date was not recorded. Review dates on the work details.</p> }
     @if (d.refreshFailed) { <p class="warning wide" role="status">Latest MNB rate refresh failed. The dashboard uses the last available rates.</p> }
     <section class="panel wide" aria-label="At a glance">
       <h2>At a glance</h2>

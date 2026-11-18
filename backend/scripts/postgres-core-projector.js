@@ -223,7 +223,7 @@ async function projectSubWorks(client) {
     currency: doc.currency || 'HUF', performance_certificate_required: Boolean(doc.performanceCertificateRequired),
     performance_certificate_signed: Boolean(doc.performanceCertificateSigned), invoice_number: doc.invoiceNumber || '',
     invoice_date: date(doc.invoiceDate), invoice_payment_deadline: date(doc.invoicePaymentDeadline),
-    paid_amount: Number(doc.paidAmount || 0), paid_at: date(doc.paidAt), archived_at: date(doc.archivedAt),
+    paid_amount: Number(doc.paidAmount || 0), paid_at: date(doc.paidAt), exchange_rates: json(doc.exchangeRates, {}), archived_at: date(doc.archivedAt),
     archived_by_work_at: date(doc.archivedByWorkAt), created_by: id(doc.createdBy), updated_by: id(doc.updatedBy), ...stamps(doc)
   });
   return docs;

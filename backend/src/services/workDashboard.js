@@ -8,6 +8,7 @@ const { latestRates, convertTotals } = require('./mnbExchangeRates');
 const { getDefaultCurrency } = require('./tenantCurrency');
 const { workCalendar, workPeriodStart } = require('./workTurnover');
 const Tenant = require('../models/tenant');
+const { validateFinancialReporting, partsFor, rateHealth } = require('./workExchangeRates');
 
 const stages = {
   inquiry: 'Lead', offer: 'Lead', to_start: 'Active', in_progress: 'Active', on_hold: 'On Hold',
@@ -61,7 +62,7 @@ async function workReporting(req, previous, sizeEnabled, tenantHasUser) {
     if (key === 'projectSize' && !sizeNames.slice(0, 3).includes(value)) throw fail('Invalid project size.');
     result[key] = key === 'nextAction' ? value.trim() : value;
   }
-  return result;
+  return validateFinancialReporting(input, result, previous);
 }
 
 async function reportWorks(tenantId) {
@@ -69,9 +70,10 @@ async function reportWorks(tenantId) {
     const { rows } = await query(`SELECT w.id,w.work_number AS "workNumber",w.name,w.status,w.customer,w.responsible,w.currency,w.deadline,w.reporting,
       w.responsible_user_id AS "ownerId",w.entity_id AS "entityId",w.service_type_id AS "serviceTypeId",
       w.total_amount AS "totalAmount",w.created_at AS "createdAt",w.updated_at AS "updatedAt",w.invoice_number AS "invoiceNumber",
-      w.invoice_date AS "invoiceDate",w.invoice_payment_deadline AS "paymentDue",p.paid AS "subPaid",p.invoiced AS "subInvoice"
+      w.invoice_date AS "invoiceDate",w.invoice_payment_deadline AS "paymentDue",p.paid AS "subPaid",p.invoiced AS "subInvoice",p.entries AS "subPaymentEntries"
       FROM work_items w LEFT JOIN (
         SELECT work_item_id,sum(paid_amount) FILTER (WHERE paid_amount>0) AS paid,
+          jsonb_agg(jsonb_build_object('amount',paid_amount,'currency',currency,'rate',exchange_rates->'payments')) FILTER (WHERE paid_amount>0) AS entries,
           bool_or(invoice_number<>'' OR invoice_date IS NOT NULL OR status IN ('invoiced','paid')) AS invoiced
         FROM sub_work_items WHERE tenant_id=$1 AND archived_at IS NULL AND status NOT IN ('cancelled','lost') GROUP BY work_item_id
       ) p ON p.work_item_id=w.id
@@ -83,6 +85,7 @@ async function reportWorks(tenantId) {
     WorkItem.find(scope).select('workNumber name status customer responsible responsibleUserId entityId serviceTypeId currency deadline totalAmount reporting createdAt updatedAt invoiceNumber invoiceDate invoicePaymentDeadline').sort('_id').lean(),
     SubWorkItem.aggregate([{ $match: { ...scope, status: { $nin: ['cancelled', 'lost'] } } },
       { $group: { _id: '$workItemId', paid: { $sum: { $toDecimal: '$paidAmount' } },
+        entries: { $push: { amount: '$paidAmount', currency: '$currency', rate: '$exchangeRates.payments' } },
         invoiced: { $max: { $or: [
           { $ne: [{ $ifNull: ['$invoiceNumber', ''] }, ''] },
           { $ne: [{ $ifNull: ['$invoiceDate', null] }, null] },
@@ -93,7 +96,8 @@ async function reportWorks(tenantId) {
   return works.map((work) => {
     const payment = payments.get(String(work._id));
     return { ...work, ownerId: work.responsibleUserId, paymentDue: work.invoicePaymentDeadline,
-      subPaid: Number(payment?.paid) > 0 ? payment.paid.toString() : null, subInvoice: payment?.invoiced };
+      subPaid: Number(payment?.paid) > 0 ? payment.paid.toString() : null, subInvoice: payment?.invoiced,
+      subPaymentEntries: payment?.entries };
   });
 }
 
@@ -168,7 +172,7 @@ function financialWorks(rows, key) {
 
 function totals(items, key, currency, fx) {
   return convertTotals(items.filter((row) => row[key] !== null)
-    .map((row) => ({ currency: row.currency, amount: row[key].toString() })), currency, fx);
+    .flatMap((row) => partsFor(row, key)), currency, fx);
 }
 
 function financialChart(rows, currency, fx) {
@@ -237,6 +241,8 @@ function buildDashboard(works, config, currency, fx, asOf = dashboardDate(), per
   const ownerTotal = ownerStats(rows);
   return {
     asOf, periodStart, currency, rateDate: fx.snapshot?.date || null, refreshFailed: fx.refresh?.failed === true, paymentGaps,
+    legacyRateWorks: count(rows, (row) => rateHealth(row).floating),
+    estimatedRateWorks: count(rows, (row) => rateHealth(row).estimated),
     aedRateDerived: fx.snapshot?.rates.AED?.source === 'cbuae-usd-peg' &&
       (currency === 'AED' || rows.some((row) => row.currency === 'AED')),
     summary: { ...ownerTotal, receivable: money(rows, 'receivable'), unbilled: money(rows, 'unbilled') },
@@ -276,8 +282,7 @@ function dashboardDrilldown(works, config, currency, fx, filter, asOf = dashboar
     stage: row.stage, deadline: row.deadlineDate, currency: row.currency,
     amount: financeKey ? row[financeKey]?.toString() ?? null : null,
     incomplete: financeKey ? financialGap(row, financeKey) : false,
-    missingRate: Boolean(financeKey && row[financeKey] && !row[financeKey].isZero() && row.currency !== currency &&
-      ((row.currency !== 'HUF' && !fx.snapshot?.rates[row.currency]) || (currency !== 'HUF' && !fx.snapshot?.rates[currency])))
+    missingRate: Boolean(financeKey && row[financeKey] !== null && totals([row], financeKey, currency, fx).missingCurrencies.length)
   })) };
 }
 

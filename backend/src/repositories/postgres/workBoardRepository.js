@@ -1,3 +1,4 @@
+const { lockSubWorkRates } = require('../../services/workExchangeRates');
 const mongoose = require('mongoose');
 const { query, withTransaction } = require('../../postgres');
 const { pgOrderBy } = require('../../services/workBoardSort');
@@ -42,7 +43,7 @@ function subWork(row) {
     performanceCertificateSigned: row.performance_certificate_signed,
     invoiceNumber: row.invoice_number, invoiceDate: row.invoice_date,
     invoicePaymentDeadline: row.invoice_payment_deadline, paidAmount: Number(row.paid_amount),
-    paidAt: row.paid_at, archivedAt: row.archived_at, archivedByWorkAt: row.archived_by_work_at,
+    exchangeRates: row.exchange_rates || {}, paidAt: row.paid_at, archivedAt: row.archived_at, archivedByWorkAt: row.archived_by_work_at,
     createdBy: row.created_by, updatedBy: row.updated_by, createdAt: row.created_at, updatedAt: row.updated_at
   };
 }
@@ -239,17 +240,18 @@ async function createSubWork(tenantId, workId, actorId, input) {
     const locked = await client.query('SELECT id FROM work_items WHERE id=$1 AND tenant_id=$2 AND archived_at IS NULL FOR UPDATE', [workId, tenantId]);
     if (!locked.rows[0]) return null;
     const seq = await client.query('SELECT coalesce(max(sequence_number),0)+1 AS value FROM sub_work_items WHERE work_item_id=$1 AND tenant_id=$2', [workId, tenantId]);
+    const exchangeRates = await lockSubWorkRates({}, input);
     const result = await client.query(`INSERT INTO sub_work_items
       (id,tenant_id,work_item_id,sequence_number,name,description,responsible_user_id,responsible,contributors,status,
        deadline,completed_at,planned_hours,amount,currency,performance_certificate_required,
        performance_certificate_signed,invoice_number,invoice_date,invoice_payment_deadline,paid_amount,paid_at,
-       created_by,updated_by,created_at,updated_at)
-      VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9::jsonb,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$23,now(),now()) RETURNING *`,
+       created_by,updated_by,created_at,updated_at,exchange_rates)
+      VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9::jsonb,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$23,now(),now(),$24::jsonb) RETURNING *`,
     [id(),tenantId,workId,Number(seq.rows[0].value),input.name,input.description||'',input.responsibleUserId||null,
       input.responsible||'',JSON.stringify(input.contributors||[]),input.status||'inquiry',input.deadline||null,
       input.completedAt||null,Number(input.plannedHours||0),Number(input.amount||0),input.currency||'HUF',
       Boolean(input.performanceCertificateRequired),Boolean(input.performanceCertificateSigned),input.invoiceNumber||'',
-      input.invoiceDate||null,input.invoicePaymentDeadline||null,Number(input.paidAmount||0),input.paidAt||null,actorId]);
+      input.invoiceDate||null,input.invoicePaymentDeadline||null,Number(input.paidAmount||0),input.paidAt||null,actorId,JSON.stringify(exchangeRates)]);
     return subWork(result.rows[0]);
   });
 }
@@ -263,15 +265,25 @@ const SUB_MUTABLE = new Map([
 ]);
 
 async function updateSubWork(tenantId, subWorkId, actorId, input) {
-  const sets=[]; const params=[subWorkId,tenantId];
-  for(const [key,column] of SUB_MUTABLE) if(Object.hasOwn(input,key)){
-    params.push(input[key]==='' && key==='responsibleUserId'?null:input[key]); sets.push(`${column}=$${params.length}`);
-  }
-  if(Object.hasOwn(input,'contributors')){params.push(JSON.stringify(input.contributors||[]));sets.push(`contributors=$${params.length}::jsonb`);}
-  if(!sets.length){const r=await query('SELECT * FROM sub_work_items WHERE id=$1 AND tenant_id=$2 AND archived_at IS NULL',params);return subWork(r.rows[0]);}
-  params.push(actorId);sets.push(`updated_by=$${params.length}`,'updated_at=now()');
-  const result=await query(`UPDATE sub_work_items SET ${sets.join(',')} WHERE id=$1 AND tenant_id=$2 AND archived_at IS NULL RETURNING *`,params);
-  return subWork(result.rows[0]);
+  return withTransaction(async (client) => {
+    const found = await client.query('SELECT * FROM sub_work_items WHERE id=$1 AND tenant_id=$2 AND archived_at IS NULL FOR UPDATE', [subWorkId, tenantId]);
+    const previous = subWork(found.rows[0]);
+    if (!previous) return null;
+    const exchangeRates = await lockSubWorkRates(previous, { ...previous, ...input });
+    const sets = []; const params = [subWorkId, tenantId];
+    for (const [key, column] of SUB_MUTABLE) if (Object.hasOwn(input, key)) {
+      params.push(input[key] === '' && key === 'responsibleUserId' ? null : input[key]);
+      sets.push(`${column}=$${params.length}`);
+    }
+    if (Object.hasOwn(input, 'contributors')) {
+      params.push(JSON.stringify(input.contributors || [])); sets.push(`contributors=$${params.length}::jsonb`);
+    }
+    if (!sets.length) return previous;
+    params.push(JSON.stringify(exchangeRates)); sets.push(`exchange_rates=$${params.length}::jsonb`);
+    params.push(actorId); sets.push(`updated_by=$${params.length}`, 'updated_at=now()');
+    const result = await client.query(`UPDATE sub_work_items SET ${sets.join(',')} WHERE id=$1 AND tenant_id=$2 AND archived_at IS NULL RETURNING *`, params);
+    return subWork(result.rows[0]);
+  });
 }
 
 async function archiveSubWork(tenantId, subWorkId, actorId) {

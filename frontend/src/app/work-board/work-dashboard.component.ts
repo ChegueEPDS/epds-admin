@@ -4,9 +4,10 @@ import { MatButtonModule } from '@angular/material/button';
 import { RouterLink } from '@angular/router';
 import { firstValueFrom } from 'rxjs';
 import { DashboardFilter, DashboardWorks, WorkBoardService } from '../services/work-board.service';
+import { WorkRateInfoComponent } from './work-rate-info.component';
 
 @Component({
-  imports: [CommonModule, RouterLink, MatButtonModule],
+  imports: [CommonModule, RouterLink, MatButtonModule, WorkRateInfoComponent],
   templateUrl: './work-dashboard.component.html',
   styleUrl: './work-dashboard.component.scss'
 })

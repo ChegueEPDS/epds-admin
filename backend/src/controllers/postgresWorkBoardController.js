@@ -53,7 +53,7 @@ exports.createWork=(req,res)=>run(res,async()=>{if(!clean(req.body?.name))throw 
   const w = await workFields.saveValues(req, status, {}, (customFields, selections) => store.createWork(req.scope.tenantId, req.userId, {
     ...req.body, ...selections, ...workBillingDates({ ...req.body, status }), status, currency, customFields, name: clean(req.body.name), customer: client?.name || '',
     responsible: user ? `${user.firstName} ${user.lastName}`.trim() : ''
-  }));
+  }), { currency });
   res.status(201).json({ work: presentWork({ ...w, subWorks: [] }) });
 });
 exports.updateWork=(req,res)=>run(res,async()=>{const input={...req.body};if(Object.hasOwn(input,'clientId')){const c=(await store.listClients(req.scope.tenantId)).find(x=>x.id===input.clientId);input.customer=c?.name||'';}

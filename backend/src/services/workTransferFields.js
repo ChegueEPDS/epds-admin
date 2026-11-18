@@ -57,7 +57,7 @@ function columnsFor({ config, clients, users, currency }) {
     ['invoiceNumber', 'Invoice number', 'text'], ['contractSigned', 'Contract signed', 'boolean'],
     ['performanceCertificate', 'Performance certificate', 'boolean'],
     ['reporting.backupId', 'Backup', 'reference', userOptions], ['reporting.nextAction', 'Next action', 'text'],
-    ['reporting.actionDue', 'Action due', 'date'], ['reporting.invoicedAmount', 'Invoiced amount', 'money'],
+    ['reporting.actionDue', 'Action due', 'date'], ['reporting.contractDate', 'Order acceptance date', 'date'], ['reporting.invoicedAmount', 'Invoiced amount', 'money'],
     ['reporting.paidAmount', 'Paid amount', 'money'], ['reporting.paymentStatus', 'Payment status', 'choice',
       ['not_invoiced', 'invoiced', 'partially_paid', 'paid']]
   ];

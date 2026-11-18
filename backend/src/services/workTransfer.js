@@ -14,6 +14,7 @@ const { markMongoDashboardDirty } = require('./workDashboardSnapshots');
 const { createWorkbook, readWorkbook, readAttachments, errorWorkbook, invalid } = require('./workTransferWorkbook');
 const { columnsFor, formatWork, prepareRows, markConflicts, revisionOf } = require('./workTransferFields');
 const { importClients } = require('./clientTransfer');
+const { lockWorkRates } = require('./workExchangeRates');
 
 const isPostgres = () => databaseEngine() === 'postgresql';
 const mongoWork = (work) => ({ ...work, id: String(work._id) });
@@ -146,6 +147,9 @@ async function importWorks({ scope, actorId, excel, archive, job }) {
     progress: (processed, total) => Object.assign(job.result, { state: 'validating', processed, total })
   });
   if (issues.length) return rejected(job, workbook, sheet, issues);
+  for (const row of rows.filter(({ modified }) => modified)) {
+    row.changes.reporting = await lockWorkRates(row.previous || {}, { ...row.previous, ...row.changes });
+  }
   if (!isPostgres()) {
     const topology = await mongoose.connection.db.admin().command({ hello: 1 });
     if (!topology.setName && topology.msg !== 'isdbgrid') {

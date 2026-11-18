@@ -21,6 +21,8 @@ import { ClientPayload, FinanceWork, FinanceWorkChanges, FinanceWorkStatus, SubW
 import { WorkFieldValuesComponent } from './work-field-values.component';
 import { WorkLayoutListComponent } from './work-layout-list.component';
 import { WorkTransferDialogComponent } from './work-transfer-dialog.component';
+import { WorkFinancialEntriesComponent } from './work-financial-entries.component';
+import { WorkRateInfoComponent } from './work-rate-info.component';
 import { cardLayout, orderLayout, LayoutItem, WorkFieldOrder, displayWorkField, isWorkFieldFile, PROJECT_SIZES, REPORT_PAYMENT_STATUSES, WORK_CATALOGS, WorkCatalog, WorkCatalogEntry, WorkField, WorkFieldCard, WorkFieldFiles, WorkFieldValues, WorkReporting, workCatalogLabel } from './work-fields';
 
 const billingCalendar = new Intl.DateTimeFormat('sv-SE', { timeZone: 'Europe/Budapest' });
@@ -42,7 +44,7 @@ type SubWorkForm = {
 @Component({
   selector: 'app-work-board',
   standalone: true,
-  imports: [CommonModule, FormsModule, MatButtonModule, MatCheckboxModule, MatDatepickerModule, MatNativeDateModule, MatFormFieldModule, MatIconModule, MatInputModule, MatProgressSpinnerModule, MatSelectModule, MatSnackBarModule, MatSortModule, WorkFieldValuesComponent, WorkLayoutListComponent],
+  imports: [CommonModule, FormsModule, MatButtonModule, MatCheckboxModule, MatDatepickerModule, MatNativeDateModule, MatFormFieldModule, MatIconModule, MatInputModule, MatProgressSpinnerModule, MatSelectModule, MatSnackBarModule, MatSortModule, WorkFieldValuesComponent, WorkLayoutListComponent, WorkFinancialEntriesComponent, WorkRateInfoComponent],
   templateUrl: './work-board.component.html',
   styleUrl: './work-board.component.scss'
 })
@@ -278,7 +280,7 @@ export class WorkBoardComponent implements OnInit, OnDestroy {
       const date = form[field] || null;
       if (date !== this.billingDay(work[field])) changes[field] = date;
     }
-    const reporting = { ...form.reporting };
+    const { exchangeRates, ...reporting } = form.reporting;
     for (const field of ['invoicedAmount', 'paidAmount', 'paymentStatus'] as const) {
       if (reporting[field] === work.reporting[field]) delete reporting[field];
     }
@@ -378,7 +380,7 @@ export class WorkBoardComponent implements OnInit, OnDestroy {
         invoicePaymentDeadline: this.billingDay(work.invoicePaymentDeadline)
           ?? this.paymentDue(this.billingDay(work.completionDate), work.paymentDeadlineDays),
         paidAt: this.billingDay(work.paidAt),
-        reporting: { ...work.reporting }
+        reporting: structuredClone(work.reporting)
       };
     }
   }
@@ -421,7 +423,7 @@ export class WorkBoardComponent implements OnInit, OnDestroy {
     };
     this.fieldChanges = {};
     this.fieldFiles = {};
-    this.reportForm = { ...w.reporting };
+    this.reportForm = structuredClone(w.reporting || {});
     this.editingWork = true; this.showWorkForm = true;
   }
   changeWorkStatus(status: WorkStatus): void {
@@ -701,6 +703,7 @@ export class WorkBoardComponent implements OnInit, OnDestroy {
       case 'totalAmount': return money(work.totalAmount);
       case 'currency': return work.currency;
       case 'offerDate': return date(work.offerDate);
+      case 'contractDate': return date(report?.contractDate);
       case 'deadline': return date(work.deadline);
       case 'paymentDays': return work.paymentDeadlineDays ? work.paymentDeadlineDays + ' days' : null;
       case 'cost': return money(work.costAmount);

@@ -37,7 +37,7 @@ async function readInputs(tenantId) {
   const currency = state.currency || DEFAULT_CURRENCY;
   const revision = String(state.revision ?? 0);
   // Bump the first value when the shape or calculation of the report changes.
-  const key = JSON.stringify([3, revision, Number(state.settingsVersion ?? 0), currency,
+  const key = JSON.stringify([4, revision, Number(state.settingsVersion ?? 0), currency,
     asOf, periodStart, fx.snapshot?.date ?? null, fx.refresh?.at ?? null]);
   // MongoDB work writes and invalidation are separate writes. Periodically
   // rebuild to recover from an interrupted invalidation.
