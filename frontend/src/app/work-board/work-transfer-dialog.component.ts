@@ -9,6 +9,7 @@ import { EMPTY, expand, filter, firstValueFrom, map, switchMap, takeWhile, tap, 
 import { WorkBoardService, WorkImportJob } from '../services/work-board.service';
 
 const finished = (job: WorkImportJob) => ['succeeded', 'rejected', 'failed'].includes(job.state);
+type ImportFileKind = 'workbook' | 'archive';
 const labels: Record<WorkImportJob['state'], string> = {
   reading: 'Reading the workbook…',
   validating: 'Validating work rows…',
@@ -23,19 +24,45 @@ const labels: Record<WorkImportJob['state'], string> = {
   template: `
     <h2 mat-dialog-title id="work-transfer-title">Import / Export works</h2>
     <mat-dialog-content class="content">
+      <section class="drop-zone" [class.dragging]="dragDepth > 0 && !busy" aria-label="Import files"
+        (dragenter)="onDragEnter($event)" (dragover)="onDragOver($event)" (dragleave)="onDragLeave($event)" (drop)="onDrop($event)">
+        <mat-icon class="material-symbols-outlined upload-icon" aria-hidden="true">upload_file</mat-icon>
+        <h3>Drop files here</h3>
+        <input #filePicker type="file" accept=".xlsx,.zip" multiple hidden [disabled]="busy" (change)="selectFiles(filePicker)">
+        <button mat-stroked-button type="button" class="browse" (click)="filePicker.click()"
+          [disabled]="busy" aria-describedby="work-transfer-file-types">
+          Browse files
+        </button>
+        <p id="work-transfer-file-types" class="muted">Excel workbook (.xlsx) · Optional attachments (.zip)</p>
+      </section>
+      @if (workbook || archive) {
+        <ul class="selected-files" aria-label="Selected files">
+          @for (entry of fileKinds; track entry.kind) {
+            @if (this[entry.kind]; as file) {
+              <li>
+                <mat-icon class="material-symbols-outlined" aria-hidden="true">{{ entry.icon }}</mat-icon>
+                <div class="file-description">
+                  <strong [title]="file.name">{{ file.name }}</strong>
+                  <span class="muted">{{ entry.label }}</span>
+                </div>
+                <button mat-icon-button type="button" [attr.aria-label]="'Remove ' + entry.label"
+                  [disabled]="busy" (click)="removeFile(entry.kind)">
+                  <mat-icon class="material-symbols-outlined" aria-hidden="true">close</mat-icon>
+                </button>
+              </li>
+            }
+          }
+        </ul>
+      }
       <div class="actions">
-        <button mat-stroked-button type="button" (click)="export('template')" [disabled]="!!downloadPending">
+        <button mat-button type="button" (click)="export('template')" [disabled]="!!downloadPending">
           <mat-icon class="material-symbols-outlined">download</mat-icon>Download template
         </button>
-        <button mat-stroked-button type="button" (click)="export('export')" [disabled]="!!downloadPending">
+        <button mat-button type="button" (click)="export('export')" [disabled]="!!downloadPending">
           <mat-icon class="material-symbols-outlined">download</mat-icon>Export works
         </button>
       </div>
-      <p>Keep the ID in column A to update an exported work. Leave it blank to create a new work.</p>
-      <div class="files">
-        <label>Excel workbook <input type="file" accept=".xlsx" (change)="selectFile($event, 'workbook')" [disabled]="busy"></label>
-        <label>Attachments ZIP (optional) <input type="file" accept=".zip" (change)="selectFile($event, 'archive')" [disabled]="busy"></label>
-      </div>
+      <p class="muted import-hint">Keep the ID in column A to update an exported work. Leave it blank to create a new work.</p>
       @if (busy) {
         <div class="status" role="status">
           <span>{{ statusText }}</span>
@@ -67,12 +94,39 @@ const labels: Record<WorkImportJob['state'], string> = {
     </mat-dialog-actions>
   `,
   styles: [`
-    .content, .files, .result { display: grid; gap: 12px; }
-    .actions, .status { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+    .content, .result { display: grid; gap: 12px; }
+    .actions, .status { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; }
     .status { justify-content: space-between; }
-    .files label { display: grid; gap: 6px; min-width: 0; }
-    input { max-width: 100%; }
-    p { margin: 0; }
+    .drop-zone {
+      display: grid;
+      justify-items: center;
+      gap: 12px;
+      padding: clamp(20px, 5vw, 32px) 16px;
+      border: 2px dashed var(--brand-border-strong);
+      border-radius: 14px;
+      background: var(--brand-panel-soft);
+      color: var(--brand-ink);
+      text-align: center;
+    }
+    .drop-zone.dragging { border-color: var(--brand-accent-ink); background: var(--brand-accent-soft); }
+    .upload-icon { width: 40px; height: 40px; font-size: 40px; }
+    .drop-zone h3 { font-size: 1.05rem; font-weight: 700; }
+    .browse { min-height: 40px; }
+    .muted { color: var(--brand-muted); font-size: .875rem; }
+    .import-hint { line-height: 1.5; }
+    p, h3 { margin: 0; }
+    .selected-files { display: grid; gap: 8px; padding: 0; margin: 0; list-style: none; }
+    .selected-files li {
+      display: grid;
+      grid-template-columns: auto minmax(0, 1fr) auto;
+      align-items: center;
+      gap: 10px;
+      padding: 4px 8px 4px 12px;
+      border: 1px solid var(--brand-border);
+      border-radius: 10px;
+    }
+    .file-description { display: grid; gap: 2px; }
+    .file-description strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .result { padding: 12px; border: 1px solid var(--brand-border); border-radius: 8px; }
     .result button { justify-self: start; }
     .error { color: var(--brand-error); }
@@ -84,6 +138,11 @@ export class WorkTransferDialogComponent {
   private readonly destroy = inject(DestroyRef);
   workbook?: File;
   archive?: File;
+  readonly fileKinds = [
+    { kind: 'workbook', label: 'Excel workbook', icon: 'table_view' },
+    { kind: 'archive', label: 'Attachments ZIP', icon: 'folder_zip' }
+  ] as const;
+  dragDepth = 0;
   job?: WorkImportJob;
   busy = false;
   saved = false;
@@ -97,13 +156,57 @@ export class WorkTransferDialogComponent {
     return this.job.state === 'validating' && this.job.total ? this.job.processed * 100 / this.job.total : undefined;
   }
 
-  selectFile(event: Event, kind: 'workbook' | 'archive'): void {
-    this[kind] = (event.target as HTMLInputElement).files?.[0];
+  selectFiles(input: HTMLInputElement): void {
+    if (input.files) this.setFiles(input.files);
+    input.value = '';
+  }
+
+  onDragEnter(event: DragEvent): void {
+    if (!event.dataTransfer?.types.includes('Files')) return;
+    event.preventDefault();
+    if (!this.busy) this.dragDepth++;
+  }
+
+  onDragOver(event: DragEvent): void {
+    if (!event.dataTransfer?.types.includes('Files')) return;
+    event.preventDefault();
+    event.dataTransfer.dropEffect = this.busy ? 'none' : 'copy';
+  }
+
+  onDragLeave(event: DragEvent): void {
+    if (event.dataTransfer?.types.includes('Files')) this.dragDepth = Math.max(0, this.dragDepth - 1);
+  }
+
+  onDrop(event: DragEvent): void {
+    event.preventDefault();
+    this.dragDepth = 0;
+    if (event.dataTransfer) this.setFiles(event.dataTransfer.files);
+  }
+
+  removeFile(kind: ImportFileKind): void {
+    if (this.busy) return;
+    this[kind] = undefined;
+    this.error = '';
+  }
+
+  private setFiles(files: FileList): void {
+    if (this.busy || !files.length) return;
+    const picked: Partial<Record<ImportFileKind, File>> = {};
+    for (const file of Array.from(files)) {
+      const kind = /\.xlsx$/i.test(file.name) ? 'workbook' : /\.zip$/i.test(file.name) ? 'archive' : undefined;
+      if (!kind || picked[kind]) {
+        this.error = 'Choose one .xlsx workbook and up to one .zip archive.';
+        return;
+      }
+      picked[kind] = file;
+    }
+    Object.assign(this, picked);
     this.error = '';
   }
 
   start(): void {
     if (!this.workbook || this.busy) return;
+    this.dragDepth = 0;
     this.job = undefined;
     this.uploadPercent = undefined;
     const request = this.board.startWorkImport(this.workbook, this.archive).pipe(

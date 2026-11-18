@@ -136,7 +136,7 @@ export class WorkBoardComponent implements OnInit, OnDestroy {
 
   constructor(private board: WorkBoardService, private snackBar: MatSnackBar, public auth: AuthService, private route: ActivatedRoute) {}
   openWorkTransfer(): void {
-    this.dialog.open(WorkTransferDialogComponent, { width: '560px', ariaLabelledBy: 'work-transfer-title' })
+    this.dialog.open(WorkTransferDialogComponent, { width: '580px', maxWidth: 'calc(100vw - 24px)', ariaLabelledBy: 'work-transfer-title' })
       .afterClosed().subscribe((saved) => { if (saved && !this.destroyed) void this.load(); });
   }
   ngOnInit(): void {
