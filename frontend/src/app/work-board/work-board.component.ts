@@ -18,7 +18,7 @@ import { AuthService } from '../services/auth.service';
 import { ClientPayload, FinanceWork, FinanceWorkChanges, FinanceWorkStatus, SubWorkItem, SubWorkPayload, TenantUserOption, WorkBoardClient, WorkBoardService, WorkDocument, WorkItem, WorkPayload, WorkStatus } from '../services/work-board.service';
 import { WorkFieldValuesComponent } from './work-field-values.component';
 import { WorkLayoutListComponent } from './work-layout-list.component';
-import { cardLayout, orderLayout, LayoutItem, WorkFieldOrder, displayWorkField, isWorkFieldFile, PROJECT_SIZES, REPORT_PAYMENT_STATUSES, WORK_CATALOGS, WorkCatalog, WorkField, WorkFieldCard, WorkFieldFiles, WorkFieldOption, WorkFieldValues, WorkReporting } from './work-fields';
+import { cardLayout, orderLayout, LayoutItem, WorkFieldOrder, displayWorkField, isWorkFieldFile, PROJECT_SIZES, REPORT_PAYMENT_STATUSES, WORK_CATALOGS, WorkCatalog, WorkCatalogEntry, WorkField, WorkFieldCard, WorkFieldFiles, WorkFieldValues, WorkReporting, workCatalogLabel } from './work-fields';
 
 const billingCalendar = new Intl.DateTimeFormat('sv-SE', { timeZone: 'Europe/Budapest' });
 const billingDateFields = ['completionDate', 'invoiceDate', 'invoicePaymentDeadline', 'paidAt'] as const;
@@ -67,11 +67,13 @@ export class WorkBoardComponent implements OnInit, OnDestroy {
   customFields: WorkField[] = [];
   reportingEnabled = false;
   projectSizeGrouping = false;
+  addServiceTypeCodeToWorkNumber = false;
   reportForm: WorkReporting = {};
   readonly projectSizes = PROJECT_SIZES;
   readonly reportPaymentStatuses = REPORT_PAYMENT_STATUSES;
   readonly catalogDefinitions = WORK_CATALOGS;
-  catalogs: Record<WorkCatalog, WorkFieldOption[]> = { entities: [], serviceTypes: [] };
+  catalogs: Record<WorkCatalog, WorkCatalogEntry[]> = { entities: [], serviceTypes: [] };
+  readonly workCatalogLabel = workCatalogLabel;
   fieldChanges: WorkFieldValues = {};
   fieldFiles: WorkFieldFiles = {};
   expandedWorkIds = new Set<string>();
@@ -294,6 +296,7 @@ export class WorkBoardComponent implements OnInit, OnDestroy {
       if (settings) {
         this.reportingEnabled = true;
         this.projectSizeGrouping = settings.projectSizeGrouping === true;
+        this.addServiceTypeCodeToWorkNumber = settings.addServiceTypeCodeToWorkNumber === true;
         this.customFields = settings.fields.filter((field) => !field.archived);
         this.fieldOrder = settings.fieldOrder;
         this.hiddenFields = new Set(settings.hiddenFields);
@@ -417,6 +420,10 @@ export class WorkBoardComponent implements OnInit, OnDestroy {
 
   async saveWork(): Promise<void> {
     if (!this.workForm.name.trim()) return this.notice('Work name is required.');
+    if (this.requiresServiceTypeCode && !this.catalogs.serviceTypes.some((entry) =>
+      entry.id === this.workForm.serviceTypeId && !!entry.code && !entry.archived)) {
+      return this.notice('Select a service type with a three-letter code.');
+    }
     const active = this.customFields.filter((field) => this.isFieldVisible(field.id) && this.fieldRelevant(field, this.workForm.status));
     const missing = active.find((field) => {
       if (!field.required || this.fieldFiles[field.id]) return false;
@@ -586,15 +593,17 @@ export class WorkBoardComponent implements OnInit, OnDestroy {
   get editorValues(): WorkFieldValues { return (this.editingWork && this.selectedWork?.customFields) || {}; }
   get visibleCatalogs() { return this.catalogDefinitions.filter((catalog) => this.hasCatalogOptions(catalog.key)); }
   hasCatalogOptions(catalog: WorkCatalog): boolean { return this.catalogs[catalog].some((entry) => !entry.archived); }
-  catalogOptions(catalog: WorkCatalog, current: string): WorkFieldOption[] {
+  get requiresServiceTypeCode(): boolean { return !this.editingWork && this.addServiceTypeCodeToWorkNumber; }
+  catalogOptions(catalog: WorkCatalog, current: string): WorkCatalogEntry[] {
     return this.catalogs[catalog].filter((entry) => !entry.archived || entry.id === current);
   }
   catalogLabel(catalog: WorkCatalog, id?: string | null): string {
     return this.catalogs[catalog].find((entry) => entry.id === id)?.label || '—';
   }
   isFieldVisible(id: string): boolean { return !this.hiddenFields.has(id); }
-  orderedFields(card: WorkFieldCard): LayoutItem[] {
-    return orderLayout(cardLayout(card, this.customFields, this.hiddenFields).filter((item) => item.visible), this.fieldOrder?.[card]);
+  orderedFields(card: WorkFieldCard, includeServiceType = false): LayoutItem[] {
+    return orderLayout(cardLayout(card, this.customFields, this.hiddenFields)
+      .filter((item) => item.visible || (includeServiceType && item.id === 'serviceTypeId')), this.fieldOrder?.[card]);
   }
   customField(id: string): WorkField | undefined { return this.customFields.find((field) => field.id === id); }
   get hasExecutionInputs(): boolean {

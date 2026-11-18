@@ -8,8 +8,8 @@ import { MatSelectModule } from '@angular/material/select';
 import { MatTabsModule } from '@angular/material/tabs';
 import { MatDialog, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
 import { firstValueFrom } from 'rxjs';
-import { WorkBoardService, WorkCurrencyPreference } from '../services/work-board.service';
-import { WORK_TABLE_COLUMNS, WORK_CATALOGS, WORK_FIELD_CARDS, WORK_FIELD_TYPES, WorkCatalog, WorkField, WorkFieldOption, WorkFieldSettings, WorkSettingsChange, WorkFieldCard, WorkFieldOrder, LayoutItem, cardLayout, orderLayout } from './work-fields';
+import { WorkBoardService, WorkCurrencyPreference, WorkTurnoverPreference } from '../services/work-board.service';
+import { WORK_TABLE_COLUMNS, WORK_CATALOGS, WORK_FIELD_CARDS, WORK_FIELD_TYPES, WorkCatalog, WorkCatalogEntry, WorkField, WorkFieldSettings, WorkSettingsChange, WorkFieldCard, WorkFieldOrder, LayoutItem, cardLayout, orderLayout, workCatalogLabel } from './work-fields';
 import { WorkLayoutListComponent } from './work-layout-list.component';
 
 @Component({
@@ -29,6 +29,8 @@ import { WorkLayoutListComponent } from './work-layout-list.component';
     .options { display: grid; gap: 8px; }
     .options mat-form-field { flex: 1 1 12rem; }
     .actions { display: flex; gap: 8px; flex-wrap: wrap; }
+    .settings-form { display: grid; justify-items: start; gap: 14px; }
+    .settings-form .actions { align-items: center; }
     .error { color: var(--brand-error); }
     .tab-content { display: grid; gap: 12px; padding-block: 16px; }
     .layout-card { min-width: 0; border: 1px solid var(--brand-border); border-radius: 12px; background: var(--brand-panel); }
@@ -48,12 +50,23 @@ export class WorkFieldSettingsComponent implements OnInit {
   readonly cards = WORK_FIELD_CARDS;
   readonly types = WORK_FIELD_TYPES;
   readonly catalogs = WORK_CATALOGS;
+  readonly workCatalogLabel = workCatalogLabel;
   config?: WorkFieldSettings;
   draft?: WorkField;
-  catalogDraft?: { catalog: WorkCatalog; entry: WorkFieldOption };
+  catalogDraft?: { catalog: WorkCatalog; entry: WorkCatalogEntry };
   currencyPreference?: WorkCurrencyPreference;
   defaultCurrency = '';
   currencyBusy = false;
+  turnoverPreference?: WorkTurnoverPreference;
+  turnoverMonth = 1;
+  turnoverDay = 1;
+  alignWorkSequence = false;
+  turnoverBusy = false;
+  addServiceTypeCodeToWorkNumber = false;
+  readonly turnoverMonths = ['January', 'February', 'March', 'April', 'May', 'June',
+    'July', 'August', 'September', 'October', 'November', 'December'];
+  private readonly monthLengths = [31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+  readonly calendarDays = Array.from({ length: 31 }, (_, index) => index + 1);
   busy = false;
   error = '';
   notice = '';
@@ -124,7 +137,7 @@ export class WorkFieldSettingsComponent implements OnInit {
     } });
   }
 
-  ngOnInit(): void { void this.load(); void this.loadCurrency(); }
+  ngOnInit(): void { void this.load(); void this.loadCurrency(); void this.loadTurnover(); }
 
   private async loadCurrency(): Promise<void> {
     try {
@@ -145,10 +158,50 @@ export class WorkFieldSettingsComponent implements OnInit {
     finally { this.currencyBusy = false; }
   }
 
-  async load(): Promise<void> {
+  get daysInTurnoverMonth(): number {
+    return this.monthLengths[this.turnoverMonth - 1];
+  }
+
+  onTurnoverMonthChange(month: number): void {
+    this.turnoverMonth = month;
+    this.turnoverDay = Math.min(this.turnoverDay, this.daysInTurnoverMonth);
+  }
+
+  private get turnoverDate(): string {
+    return [this.turnoverMonth, this.turnoverDay].map((value) => String(value).padStart(2, '0')).join('-');
+  }
+
+  get turnoverChanged(): boolean {
+    return !!this.turnoverPreference && (this.turnoverDate !== this.turnoverPreference.workTurnoverDay ||
+      this.alignWorkSequence !== this.turnoverPreference.alignWorkSequence);
+  }
+
+  private async loadTurnover(): Promise<void> {
+    try {
+      this.turnoverPreference = await firstValueFrom(this.board.turnoverPreference());
+      [this.turnoverMonth, this.turnoverDay] = this.turnoverPreference.workTurnoverDay.split('-').map(Number);
+      this.alignWorkSequence = this.turnoverPreference.alignWorkSequence;
+    } catch (error) { this.showError(error); }
+  }
+
+  async saveTurnover(): Promise<void> {
+    if (this.turnoverBusy || !this.turnoverChanged) return;
+    this.turnoverBusy = true;
+    this.error = this.notice = '';
+    try {
+      this.turnoverPreference = await firstValueFrom(this.board.saveTurnoverPreference({
+        workTurnoverDay: this.turnoverDate, alignWorkSequence: this.alignWorkSequence
+      }));
+      this.notice = 'Turnover settings saved.';
+    } catch (error) { this.showError(error); }
+    finally { this.turnoverBusy = false; }
+  }
+
+  async load(preserveLayout = false): Promise<void> {
     try {
       this.config = await firstValueFrom(this.board.fieldSettings());
-      this.discardLayout();
+      this.addServiceTypeCodeToWorkNumber = this.config.addServiceTypeCodeToWorkNumber;
+      if (!preserveLayout) this.discardLayout();
     }
     catch (error) { this.showError(error); }
   }
@@ -186,10 +239,25 @@ export class WorkFieldSettingsComponent implements OnInit {
       this.fieldDialog?.close();
     } else this.stageField({ ...field, archived: !field.archived });
   }
-  editCatalog(catalog: WorkCatalog, entry = { id: '', label: '', archived: false }): void {
+  editCatalog(catalog: WorkCatalog, entry: WorkCatalogEntry = { id: '', label: '', archived: false }): void {
     this.catalogDraft = { catalog, entry: { ...entry } };
   }
-  toggleCatalogArchived(catalog: WorkCatalog, entry: WorkFieldOption): void {
+  validServiceTypeCode(value = ''): boolean {
+    const code = value.trim().normalize('NFC');
+    const threeLetters = /^\p{L}{3}$/u;
+    return !code || (threeLetters.test(code) && threeLetters.test(code.toUpperCase().normalize('NFC')));
+  }
+  async saveWorkNumbering(confirmation: TemplateRef<unknown>): Promise<void> {
+    if (this.busy || !this.config) return;
+    const choice = await firstValueFrom(this.dialog.open(confirmation, {
+      width: '480px', ariaLabelledBy: 'work-numbering-confirmation-title'
+    }).afterClosed());
+    if (choice === 'update' || choice === 'save') {
+      await this.save({ addServiceTypeCodeToWorkNumber: this.addServiceTypeCodeToWorkNumber,
+        updateExistingWorkNumbers: choice === 'update' });
+    }
+  }
+  toggleCatalogArchived(catalog: WorkCatalog, entry: WorkCatalogEntry): void {
     void this.save({ catalog, entry: { ...entry, archived: !entry.archived } });
   }
   cardLabel(field: WorkField): string { return this.cards.find((card) => card.id === field.card)?.label || ''; }
@@ -207,11 +275,25 @@ export class WorkFieldSettingsComponent implements OnInit {
       this.draft = undefined;
       this.catalogDraft = undefined;
       if ('layout' in change) this.discardLayout();
-      this.notice = 'field' in change ? 'Field settings saved.' :
-        'catalog' in change ? 'Catalog entry saved.' : 'layout' in change ? 'Field layout saved.' : 'Project size setting saved.';
+      if ('addServiceTypeCodeToWorkNumber' in change) {
+        const result = this.config.workNumberUpdate;
+        this.notice = 'Work numbering setting saved.';
+        if (result) {
+          this.notice += ` Updated work numbers: ${result.updated}.`;
+          if (result.missingCode) this.notice += ` Missing service type code: ${result.missingCode}.`;
+          if (result.customFormat) this.notice += ` Kept custom work numbers: ${result.customFormat}.`;
+          if (result.concurrentChanges) this.notice += ` Changed while saving: ${result.concurrentChanges}. Save again to retry.`;
+        }
+      } else {
+        this.notice = 'field' in change ? 'Field settings saved.' :
+          'catalog' in change ? 'Catalog entry saved.' : 'layout' in change ? 'Field layout saved.' : 'Project size setting saved.';
+      }
     } catch (error) {
       this.showError(error);
-      if ((error as { status?: number }).status === 409 && !this.layoutDirty) {
+      const status = (error as { status?: number }).status;
+      if (status === 503 && 'addServiceTypeCodeToWorkNumber' in change) {
+        await this.load(true);
+      } else if (status === 409 && !this.layoutDirty) {
         this.draft = undefined;
         this.catalogDraft = undefined;
         await this.load();

@@ -50,6 +50,7 @@ export type ActiveWorkValue = {
   amount: number | null; currency: string; rateDate: string | null; missingCurrencies: string[]; refreshFailed: boolean;
 };
 export type WorkCurrencyPreference = { defaultCurrency: string; currencies: string[] };
+export type WorkTurnoverPreference = { workTurnoverDay: string; alignWorkSequence: boolean };
 export type DashboardOwner = { active: number; leads: number; activeValue: ActiveWorkValue; pipelineValue: ActiveWorkValue;
   overdue: number; stale: number; attention: number };
 export type DashboardCount = { label: string; count: number };
@@ -239,6 +240,12 @@ export class WorkBoardService {
   }
   saveCurrencyPreference(defaultCurrency: string): Observable<WorkCurrencyPreference> {
     return this.refreshAfterSave(this.http.put<WorkCurrencyPreference>(`${this.baseUrl}/default-currency`, { defaultCurrency }, { withCredentials: true }));
+  }
+  turnoverPreference(): Observable<WorkTurnoverPreference> {
+    return this.http.get<WorkTurnoverPreference>(`${this.baseUrl}/turnover`, { withCredentials: true });
+  }
+  saveTurnoverPreference(preference: WorkTurnoverPreference): Observable<WorkTurnoverPreference> {
+    return this.refreshAfterSave(this.http.put<WorkTurnoverPreference>(`${this.baseUrl}/turnover`, preference, { withCredentials: true }));
   }
   saveFieldSettings(version: number, change: WorkSettingsChange): Observable<WorkFieldSettings> {
     return this.refreshAfterSave(this.http.put<WorkFieldSettings>(`${this.baseUrl}/custom-fields`, { version, ...change }, { withCredentials: true }));

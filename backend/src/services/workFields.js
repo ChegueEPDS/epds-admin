@@ -1,9 +1,12 @@
 const { randomUUID } = require('node:crypto');
 const { pipeline } = require('node:stream/promises');
-const { databaseEngine, query } = require('../postgres');
+const { databaseEngine, query, withTransaction } = require('../postgres');
 const Tenant = require('../models/tenant');
 const storage = require('./fileStorageService');
 const { workReporting } = require('./workDashboard');
+const { DEFAULT_WORK_TURNOVER_DAY, workTurnoverError } = require('./workTurnover');
+const { isServiceTypeCode, updatePostgresWorkNumbers, updateMongoWorkNumbers } = require('./workNumbers');
+const { withJobLease } = require('./scheduledJobLeaseService');
 
 const cards = { basic: 0, offer: 1, execution: 2, completion: 3, invoice: 4, reporting: 0, documents: 0 };
 const builtInFields = {
@@ -21,7 +24,7 @@ const ranks = { inquiry: 0, offer: 1, to_start: 2, in_progress: 2, on_hold: 2,
   completed_billable: 3, invoiced: 4, paid: 5, closed: 6, cancelled: 6, lost: 1 };
 const types = ['text', 'longText', 'integer', 'decimal', 'date', 'amount', 'list', 'boolean', 'file'];
 const uid = /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/;
-const empty = { version: 0, fields: [], entities: [], serviceTypes: [], projectSizeGrouping: false };
+const empty = { version: 0, fields: [], entities: [], serviceTypes: [], projectSizeGrouping: false, addServiceTypeCodeToWorkNumber: false };
 const workCatalogs = [
   { key: 'entities', reference: 'entityId', label: 'Entity' },
   { key: 'serviceTypes', reference: 'serviceTypeId', label: 'Service type' }
@@ -77,6 +80,16 @@ function updateCatalog(current, input) {
   if (!archived && options.some((item) => item.id !== previous?.id && !item.archived &&
       item.label.toLowerCase() === label.toLowerCase())) throw fail('An active entry with this name already exists.');
   const entry = { id: previous?.id || randomUUID(), label, archived };
+  if (catalog.key === 'serviceTypes') {
+    const value = Object.hasOwn(draft, 'code') ? draft.code : previous?.code ?? '';
+    if (typeof value !== 'string') throw fail('Enter a three-letter service type code.');
+    const original = value.trim().normalize('NFC');
+    const code = original.toUpperCase().normalize('NFC');
+    if (code && (!isServiceTypeCode(original) || !isServiceTypeCode(code))) {
+      throw fail('Enter a three-letter service type code.');
+    }
+    if (code) entry.code = code;
+  }
   return { ...current, version: current.version + 1, [catalog.key]: previous
     ? options.map((item) => item.id === entry.id ? entry : item)
     : [...options, entry] };
@@ -118,6 +131,9 @@ function buildSettings(current, input) {
   }
   if (typeof input.projectSizeGrouping === 'boolean') {
     return { ...current, version: current.version + 1, projectSizeGrouping: input.projectSizeGrouping };
+  }
+  if (typeof input.addServiceTypeCodeToWorkNumber === 'boolean') {
+    return { ...current, version: current.version + 1, addServiceTypeCodeToWorkNumber: input.addServiceTypeCodeToWorkNumber };
   }
   if (Object.hasOwn(input, 'catalog')) return updateCatalog(current, input);
   if (Object.hasOwn(input, 'fieldOrder')) {
@@ -203,20 +219,87 @@ function catalogSelections(config, work, input) {
   }));
 }
 
+function workNumberPrefix(config, serviceTypeId) {
+  if (config?.addServiceTypeCodeToWorkNumber !== true) return '';
+  const code = config.serviceTypes?.find((entry) => entry.id === serviceTypeId && !entry.archived)?.code;
+  if (!isServiceTypeCode(code)) {
+    throw fail('Select a service type with a three-letter code to create a work.', 422);
+  }
+  return code;
+}
+
+const turnoverColumns = 'work_turnover_day AS "workTurnoverDay", align_work_sequence AS "alignWorkSequence"';
+async function workTurnoverPreference(tenantId) {
+  const tenant = databaseEngine() === 'postgresql'
+    ? (await query(`SELECT ${turnoverColumns} FROM tenants WHERE id=$1`, [tenantId])).rows[0]
+    : await Tenant.findById(tenantId).select('workTurnoverDay alignWorkSequence').lean();
+  if (!tenant) throw fail('Tenant not found.', 404);
+  return {
+    workTurnoverDay: tenant.workTurnoverDay ?? DEFAULT_WORK_TURNOVER_DAY,
+    alignWorkSequence: tenant.alignWorkSequence === true
+  };
+}
+
+async function saveWorkTurnoverPreference(tenantId, input) {
+  const { workTurnoverDay, alignWorkSequence } = input || {};
+  const preference = { workTurnoverDay, alignWorkSequence };
+  const error = workTurnoverError(preference);
+  if (error || workTurnoverDay === undefined || alignWorkSequence === undefined) {
+    throw fail(error || 'Enter a turnover date and sequence alignment.');
+  }
+  const saved = databaseEngine() === 'postgresql'
+    ? (await query('UPDATE tenants SET work_turnover_day=$2, align_work_sequence=$3, updated_at=now() WHERE id=$1',
+      [tenantId, workTurnoverDay, alignWorkSequence])).rowCount
+    : (await Tenant.updateOne({ _id: tenantId }, { $set: preference })).matchedCount;
+  if (!saved) throw fail('Tenant not found.', 404);
+  return preference;
+}
+
 async function saveSettings(tenantId, input) {
+  const numbering = typeof input?.addServiceTypeCodeToWorkNumber === 'boolean';
+  const updateExisting = input?.updateExistingWorkNumbers === true;
+  if (Object.hasOwn(input || {}, 'updateExistingWorkNumbers') &&
+      (!numbering || typeof input.updateExistingWorkNumbers !== 'boolean' || Object.hasOwn(input, 'layout') ||
+        typeof input.projectSizeGrouping === 'boolean')) throw fail('Invalid work numbering settings.');
+  if (numbering && databaseEngine() !== 'postgresql') {
+    const lease = await withJobLease(`work-numbering:${tenantId}`, 10 * 60 * 1000,
+      () => persistSettings(tenantId, input, updateExisting));
+    if (!lease.acquired) throw fail('Work numbering is being updated. Try again shortly.', 409);
+    return lease.value;
+  }
+  return persistSettings(tenantId, input, updateExisting);
+}
+
+async function persistSettings(tenantId, input, updateExisting) {
   const current = await settings(tenantId);
   const next = buildSettings(current, input);
-  let matched;
+  const conflict = () => fail('Settings changed. Reload and try again.', 409);
   if (databaseEngine() === 'postgresql') {
-    matched = (await query("UPDATE tenants SET work_field_settings=$2::jsonb WHERE id=$1 AND (work_field_settings->>'version')::int=$3",
-      [tenantId, JSON.stringify(next), current.version])).rowCount;
-  } else {
-    const version = current.version ? { 'workFieldSettings.version': current.version }
-      : { 'workFieldSettings.version': { $in: [null, 0] } };
-    matched = (await Tenant.updateOne({ _id: tenantId, ...version }, { $set: { workFieldSettings: next } })).matchedCount;
+    const persist = async (runQuery) => {
+      const result = await runQuery("UPDATE tenants SET work_field_settings=$2::jsonb WHERE id=$1 AND (work_field_settings->>'version')::int=$3",
+        [tenantId, JSON.stringify(next), current.version]);
+      if (!result.rowCount) throw conflict();
+    };
+    if (updateExisting) return withTransaction(async (client) => {
+      await persist(client.query.bind(client));
+      const workNumberUpdate = await updatePostgresWorkNumbers(client, tenantId, next);
+      return { ...next, workNumberUpdate };
+    });
+    await persist(query);
+    return next;
   }
-  if (!matched) throw fail('Settings changed. Reload and try again.', 409);
-  return next;
+  const version = current.version ? { 'workFieldSettings.version': current.version }
+    : { 'workFieldSettings.version': { $in: [null, 0] } };
+  const { matchedCount } = await Tenant.updateOne({ _id: tenantId, ...version }, { $set: { workFieldSettings: next } });
+  if (!matchedCount) throw conflict();
+  if (!updateExisting) return next;
+  try {
+    const workNumberUpdate = await updateMongoWorkNumbers(tenantId, next);
+    return { ...next, workNumberUpdate };
+  } catch (error) {
+    console.error('[work-numbering] Could not finish updating existing work numbers', error.code);
+    throw fail('Work numbering was saved. Save again and choose to update existing work numbers to finish.', 503);
+  }
 }
 
 function validDate(value) {
@@ -307,7 +390,7 @@ async function saveValues(req, status, work, save) {
       await storage.uploadBuffer(key, buffer);
       uploaded.push(key);
     }
-    result = await save(values, { ...selections, reporting });
+    result = await save(values, { ...selections, reporting }, config);
   } catch (error) {
     await Promise.allSettled(uploaded.map((key) => storage.deleteFile(key)));
     if (error.name === 'VersionError' || error.code === '40001') throw fail('The work changed. Reload and try again.', 409);
@@ -340,4 +423,5 @@ async function download(req, res, work) {
   await pipeline(result.stream, res);
 }
 
-module.exports = { settings, saveSettings, saveValues, download, buildSettings, planValues, relevant, catalogSelections };
+module.exports = { settings, saveSettings, saveValues, download, buildSettings, planValues, relevant, catalogSelections,
+  workNumberPrefix, workTurnoverPreference, saveWorkTurnoverPreference };

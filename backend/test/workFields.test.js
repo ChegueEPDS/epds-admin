@@ -1,6 +1,7 @@
 const assert = require('node:assert/strict');
 const { test } = require('node:test');
-const { buildSettings, planValues, catalogSelections } = require('../src/services/workFields');
+const { buildSettings, planValues, catalogSelections, workNumberPrefix } = require('../src/services/workFields');
+const { planWorkNumberUpdates } = require('../src/services/workNumbers');
 
 const field = (id, type, extra) => ({ id, label: id, type, card: 'basic', ...extra });
 
@@ -61,6 +62,52 @@ test('entities and service types have separate tenant catalogs with stable archi
   const withField = buildSettings(archived, { version: 3, field: field('', 'text', { label: 'Reference' }) });
   assert.deepEqual(withField.entities, archived.entities);
   assert.deepEqual(withField.serviceTypes, archived.serviceTypes);
+});
+
+test('work numbering prefixes use the active service type code when enabled', () => {
+  const initial = { version: 0, fields: [], serviceTypes: [{ id: 'legacy', label: 'Legacy', archived: false }] };
+  const addService = (code) => buildSettings(initial, {
+    version: 0, catalog: 'serviceTypes', entry: { label: 'Inspection', code }
+  });
+  for (const code of ['IN', 'INSP', 'IN5', 'I-S', 'ßA', 'ßAB']) {
+    assert.throws(() => addService(code), { statusCode: 400 });
+  }
+  const catalog = addService(' ko\u0301d ');
+  const service = catalog.serviceTypes[1];
+  assert.equal(service.code, 'KÓD');
+  assert.equal(workNumberPrefix(catalog, service.id), '');
+  const enabled = buildSettings(catalog, { version: 1, addServiceTypeCodeToWorkNumber: true });
+  assert.equal(workNumberPrefix(enabled, service.id), 'KÓD');
+  for (const id of [undefined, 'legacy', 'other-tenant']) {
+    assert.throws(() => workNumberPrefix(enabled, id), { statusCode: 422 });
+  }
+  const archived = buildSettings(enabled, { version: 2, catalog: 'serviceTypes',
+    entry: { id: service.id, label: service.label, archived: true } });
+  assert.equal(archived.serviceTypes[1].code, 'KÓD');
+  assert.throws(() => workNumberPrefix(archived, service.id), { statusCode: 422 });
+  const disabled = buildSettings(archived, { version: 3, addServiceTypeCodeToWorkNumber: false });
+  assert.equal(workNumberPrefix(disabled, null), '');
+});
+
+test('existing work numbers retain their sequence when a prefix is added, replaced or removed', () => {
+  const settings = { serviceTypes: [{ id: 'inspection', code: 'KÓD', archived: true }], addServiceTypeCodeToWorkNumber: true };
+  const work = (id, sequenceNumber, workNumber, serviceTypeId = 'inspection') => ({
+    id, year: 2026, sequenceNumber, workNumber, serviceTypeId
+  });
+  const works = [
+    work('old', 1, '26-0001'), work('stale', 2, 'INS26-0002'), work('current', 3, 'KÓD26-0003'),
+    work('missing', 4, '26-0004', null), work('custom', 5, 'EXT-2026-5'), work('long', 12345, '26-12345')
+  ];
+  const enabled = planWorkNumberUpdates(works, settings);
+  assert.deepEqual(enabled.changes.map(({ next }) => next), ['KÓD26-0001', 'KÓD26-0002', 'KÓD26-12345']);
+  assert.equal(enabled.missingCode, 1);
+  assert.equal(enabled.customFormat, 1);
+  const replacements = new Map(enabled.changes.map(({ id, next }) => [id, next]));
+  const updated = works.map((item) => ({ ...item, workNumber: replacements.get(item.id) ?? item.workNumber }));
+  assert.deepEqual(planWorkNumberUpdates(updated, settings).changes, []);
+  const disabled = planWorkNumberUpdates(updated, { ...settings, addServiceTypeCodeToWorkNumber: false });
+  assert.deepEqual(disabled.changes.map(({ next }) => next), ['26-0001', '26-0002', '26-0003', '26-12345']);
+  assert.equal(disabled.missingCode, 0);
 });
 
 test('required fields follow the target card status and accept false and zero', () => {

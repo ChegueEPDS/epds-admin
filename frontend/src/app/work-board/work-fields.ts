@@ -57,6 +57,11 @@ export const WORK_FIELD_TYPES = [
 ] as const;
 export type WorkFieldType = typeof WORK_FIELD_TYPES[number]['id'];
 export type WorkFieldOption = { id: string; label: string; archived: boolean };
+export type WorkCatalogEntry = WorkFieldOption & { code?: string };
+export function workCatalogLabel(entry: WorkCatalogEntry): string {
+  return entry.code ? `${entry.code} -- ${entry.label}` : entry.label;
+}
+
 export type WorkField = {
   id: string; label: string; card: WorkFieldCard; type: WorkFieldType; multiple: boolean;
   required: boolean; showInList: boolean; archived: boolean; options: WorkFieldOption[];
@@ -66,9 +71,12 @@ export const WORK_CATALOGS = [
   { key: 'serviceTypes', reference: 'serviceTypeId', label: 'Service type', title: 'Service types' }
 ] as const;
 export type WorkCatalog = typeof WORK_CATALOGS[number]['key'];
-export type WorkFieldSettings = { version: number; fields: WorkField[]; projectSizeGrouping: boolean;
-  fieldOrder?: WorkFieldOrder; hiddenFields?: string[]; columnVisibility?: Record<string, boolean> } & Record<WorkCatalog, WorkFieldOption[]>;
-export type WorkSettingsChange = { field: WorkField } | { catalog: WorkCatalog; entry: WorkFieldOption } | { projectSizeGrouping: boolean } |
+export type WorkNumberUpdate = { updated: number; missingCode: number; customFormat: number; concurrentChanges: number };
+export type WorkFieldSettings = { version: number; fields: WorkField[]; projectSizeGrouping: boolean; addServiceTypeCodeToWorkNumber: boolean;
+  workNumberUpdate?: WorkNumberUpdate; fieldOrder?: WorkFieldOrder; hiddenFields?: string[];
+  columnVisibility?: Record<string, boolean> } & Record<WorkCatalog, WorkCatalogEntry[]>;
+export type WorkSettingsChange = { field: WorkField } | { catalog: WorkCatalog; entry: WorkCatalogEntry } | { projectSizeGrouping: boolean } |
+  { addServiceTypeCodeToWorkNumber: boolean; updateExistingWorkNumbers?: boolean } |
   { fieldOrder: { card: WorkFieldCard; order: string[]; hidden?: string[] } } |
   { layout: { fields: { key: string; field: WorkField }[]; orders: WorkFieldOrder; hidden: string[]; columns: Record<string, boolean> } };
 

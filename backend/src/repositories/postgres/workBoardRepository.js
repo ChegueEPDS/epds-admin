@@ -2,6 +2,8 @@ const mongoose = require('mongoose');
 const { query, withTransaction } = require('../../postgres');
 const { pgOrderBy } = require('../../services/workBoardSort');
 const { alignedWorkYear } = require('../../services/workTurnover');
+const { workNumberPrefix } = require('../../services/workFields');
+const { workNumberBase } = require('../../services/workNumbers');
 
 const id = () => String(new mongoose.Types.ObjectId());
 const TERMINAL = ['completed_billable', 'invoiced', 'paid', 'closed', 'cancelled', 'lost'];
@@ -65,7 +67,7 @@ async function listSubWorks(tenantId, workIds, deleted = false) {
 
 async function listBoardOptions(tenantId) {
   const { rows } = await query(`SELECT id, work_number AS "workNumber", name, customer, status
-    FROM work_items WHERE tenant_id=$1 AND archived_at IS NULL ORDER BY work_number DESC`, [tenantId]);
+    FROM work_items WHERE tenant_id=$1 AND archived_at IS NULL ORDER BY year DESC, sequence_number DESC`, [tenantId]);
   const byWork = new Map(rows.map((row) => [row.id, { ...row, subWorks: [] }]));
   for (const item of await listSubWorks(tenantId, rows.map((row) => row.id))) {
     const parent = byWork.get(item.workItemId);
@@ -135,21 +137,23 @@ async function nextSequence(client, tenantId, year) {
 
 async function createWork(tenantId, actorId, input) {
   return withTransaction(async (client) => {
-    const { rows: [tenant] } = await client.query(`SELECT work_turnover_day, align_work_sequence, now() AS created_at
-      FROM tenants WHERE id=$1`, [tenantId]);
+    const { rows: [tenant] } = await client.query(`SELECT work_turnover_day, align_work_sequence, work_field_settings, now() AS created_at
+      FROM tenants WHERE id=$1 FOR SHARE`, [tenantId]);
+    const prefix = workNumberPrefix(tenant.work_field_settings, input.serviceTypeId);
     const year = tenant.align_work_sequence
       ? alignedWorkYear(tenant.created_at, tenant.work_turnover_day)
       : Number(input.year || alignedWorkYear(tenant.created_at));
     const sequence = await nextSequence(client, tenantId, year);
     const workId = id();
-    const workNumber = tenant.align_work_sequence ? null : input.workNumber;
+    const suppliedWorkNumber = tenant.align_work_sequence ? null : input.workNumber;
+    const workNumber = prefix + (suppliedWorkNumber || workNumberBase(year, sequence));
     const result = await client.query(`INSERT INTO work_items
       (id,tenant_id,year,sequence_number,work_number,name,client_id,customer,responsible_user_id,responsible,
        contributors,status,deadline,description,currency,total_amount,cost_amount,subcontractor,payment_deadline_days,
        offer_date,completion_date,invoice_date,invoice_payment_deadline,invoice_number,contract_signed,
        performance_certificate,created_by,updated_by,created_at,updated_at,custom_fields,entity_id,service_type_id,reporting,paid_at)
       VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11::jsonb,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$27,now(),now(),$28::jsonb,$29,$30,$31::jsonb,$32) RETURNING *`,
-    [workId, tenantId, year, sequence, workNumber || `${String(year).slice(-2)}-${String(sequence).padStart(4, '0')}`,
+    [workId, tenantId, year, sequence, workNumber,
       input.name, input.clientId || null, input.customer || '', input.responsibleUserId || null, input.responsible || '',
       JSON.stringify(input.contributors || []), input.status || 'inquiry', input.deadline || null, input.description || '',
       input.currency || 'HUF', Number(input.totalAmount || 0), Number(input.costAmount || 0), input.subcontractor || '',

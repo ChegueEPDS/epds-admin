@@ -13,6 +13,7 @@ const { alignedWorkYear } = require('../services/workTurnover');
 const tenantCurrency = require('../services/tenantCurrency');
 const { workBoardSort, mongoSortStages } = require('../services/workBoardSort');
 const { markMongoDashboardDirty } = require('../services/workDashboardSnapshots');
+const { workNumberBase } = require('../services/workNumbers');
 const { pipeline } = require('stream/promises');
 const crypto = require('crypto');
 
@@ -367,7 +368,7 @@ exports.listWorks = (req, res) => withErrors(res, async () => {
 const workOptions = (activeOnly) => (req, res) => withErrors(res, async () => {
   const filter = { ...scopeQuery(req.scope), archivedAt: { $exists: false } };
   if (activeOnly) filter.status = { $nin: [...TERMINAL_STATUSES] };
-  const worksQuery = WorkItem.find(filter).select('workNumber name customer status').sort({ workNumber: -1 }).lean();
+  const worksQuery = WorkItem.find(filter).select('workNumber name customer status').sort({ year: -1, sequenceNumber: -1 }).lean();
   const works = await (activeOnly ? worksQuery.limit(250) : worksQuery);
   const subWorks = await SubWorkItem.find({ ...filter, workItemId: { $in: works.map((work) => work._id) } })
     .select('workItemId sequenceNumber name status').sort({ sequenceNumber: 1 }).lean();
@@ -406,18 +407,17 @@ exports.createWork = (req, res) => withErrors(res, async () => {
   const year = tenant?.alignWorkSequence
     ? alignedWorkYear(createdAt, tenant.workTurnoverDay)
     : Math.max(2000, Math.min(9999, numberValue(req.body?.year, alignedWorkYear(createdAt))));
-  const latest = await WorkItem.findOne({ ...scopeQuery(req.scope), year }).sort({ sequenceNumber: -1 }).select('sequenceNumber').lean();
-  const sequenceNumber = await allocateSequence(req.scope.tenantId, `work:${year}`, latest?.sequenceNumber);
-  const work = new WorkItem({
-    ...payload, ...scopeQuery(req.scope), year, sequenceNumber,
-    workNumber: `${String(year).slice(-2)}-${String(sequenceNumber).padStart(4, '0')}`,
-    createdAt, createdBy: req.userId, updatedBy: req.userId
-  });
-  applyWorkReferences(work, client, responsibleUser);
-  await workFields.saveValues(req, payload.status, {}, (values, selections) => {
-    Object.assign(work, selections);
-    work.customFields = values;
-    return work.save();
+  const work = await workFields.saveValues(req, payload.status, {}, async (customFields, selections, config) => {
+    const prefix = workFields.workNumberPrefix(config, selections.serviceTypeId);
+    const latest = await WorkItem.findOne({ ...scopeQuery(req.scope), year }).sort({ sequenceNumber: -1 }).select('sequenceNumber').lean();
+    const sequenceNumber = await allocateSequence(req.scope.tenantId, `work:${year}`, latest?.sequenceNumber);
+    const item = new WorkItem({
+      ...payload, ...scopeQuery(req.scope), ...selections, customFields, year, sequenceNumber,
+      workNumber: prefix + workNumberBase(year, sequenceNumber),
+      createdAt, createdBy: req.userId, updatedBy: req.userId
+    });
+    applyWorkReferences(item, client, responsibleUser);
+    return item.save();
   });
   await markMongoDashboardDirty(req.scope);
   res.status(201).json({ work: presentWork(work, []) });

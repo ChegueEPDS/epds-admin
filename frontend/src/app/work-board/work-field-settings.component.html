@@ -6,6 +6,21 @@
   </header>
   @if (error) { <p class="error" role="alert">{{ error }}</p> }
   @if (notice) { <p role="status">{{ notice }}</p> }
+  <ng-template #confirmWorkNumbering>
+    <h2 mat-dialog-title id="work-numbering-confirmation-title">Update existing work numbers?</h2>
+    <mat-dialog-content>
+      @if (addServiceTypeCodeToWorkNumber) {
+        <p>Apply the current service type code to existing work numbers, including archived works. Works without a service type code and custom work numbers keep their current numbers.</p>
+      } @else {
+        <p>Remove the service type prefix from existing work numbers, including archived works. Custom work numbers keep their current numbers.</p>
+      }
+    </mat-dialog-content>
+    <mat-dialog-actions align="end">
+      <button mat-button mat-dialog-close type="button">Cancel</button>
+      <button mat-stroked-button mat-dialog-close="save" type="button">Save only</button>
+      <button mat-flat-button color="primary" mat-dialog-close="update" type="button">Save and update</button>
+    </mat-dialog-actions>
+  </ng-template>
   <ng-template #fieldEditor>
     @if (draft; as field) {
       <form #fieldForm="ngForm" (ngSubmit)="fieldForm.valid && stageField(field)">
@@ -114,13 +129,20 @@
               </div>
               @if (catalogDraft; as pending) {
                 @if (pending.catalog === catalog.key) {
-                  <form class="row" (ngSubmit)="save(pending)">
-                    <mat-form-field appearance="outline">
+                  <form class="actions" (ngSubmit)="pending.entry.label.trim() && validServiceTypeCode(pending.entry.code) && save(pending)">
+                    <mat-form-field appearance="outline" subscriptSizing="dynamic">
                       <mat-label>{{ catalog.label }} name</mat-label>
                       <input matInput name="entryName" [(ngModel)]="pending.entry.label" maxlength="100" required>
                     </mat-form-field>
+                    @if (catalog.key === 'serviceTypes') {
+                      <mat-form-field appearance="outline" subscriptSizing="dynamic">
+                        <mat-label>Service type code</mat-label>
+                        <input matInput name="entryCode" [(ngModel)]="pending.entry.code" autocapitalize="characters">
+                        <mat-hint>{{ validServiceTypeCode(pending.entry.code) ? 'Three letters, e.g. INS' : 'Use exactly three letters.' }}</mat-hint>
+                      </mat-form-field>
+                    }
                     <div class="actions">
-                      <button mat-flat-button color="primary" type="submit" [disabled]="busy || !pending.entry.label.trim()">Save {{ catalog.label.toLowerCase() }}</button>
+                      <button mat-flat-button color="primary" type="submit" [disabled]="busy || !pending.entry.label.trim() || !validServiceTypeCode(pending.entry.code)">Save {{ catalog.label.toLowerCase() }}</button>
                       <button mat-button type="button" (click)="catalogDraft = undefined" [disabled]="busy">Cancel</button>
                     </div>
                   </form>
@@ -128,7 +150,7 @@
               }
               @for (entry of config[catalog.key]; track entry.id) {
                 <div class="row field-row">
-                  <div><strong>{{ entry.label }}</strong> @if (entry.archived) { <span class="muted"> · Archived</span> }</div>
+                  <div><strong>{{ workCatalogLabel(entry) }}</strong> @if (entry.archived) { <span class="muted"> · Archived</span> }</div>
                   <div class="actions">
                     <button mat-button type="button" (click)="editCatalog(catalog.key, entry)" [disabled]="busy || !!draft || !!catalogDraft">Edit</button>
                     <button mat-button type="button" (click)="toggleCatalogArchived(catalog.key, entry)" [disabled]="busy || !!draft || !!catalogDraft">{{ entry.archived ? 'Restore' : 'Archive' }}</button>
@@ -141,6 +163,45 @@
       </mat-tab>
       <mat-tab label="General">
         <div class="tab-content">
+          <section class="panel">
+            <h2>Work numbering</h2>
+            <form class="settings-form" (ngSubmit)="saveWorkNumbering(confirmWorkNumbering)">
+              <mat-checkbox name="addServiceTypeCodeToWorkNumber" [(ngModel)]="addServiceTypeCodeToWorkNumber"
+                [disabled]="busy || !!catalogDraft">Add service type code to work number</mat-checkbox>
+              <p class="muted">New works require a service type with a code when this is enabled. With code INS, the work number will look like INS26-0003.</p>
+              <button mat-flat-button color="primary" type="submit" [disabled]="busy || !!catalogDraft">Save work numbering</button>
+            </form>
+          </section>
+          @if (turnoverPreference) {
+            <section class="panel">
+              <h2>Turnover date</h2>
+              <p class="muted">The dashboard summarizes works created since the latest turnover date.
+                @if (turnoverMonth === 2 && turnoverDay === 29) { The turnover date falls on February 28 in non-leap years. }
+              </p>
+              <form class="settings-form" (ngSubmit)="saveTurnover()">
+                <div class="actions">
+                  <mat-form-field appearance="outline" subscriptSizing="dynamic">
+                    <mat-label>Month</mat-label>
+                    <mat-select name="turnoverMonth" [ngModel]="turnoverMonth" (ngModelChange)="onTurnoverMonthChange($event)" [disabled]="turnoverBusy">
+                      @for (month of turnoverMonths; track month; let i = $index) {
+                        <mat-option [value]="i + 1">{{ month }}</mat-option>
+                      }
+                    </mat-select>
+                  </mat-form-field>
+                  <mat-form-field appearance="outline" subscriptSizing="dynamic">
+                    <mat-label>Day</mat-label>
+                    <mat-select name="turnoverDay" [(ngModel)]="turnoverDay" [disabled]="turnoverBusy">
+                      @for (day of calendarDays.slice(0, daysInTurnoverMonth); track day) {
+                        <mat-option [value]="day">{{ day }}</mat-option>
+                      }
+                    </mat-select>
+                  </mat-form-field>
+                </div>
+                <mat-checkbox name="alignWorkSequence" [(ngModel)]="alignWorkSequence" [disabled]="turnoverBusy">Align work numbering with the turnover date</mat-checkbox>
+                <button mat-flat-button color="primary" type="submit" [disabled]="turnoverBusy || !turnoverChanged">Save turnover settings</button>
+              </form>
+            </section>
+          }
           @if (currencyPreference; as preference) {
             <section class="panel">
               <h2>Currency</h2>

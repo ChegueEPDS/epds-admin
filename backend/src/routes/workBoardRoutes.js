@@ -4,7 +4,8 @@ const controller = require('../controllers/workBoardControllerFacade');
 const workFields = require('../services/workFields');
 const tenantCurrency = require('../services/tenantCurrency');
 const { dashboardWorks } = require('../services/workDashboard');
-const { getDashboardSnapshot } = require('../services/workDashboardSnapshots');
+const { getDashboardSnapshot, markMongoDashboardDirty } = require('../services/workDashboardSnapshots');
+const { databaseEngine } = require('../postgres');
 const { requireAuth, requireTenantFeature, requireTenantContext } = require('../middlewares/authMiddleware');
 
 const router = express.Router();
@@ -65,11 +66,21 @@ router.get('/work-board/custom-fields', requireTenantFeature('workBoard'), compa
   return ['Admin', 'SuperAdmin'].includes(req.role) ? config : { ...config, fields: config.fields.filter((field) => !field.archived) };
 }));
 router.put('/work-board/custom-fields', requireTenantFeature('workBoard', 'edit'), companyOnly, manageFields,
-  settingsRoute((req) => workFields.saveSettings(req.scope.tenantId, req.body)));
+  settingsRoute(async (req) => {
+    try {
+      return await workFields.saveSettings(req.scope.tenantId, req.body);
+    } finally {
+      if (databaseEngine() === 'mongodb' && req.body?.updateExistingWorkNumbers === true) await markMongoDashboardDirty(req.scope);
+    }
+  }));
 router.get('/work-board/default-currency', requireTenantFeature('workBoard'), companyOnly, manageFields,
   settingsRoute((req) => tenantCurrency.preference(req.scope.tenantId)));
 router.put('/work-board/default-currency', requireTenantFeature('workBoard', 'edit'), companyOnly, manageFields,
   settingsRoute((req) => tenantCurrency.setPreference(req.scope.tenantId, req.body?.defaultCurrency)));
+router.get('/work-board/turnover', requireTenantFeature('workBoard'), companyOnly, manageFields,
+  settingsRoute((req) => workFields.workTurnoverPreference(req.scope.tenantId)));
+router.put('/work-board/turnover', requireTenantFeature('workBoard', 'edit'), companyOnly, manageFields,
+  settingsRoute((req) => workFields.saveWorkTurnoverPreference(req.scope.tenantId, req.body)));
 router.get('/work-board/works/:id/custom-fields/:fieldId/file', requireTenantFeature('workBoard'), companyOnly, controller.downloadCustomField);
 router.get('/work-board/works/:id', requireTenantFeature('workBoard'), controller.getWork);
 router.post('/work-board/works', requireTenantFeature('workBoard', 'edit'), workPayload, controller.createWork);

@@ -21,44 +21,6 @@
       </mat-select>
     </mat-form-field>
 
-    <mat-form-field appearance="outline">
-      <mat-label>Default currency</mat-label>
-      <mat-select name="defaultCurrency" [(ngModel)]="defaultCurrency" required>
-        <mat-option *ngFor="let currency of currencies" [value]="currency">{{ currency === 'AED' ? 'AED · UAE dirham' : currency }}</mat-option>
-        @if (!currencies.includes(defaultCurrency)) {
-          <mat-option [value]="defaultCurrency" disabled>{{ defaultCurrency }}</mat-option>
-        }
-      </mat-select>
-    </mat-form-field>
-
-    @if (type === 'company') {
-      <section class="turnover-settings" aria-labelledby="turnover-settings-title">
-        <h3 id="turnover-settings-title">Fordulónap</h3>
-        <div class="turnover-date">
-          <mat-form-field appearance="outline" subscriptSizing="dynamic">
-            <mat-label>Hónap</mat-label>
-            <mat-select name="turnoverMonth" [ngModel]="turnoverMonth" (ngModelChange)="onTurnoverMonthChange($event)">
-              @for (month of turnoverMonths; track month; let i = $index) {
-                <mat-option [value]="i + 1">{{ month }}</mat-option>
-              }
-            </mat-select>
-          </mat-form-field>
-          <mat-form-field appearance="outline" subscriptSizing="dynamic">
-            <mat-label>Nap</mat-label>
-            <mat-select name="turnoverDay" [(ngModel)]="turnoverDay">
-              @for (day of calendarDays.slice(0, daysInTurnoverMonth); track day) {
-                <mat-option [value]="day">{{ day }}.</mat-option>
-              }
-            </mat-select>
-          </mat-form-field>
-        </div>
-        <p>A dashboard a legutóbbi fordulónaptól létrehozott munkákat összesíti.
-          @if (turnoverMonth === 2 && turnoverDay === 29) { Nem szökőévben a fordulónap február 28. }
-        </p>
-        <mat-checkbox name="alignWorkSequence" [(ngModel)]="alignWorkSequence">Sorszám igazítása a fordulónaphoz</mat-checkbox>
-      </section>
-    }
-
     <section class="feature-list" *ngIf="type !== 'finance'">
       <h3>Features</h3>
       <div class="feature-row header-row" aria-hidden="true">

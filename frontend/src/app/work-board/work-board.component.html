@@ -70,15 +70,17 @@
 
   <ng-template #catalogEditor let-reference>
     @for (catalog of catalogDefinitions; track catalog.key) {
-      @if (catalog.reference === reference && (hasCatalogOptions(catalog.key) || workForm[catalog.reference])) {
+      @let requiresCode = catalog.key === 'serviceTypes' && requiresServiceTypeCode;
+      @if (catalog.reference === reference && (requiresCode || hasCatalogOptions(catalog.key) || workForm[catalog.reference])) {
         <mat-form-field appearance="outline">
           <mat-label>{{ catalog.label }}</mat-label>
-          <mat-select [name]="catalog.reference" [(ngModel)]="workForm[catalog.reference]">
-            <mat-option value="">Unassigned</mat-option>
+          <mat-select [name]="catalog.reference" [(ngModel)]="workForm[catalog.reference]" [required]="requiresCode">
+            @if (!requiresCode) { <mat-option value="">Unassigned</mat-option> }
             @for (entry of catalogOptions(catalog.key, workForm[catalog.reference]); track entry.id) {
-              <mat-option [value]="entry.id" [disabled]="entry.archived">{{ entry.label }}{{ entry.archived ? ' (archived)' : '' }}</mat-option>
+              <mat-option [value]="entry.id" [disabled]="entry.archived || (requiresCode && !entry.code)">{{ workCatalogLabel(entry) }}{{ entry.archived ? ' (archived)' : '' }}</mat-option>
             }
           </mat-select>
+          @if (requiresCode) { <mat-hint>The service type code becomes the work number prefix.</mat-hint> }
         </mat-form-field>
       }
     }
@@ -88,7 +90,7 @@
     <section class="form-group">
       <div class="group-heading"><span>01</span><div><h2>Basic information</h2></div></div>
       <div class="form-grid">
-        @for (item of orderedFields('basic'); track item.id) {
+        @for (item of orderedFields('basic', requiresServiceTypeCode); track item.id) {
           @switch (item.id) {
             @case ('name') {
               <mat-form-field appearance="outline"><mat-label>Name</mat-label><input matInput name="workName" [(ngModel)]="workForm.name" required></mat-form-field>
