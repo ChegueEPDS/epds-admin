@@ -4,34 +4,45 @@
       @if (financeTenantId) {
         <h1>{{ financeTenantName || 'Pénzügy' }}</h1>
         <p>Project Tracker · Table</p>
+      } @else if (showClients) {
+        <h1>Clients</h1>
       } @else {
         <h1>{{ showWorkForm ? (editingWork ? 'Edit work' : 'New work') : (detailView ? 'Work details' : 'Work table') }}</h1>
         <p *ngIf="detailView">Complete operational and financial record.</p>
       }
     </div>
     <div class="page-actions">
-      <button mat-stroked-button type="button" *ngIf="detailView || showWorkForm" (click)="backToTable()" [disabled]="!!financeForm && saving">
+      <button mat-stroked-button type="button" *ngIf="showClients || detailView || showWorkForm"
+        (click)="backToTable()" [disabled]="(showClients || !!financeForm) && saving">
         <mat-icon class="material-symbols-outlined">arrow_back</mat-icon>{{ financeTenantId ? 'Vissza a táblához' : 'Back to table' }}
       </button>
-      <ng-container *ngIf="!detailView && !showWorkForm && auth.canEditFeature('workBoard')">
+      @if (showClients && auth.canManageWorkFields()) {
+        <button mat-stroked-button type="button" (click)="openWorkTransfer('clients')" [disabled]="saving || clientsLoading">
+          <mat-icon class="material-symbols-outlined">sync_alt</mat-icon>Import / Export clients
+        </button>
+      }
+      <ng-container *ngIf="!showClients && !detailView && !showWorkForm && auth.canEditFeature('workBoard')">
         @if (!financeTenantId && auth.canManageWorkFields()) {
           <button mat-stroked-button type="button" (click)="openWorkTransfer()"><mat-icon class="material-symbols-outlined">sync_alt</mat-icon>Import / Export</button>
         }
-        <button mat-stroked-button type="button" (click)="openClientPanel()"><mat-icon class="material-symbols-outlined">business</mat-icon>Clients</button>
+        <button mat-stroked-button type="button" (click)="openClients()" [disabled]="!!financeTenantId || (loading && !referencesLoaded)"><mat-icon class="material-symbols-outlined">business</mat-icon>Clients</button>
         <button mat-flat-button color="primary" type="button" (click)="startCreateWork()" [disabled]="loading"><mat-icon class="material-symbols-outlined">add</mat-icon>New work</button>
       </ng-container>
     </div>
   </header>
 
-  <section class="client-panel" *ngIf="showClientPanel && !detailView && !showWorkForm">
-    <div class="editor-title"><div><span>TENANT CLIENT LIST</span><h2>Clients</h2></div><button mat-icon-button type="button" (click)="openClientPanel()"><mat-icon class="material-symbols-outlined">close</mat-icon></button></div>
+  <section class="client-panel" *ngIf="showClients">
     <div class="client-layout">
       <div class="client-list">
         <article *ngFor="let client of clients"><div><strong>{{ client.name }}</strong><span>{{ client.taxNumber }}</span></div><small>{{ client.postalCode }} {{ client.city }} {{ client.address }}</small></article>
-        <div class="empty" *ngIf="!clients.length">No clients linked to this tenant.</div>
+        @if (clientsLoading && !clients.length) {
+          <div class="loading"><mat-spinner diameter="32" aria-label="Loading clients"></mat-spinner></div>
+        } @else if (!clients.length) {
+          <div class="empty">No clients linked to this tenant.</div>
+        }
       </div>
       <form class="client-form" (ngSubmit)="saveClient()">
-        <div class="tax-lookup"><mat-form-field appearance="outline"><mat-label>Tax number</mat-label><input matInput name="clientTaxNumber" [(ngModel)]="clientForm.taxNumber" required></mat-form-field><button mat-stroked-button type="button" (click)="lookupClient()"><mat-icon class="material-symbols-outlined">search</mat-icon>Check</button></div>
+        <div class="tax-lookup"><mat-form-field appearance="outline"><mat-label>Tax number</mat-label><input matInput name="clientTaxNumber" [ngModel]="clientForm.taxNumber" (ngModelChange)="changeClientTaxNumber($event)" [required]="clientTaxNumberRequired"></mat-form-field><button mat-stroked-button type="button" (click)="lookupClient()" [disabled]="!clientForm.taxNumber.trim()"><mat-icon class="material-symbols-outlined">search</mat-icon>Check</button></div>
         <div class="match-notice" *ngIf="clientLookupFound"><mat-icon class="material-symbols-outlined">verified</mat-icon><span><strong>Existing company found</strong>{{ clientLookupLinked ? 'Already linked to this tenant.' : 'The existing record will be linked without creating a duplicate.' }}</span></div>
         <mat-form-field appearance="outline"><mat-label>Company name</mat-label><input matInput name="clientName" [(ngModel)]="clientForm.name" [readonly]="!!clientLookupFound" required></mat-form-field>
         <div class="client-address">
@@ -41,7 +52,7 @@
         </div>
         <mat-form-field appearance="outline"><mat-label>Address</mat-label><input matInput name="clientAddress" [(ngModel)]="clientForm.address" [readonly]="!!clientLookupFound"></mat-form-field>
         <div class="client-address"><mat-form-field appearance="outline"><mat-label>Email</mat-label><input matInput type="email" name="clientEmail" [(ngModel)]="clientForm.email" [readonly]="!!clientLookupFound"></mat-form-field><mat-form-field appearance="outline"><mat-label>Phone</mat-label><input matInput name="clientPhone" [(ngModel)]="clientForm.phone" [readonly]="!!clientLookupFound"></mat-form-field></div>
-        <div class="form-actions"><button mat-flat-button color="primary" type="submit" [disabled]="saving || clientLookupLinked">{{ clientLookupFound ? 'Link existing client' : 'Create client' }}</button></div>
+        <div class="form-actions"><button mat-flat-button color="primary" type="submit" [disabled]="saving || clientsLoading || clientLookupLinked">{{ clientLookupFound ? 'Link existing client' : 'Create client' }}</button></div>
       </form>
     </div>
   </section>
@@ -348,9 +359,9 @@
     </div>
   }
 
-  <div class="loading" *ngIf="loading && (detailView || !referencesLoaded)"><mat-spinner diameter="38"></mat-spinner></div>
+  <div class="loading" *ngIf="!showClients && loading && (detailView || !referencesLoaded)"><mat-spinner diameter="38"></mat-spinner></div>
 
-  <ng-container *ngIf="!financeError && !showWorkForm && (!loading || (!detailView && referencesLoaded))">
+  <ng-container *ngIf="!showClients && !financeError && !showWorkForm && (!loading || (!detailView && referencesLoaded))">
     <ng-container *ngIf="!detailView">
       <div class="table-toolbar">
         <mat-form-field appearance="outline" subscriptSizing="dynamic"><mat-label>{{ financeTenantId ? 'Keresés a munkák között' : 'Search works' }}</mat-label><mat-icon class="material-symbols-outlined" matPrefix>search</mat-icon><input matInput [(ngModel)]="search" (ngModelChange)="filtersChanged(true)"></mat-form-field>

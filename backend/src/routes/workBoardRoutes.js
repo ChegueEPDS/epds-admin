@@ -7,6 +7,7 @@ const { dashboardWorks } = require('../services/workDashboard');
 const { getDashboardSnapshot, markMongoDashboardDirty } = require('../services/workDashboardSnapshots');
 const { databaseEngine } = require('../postgres');
 const workTransfer = require('../services/workTransfer');
+const { exportClients } = require('../services/clientTransfer');
 const { maxWorkbookBytes, maxZipBytes } = require('../services/workTransferWorkbook');
 const { requireAuth, requireTenantFeature, requireTenantContext } = require('../middlewares/authMiddleware');
 
@@ -69,34 +70,45 @@ function transferRoute(handler) {
   };
 }
 
-router.get('/work-board/transfer/template', ...transferAccess, transferRoute(async (req, res) => {
-  sendWorkbook(res, 'project-tracker-template.xlsx', await workTransfer.exportWorks(req.scope.tenantId, true));
-}));
-router.get('/work-board/transfer/export', ...transferAccess, transferRoute(async (req, res) => {
-  sendWorkbook(res, 'project-tracker-export.xlsx', await workTransfer.exportWorks(req.scope.tenantId, false));
-}));
-router.post('/work-board/transfer/import', ...transferAccess, (req, res, next) => {
-  workTransferUpload(req, res, (error) => {
-    if (error) return res.status(400).json({ error: 'Upload one Excel workbook and an optional attachments ZIP up to 40 MB.' });
-    next();
-  });
-}, transferRoute((req, res) => {
-  const workbook = req.files?.workbook?.[0];
-  const archive = req.files?.attachments?.[0];
-  if (!workbook || !/\.xlsx$/i.test(workbook.originalname) || workbook.size > maxWorkbookBytes ||
-      (archive && !/\.zip$/i.test(archive.originalname))) {
-    return res.status(400).json({ error: 'Choose an XLSX workbook up to 10 MB and an optional ZIP file.' });
+const clientTransferUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: maxWorkbookBytes, files: 1, fields: 0 } })
+  .fields([{ name: 'workbook', maxCount: 1 }]);
+
+function registerWorkbookTransfer(path, kind, prefix, exporter) {
+  for (const mode of ['template', 'export']) {
+    router.get(path + '/' + mode, ...transferAccess, transferRoute(async (req, res) => {
+      sendWorkbook(res, prefix + '-' + mode + '.xlsx', await exporter(req.scope.tenantId, mode === 'template'));
+    }));
   }
-  res.status(202).json(workTransfer.startImport({ scope: req.scope, actorId: req.userId, excel: workbook.buffer, archive: archive?.buffer }));
-}));
-router.get('/work-board/transfer/import/:id', ...transferAccess, transferRoute((req, res) => {
-  res.json(workTransfer.importJob(req.params.id, req.scope.tenantId, req.userId).result);
-}));
-router.get('/work-board/transfer/import/:id/errors', ...transferAccess, transferRoute((req, res) => {
-  const { report } = workTransfer.importJob(req.params.id, req.scope.tenantId, req.userId);
-  if (!report) return res.status(404).json({ error: 'No error workbook is available.' });
-  sendWorkbook(res, 'project-tracker-import-errors.xlsx', report);
-}));
+  const allowAttachments = kind === 'works';
+  const upload = allowAttachments ? workTransferUpload : clientTransferUpload;
+  const errorMessage = 'Choose an XLSX workbook up to 10 MB' + (allowAttachments ? ' and an optional ZIP file up to 40 MB.' : '.');
+  router.post(path + '/import', ...transferAccess, (req, res, next) => {
+    upload(req, res, (error) => {
+      if (error) return res.status(400).json({ error: errorMessage });
+      next();
+    });
+  }, transferRoute((req, res) => {
+    const workbook = req.files?.workbook?.[0];
+    const archive = req.files?.attachments?.[0];
+    if (!workbook || !/\.xlsx$/i.test(workbook.originalname) || workbook.size > maxWorkbookBytes ||
+        (archive && !/\.zip$/i.test(archive.originalname))) {
+      return res.status(400).json({ error: errorMessage });
+    }
+    res.status(202).json(workTransfer.startImport({
+      scope: req.scope, actorId: req.userId, excel: workbook.buffer, archive: archive?.buffer, kind
+    }));
+  }));
+  const jobFor = (req) => workTransfer.importJob(req.params.id, req.scope.tenantId, req.userId, kind);
+  router.get(path + '/import/:id', ...transferAccess, transferRoute((req, res) => res.json(jobFor(req).result)));
+  router.get(path + '/import/:id/errors', ...transferAccess, transferRoute((req, res) => {
+    const { report } = jobFor(req);
+    if (!report) return res.status(404).json({ error: 'No error workbook is available.' });
+    sendWorkbook(res, prefix + '-import-errors.xlsx', report);
+  }));
+}
+
+registerWorkbookTransfer('/work-board/transfer', 'works', 'project-tracker', workTransfer.exportWorks);
+registerWorkbookTransfer('/work-board/clients/transfer', 'clients', 'project-tracker-clients', exportClients);
 
 router.get('/work-board/clients', requireTenantFeature('workBoard'), controller.listClients);
 router.get('/work-board/clients/lookup', requireTenantFeature('workBoard'), controller.lookupClientByTaxNumber);

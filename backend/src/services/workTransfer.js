@@ -13,6 +13,7 @@ const { getDefaultCurrency } = require('./tenantCurrency');
 const { markMongoDashboardDirty } = require('./workDashboardSnapshots');
 const { createWorkbook, readWorkbook, readAttachments, errorWorkbook, invalid } = require('./workTransferWorkbook');
 const { columnsFor, formatWork, prepareRows, markConflicts, revisionOf } = require('./workTransferFields');
+const { importClients } = require('./clientTransfer');
 
 const isPostgres = () => databaseEngine() === 'postgresql';
 const mongoWork = (work) => ({ ...work, id: String(work._id) });
@@ -190,7 +191,7 @@ async function rejected(job, workbook, sheet, issues) {
 
 const jobs = new Map();
 const jobRetention = 20 * 60 * 1000;
-function startImport({ scope, actorId, excel, archive }) {
+function startImport({ scope, actorId, excel, archive, kind = 'works' }) {
   const active = [...jobs.values()].filter((job) => !job.finishedAt);
   if (active.some((job) => job.tenantId === scope.tenantId) || active.length >= 2) {
     throw Object.assign(new Error('An import is already running. Try again shortly.'), { statusCode: 409 });
@@ -200,12 +201,13 @@ function startImport({ scope, actorId, excel, archive }) {
     if (oldest) jobs.delete(oldest[0]);
   }
   const id = randomUUID();
-  const job = { tenantId: scope.tenantId, actorId, result: { id, state: 'reading', processed: 0, total: 0 } };
+  const job = { tenantId: scope.tenantId, actorId, kind, result: { id, state: 'reading', processed: 0, total: 0 } };
   jobs.set(id, job);
   setImmediate(() => {
-    importWorks({ scope, actorId, excel, archive, job }).catch((error) => {
+    const importer = kind === 'clients' ? importClients : importWorks;
+    importer({ scope, actorId, excel, archive, job, reject: rejected }).catch((error) => {
       if (!error.statusCode) console.error('[work-transfer] Import failed', error.code || error.name);
-      Object.assign(job.result, { state: 'failed', message: error.statusCode ? error.message : 'The import could not be completed. Check the work table before retrying.' });
+      Object.assign(job.result, { state: 'failed', message: error.statusCode ? error.message : 'The import could not be completed. Check the list before retrying.' });
     }).finally(() => {
       job.finishedAt = Date.now();
       setTimeout(() => jobs.delete(id), jobRetention).unref();
@@ -214,9 +216,9 @@ function startImport({ scope, actorId, excel, archive }) {
   return job.result;
 }
 
-function importJob(id, tenantId, actorId) {
+function importJob(id, tenantId, actorId, kind = 'works') {
   const job = jobs.get(id);
-  if (job?.tenantId === tenantId && job.actorId === actorId &&
+  if (job?.tenantId === tenantId && job.actorId === actorId && job.kind === kind &&
       (!job.finishedAt || Date.now() - job.finishedAt <= jobRetention)) return job;
   throw Object.assign(new Error('Import job not found or expired.'), { statusCode: 404 });
 }

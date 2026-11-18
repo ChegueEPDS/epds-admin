@@ -60,14 +60,14 @@ async function readAttachments(buffer) {
   return files;
 }
 
-async function readWorkbook(buffer) {
+async function readWorkbook(buffer, sheetName = 'Works') {
   try {
     await visitZip(buffer, 80 * 1024 * 1024, () => {});
     const workbook = new ExcelJS.Workbook();
     await workbook.xlsx.load(buffer);
-    const sheet = workbook.getWorksheet('Works');
+    const sheet = workbook.getWorksheet(sheetName);
     if (!sheet || sheet.rowCount > maxRows + 1 || sheet.columnCount > 200) {
-      throw invalid('Use the Works sheet from the template with at most 10,000 data rows and 200 columns.');
+      throw invalid(`Use the ${sheetName} sheet from the template with at most 10,000 data rows and 200 columns.`);
     }
     return { workbook, sheet };
   } catch (error) {
@@ -75,16 +75,18 @@ async function readWorkbook(buffer) {
   }
 }
 
-async function createWorkbook(columns, works, value) {
+async function createWorkbook(columns, works, value, { sheetName = 'Works', instructions } = {}) {
   const workbook = new ExcelJS.Workbook();
-  const sheet = workbook.addWorksheet('Works', { views: [{ state: 'frozen', ySplit: 1 }] });
-  sheet.columns = [...columns.map(({ key, label }) => ({ key, header: label, width: Math.max(16, Math.min(label.length + 3, 40)) })),
+  const sheet = workbook.addWorksheet(sheetName, { views: [{ state: 'frozen', ySplit: 1 }] });
+  sheet.columns = [...columns.map(({ key, label, numFmt }) => ({
+    key, header: label, width: Math.max(16, Math.min(label.length + 3, 40)), ...(numFmt ? { style: { numFmt } } : {})
+  })),
     { key: 'revision', header: revisionKey, hidden: true }];
   const lists = workbook.addWorksheet('Lists');
   lists.state = 'veryHidden';
   const guide = workbook.addWorksheet('Instructions');
   guide.getColumn(1).width = 110;
-  for (const line of [
+  for (const line of instructions ?? [
     'Keep the ID and hidden export version for existing works. Leave both empty for a new work.',
     'Enter the full year and a positive whole-number sequence. Dates use YYYY-MM-DD.',
     'Omitted columns keep existing values. Blank cells in included optional columns clear their values or apply the default.',

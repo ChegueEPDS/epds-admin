@@ -2,17 +2,17 @@ import { HttpEventType } from '@angular/common/http';
 import { Component, DestroyRef, inject } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { MatButtonModule } from '@angular/material/button';
-import { MatDialogModule, MatDialogRef } from '@angular/material/dialog';
+import { MAT_DIALOG_DATA, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
 import { MatIconModule } from '@angular/material/icon';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { EMPTY, expand, filter, firstValueFrom, map, switchMap, takeWhile, tap, timer } from 'rxjs';
-import { WorkBoardService, WorkImportJob } from '../services/work-board.service';
+import { WorkBoardService, WorkImportJob, WorkbookTransferTarget } from '../services/work-board.service';
 
 const finished = (job: WorkImportJob) => ['succeeded', 'rejected', 'failed'].includes(job.state);
 type ImportFileKind = 'workbook' | 'archive';
 const labels: Record<WorkImportJob['state'], string> = {
   reading: 'Reading the workbook…',
-  validating: 'Validating work rows…',
+  validating: 'Validating rows…',
   saving: 'Saving all changes…',
   succeeded: 'Import completed',
   rejected: 'Import rejected',
@@ -22,18 +22,18 @@ const labels: Record<WorkImportJob['state'], string> = {
 @Component({
   imports: [MatButtonModule, MatDialogModule, MatIconModule, MatProgressBarModule],
   template: `
-    <h2 mat-dialog-title id="work-transfer-title">Import / Export works</h2>
+    <h2 mat-dialog-title id="work-transfer-title">Import / Export {{ target }}</h2>
     <mat-dialog-content class="content">
       <section class="drop-zone" [class.dragging]="dragDepth > 0 && !busy" aria-label="Import files"
         (dragenter)="onDragEnter($event)" (dragover)="onDragOver($event)" (dragleave)="onDragLeave($event)" (drop)="onDrop($event)">
         <mat-icon class="material-symbols-outlined upload-icon" aria-hidden="true">upload_file</mat-icon>
         <h3>Drop files here</h3>
-        <input #filePicker type="file" accept=".xlsx,.zip" multiple hidden [disabled]="busy" (change)="selectFiles(filePicker)">
+        <input #filePicker type="file" [accept]="isClients ? '.xlsx' : '.xlsx,.zip'" [multiple]="!isClients" hidden [disabled]="busy" (change)="selectFiles(filePicker)">
         <button mat-stroked-button type="button" class="browse" (click)="filePicker.click()"
           [disabled]="busy" aria-describedby="work-transfer-file-types">
           Browse files
         </button>
-        <p id="work-transfer-file-types" class="muted">Excel workbook (.xlsx) · Optional attachments (.zip)</p>
+        <p id="work-transfer-file-types" class="muted">Excel workbook (.xlsx)@if (!isClients) { <span> · Optional attachments (.zip)</span> }</p>
       </section>
       @if (workbook || archive) {
         <ul class="selected-files" aria-label="Selected files">
@@ -59,10 +59,12 @@ const labels: Record<WorkImportJob['state'], string> = {
           <mat-icon class="material-symbols-outlined">download</mat-icon>Download template
         </button>
         <button mat-button type="button" (click)="export('export')" [disabled]="!!downloadPending">
-          <mat-icon class="material-symbols-outlined">download</mat-icon>Export works
+          <mat-icon class="material-symbols-outlined">download</mat-icon>Export {{ target }}
         </button>
       </div>
-      <p class="muted import-hint">Keep the ID in column A to update an exported work. Leave it blank to create a new work.</p>
+      <p class="muted import-hint">
+        Keep the ID in column A to update the exported {{ singular }}. Leave it blank to create a new {{ singular }}.
+      </p>
       @if (busy) {
         <div class="status" role="status">
           <span>{{ statusText }}</span>
@@ -72,7 +74,7 @@ const labels: Record<WorkImportJob['state'], string> = {
       }
       @if (job?.state === 'rejected') {
         <div class="result error" role="alert">
-          <strong>Import rejected. No works were saved.</strong>
+          <strong>Import rejected. No {{ target }} were saved.</strong>
           <span>{{ job?.errors }} validation messages. Correct the highlighted cells and upload again.</span>
           <button mat-stroked-button type="button" (click)="downloadErrors()" [disabled]="!!downloadPending || !job?.canDownload">
             <mat-icon class="material-symbols-outlined">download</mat-icon>Download error workbook
@@ -134,6 +136,10 @@ const labels: Record<WorkImportJob['state'], string> = {
 })
 export class WorkTransferDialogComponent {
   private readonly board = inject(WorkBoardService);
+  readonly target = inject<WorkbookTransferTarget>(MAT_DIALOG_DATA);
+  readonly isClients = this.target === 'clients';
+  readonly singular = this.isClients ? 'client' : 'work';
+  private readonly filenamePrefix = this.isClients ? 'project-tracker-clients' : 'project-tracker';
   private readonly dialog = inject(MatDialogRef<WorkTransferDialogComponent, boolean>);
   private readonly destroy = inject(DestroyRef);
   workbook?: File;
@@ -193,9 +199,9 @@ export class WorkTransferDialogComponent {
     if (this.busy || !files.length) return;
     const picked: Partial<Record<ImportFileKind, File>> = {};
     for (const file of Array.from(files)) {
-      const kind = /\.xlsx$/i.test(file.name) ? 'workbook' : /\.zip$/i.test(file.name) ? 'archive' : undefined;
+      const kind = /\.xlsx$/i.test(file.name) ? 'workbook' : !this.isClients && /\.zip$/i.test(file.name) ? 'archive' : undefined;
       if (!kind || picked[kind]) {
-        this.error = 'Choose one .xlsx workbook and up to one .zip archive.';
+        this.error = this.isClients ? 'Choose one .xlsx workbook.' : 'Choose one .xlsx workbook and up to one .zip archive.';
         return;
       }
       picked[kind] = file;
@@ -209,7 +215,7 @@ export class WorkTransferDialogComponent {
     this.dragDepth = 0;
     this.job = undefined;
     this.uploadPercent = undefined;
-    const request = this.board.startWorkImport(this.workbook, this.archive).pipe(
+    const request = this.board.startWorkImport(this.target, this.workbook, this.archive).pipe(
       tap((event) => {
         if (event.type === HttpEventType.UploadProgress && event.total) this.uploadPercent = event.loaded * 100 / event.total;
       }),
@@ -220,14 +226,14 @@ export class WorkTransferDialogComponent {
   }
 
   resume(): void {
-    if (this.job && !this.busy) this.track(this.board.workImportStatus(this.job.id));
+    if (this.job && !this.busy) this.track(this.board.workImportStatus(this.job.id, this.target));
   }
 
   private track(request: ReturnType<WorkBoardService['workImportStatus']>): void {
     this.busy = this.dialog.disableClose = true;
     this.error = '';
     request.pipe(
-      expand((job) => finished(job) ? EMPTY : timer(600).pipe(switchMap(() => this.board.workImportStatus(job.id)))),
+      expand((job) => finished(job) ? EMPTY : timer(600).pipe(switchMap(() => this.board.workImportStatus(job.id, this.target)))),
       takeWhile((job) => !finished(job), true),
       takeUntilDestroyed(this.destroy)
     ).subscribe({
@@ -248,11 +254,11 @@ export class WorkTransferDialogComponent {
   }
 
   export(kind: 'template' | 'export'): void {
-    void this.download(kind, this.board.downloadWorkTransfer(kind), 'project-tracker-' + kind + '.xlsx');
+    void this.download(kind, this.board.downloadWorkTransfer(kind, this.target), this.filenamePrefix + '-' + kind + '.xlsx');
   }
 
   downloadErrors(): void {
-    if (this.job) void this.download('errors', this.board.downloadWorkImportErrors(this.job.id), 'project-tracker-import-errors.xlsx');
+    if (this.job) void this.download('errors', this.board.downloadWorkImportErrors(this.job.id, this.target), this.filenamePrefix + '-import-errors.xlsx');
   }
 
   private async download(kind: string, request: ReturnType<WorkBoardService['downloadWorkTransfer']>, name: string): Promise<void> {

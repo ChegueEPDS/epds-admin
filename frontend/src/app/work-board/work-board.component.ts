@@ -1,7 +1,8 @@
 import { CommonModule, formatDate, formatNumber } from '@angular/common';
-import { Component, Input, OnDestroy, OnInit, inject } from '@angular/core';
+import { Component, DestroyRef, Input, OnDestroy, OnInit, inject } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormsModule } from '@angular/forms';
-import { ActivatedRoute } from '@angular/router';
+import { ActivatedRoute, Router } from '@angular/router';
 import { firstValueFrom } from 'rxjs';
 import { MatButtonModule } from '@angular/material/button';
 import { MatCheckboxModule } from '@angular/material/checkbox';
@@ -16,7 +17,7 @@ import { MatNativeDateModule } from '@angular/material/core';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { MatSortModule, Sort } from '@angular/material/sort';
 import { AuthService } from '../services/auth.service';
-import { ClientPayload, FinanceWork, FinanceWorkChanges, FinanceWorkStatus, SubWorkItem, SubWorkPayload, TenantUserOption, WorkBoardClient, WorkBoardService, WorkDocument, WorkItem, WorkPayload, WorkStatus } from '../services/work-board.service';
+import { ClientPayload, FinanceWork, FinanceWorkChanges, FinanceWorkStatus, SubWorkItem, SubWorkPayload, TenantUserOption, WorkBoardClient, WorkBoardService, WorkDocument, WorkItem, WorkPayload, WorkStatus, WorkbookTransferTarget } from '../services/work-board.service';
 import { WorkFieldValuesComponent } from './work-field-values.component';
 import { WorkLayoutListComponent } from './work-layout-list.component';
 import { WorkTransferDialogComponent } from './work-transfer-dialog.component';
@@ -63,6 +64,8 @@ export class WorkBoardComponent implements OnInit, OnDestroy {
   ];
   private destroyed = false;
   private readonly dialog = inject(MatDialog);
+  private readonly router = inject(Router);
+  private readonly destroyRef = inject(DestroyRef);
   works: WorkItem[] = [];
   clients: WorkBoardClient[] = [];
   tenantUsers: TenantUserOption[] = [];
@@ -105,7 +108,8 @@ export class WorkBoardComponent implements OnInit, OnDestroy {
   ];
   showWorkForm = false;
   showSubWorkForm = false;
-  showClientPanel = false;
+  showClients = false;
+  clientsLoading = false;
   clientLookupFound: WorkBoardClient | null = null;
   clientLookupLinked = false;
   clientForm: ClientPayload = this.emptyClientForm();
@@ -135,9 +139,14 @@ export class WorkBoardComponent implements OnInit, OnDestroy {
   private resetColumnDraft = false;
 
   constructor(private board: WorkBoardService, private snackBar: MatSnackBar, public auth: AuthService, private route: ActivatedRoute) {}
-  openWorkTransfer(): void {
-    this.dialog.open(WorkTransferDialogComponent, { width: '580px', maxWidth: 'calc(100vw - 24px)', ariaLabelledBy: 'work-transfer-title' })
-      .afterClosed().subscribe((saved) => { if (saved && !this.destroyed) void this.load(); });
+  openWorkTransfer(target: WorkbookTransferTarget = 'works'): void {
+    this.dialog.open(WorkTransferDialogComponent, { data: target, width: '580px', maxWidth: 'calc(100vw - 24px)', ariaLabelledBy: 'work-transfer-title' })
+      .afterClosed().subscribe((saved) => {
+        if (saved && !this.destroyed) {
+          if (target === 'clients') void this.reloadClients();
+          else void this.load();
+        }
+      });
   }
   ngOnInit(): void {
     try {
@@ -151,11 +160,26 @@ export class WorkBoardComponent implements OnInit, OnDestroy {
       void this.loadFinance(this.financeTenantId, id);
       return;
     }
+    this.route.queryParamMap.pipe(takeUntilDestroyed(this.destroyRef)).subscribe((params) => {
+      const showClients = params.get('view') === 'clients' && this.auth.canEditFeature('workBoard');
+      if (showClients === this.showClients) return;
+      this.showClients = showClients;
+      this.resetClientForm();
+      if (showClients) {
+        this.cancelForms();
+        this.detailView = false;
+        void this.reloadClients();
+      } else if (!this.referencesLoaded && !this.loading) void this.load();
+    });
+    if (this.showClients) {
+      this.loading = false;
+      return;
+    }
     void this.load().then(async () => {
-      if (!id || this.showWorkForm || this.detailView) return;
+      if (!id || this.showClients || this.showWorkForm || this.detailView) return;
       try {
         const work = this.works.find((item) => item.id === id) || await firstValueFrom(this.board.getWork(id));
-        if (!this.showWorkForm && !this.detailView) this.selectWork(work);
+        if (!this.showClients && !this.showWorkForm && !this.detailView) this.selectWork(work);
       } catch (error) { this.error(error, 'The work could not be opened.'); }
     });
   }
@@ -369,6 +393,10 @@ export class WorkBoardComponent implements OnInit, OnDestroy {
   trackWork(_: number, work: WorkItem | FinanceWork): string { return work.id; }
   trackSubWork(_: number, subWork: SubWorkItem): string { return subWork.id; }
   backToTable(): void {
+    if (this.showClients) {
+      if (!this.saving) void this.router.navigate([], { relativeTo: this.route, queryParams: { view: null }, queryParamsHandling: 'merge' });
+      return;
+    }
     this.cancelForms();
     this.detailView = false;
     this.documents = [];
@@ -378,7 +406,7 @@ export class WorkBoardComponent implements OnInit, OnDestroy {
   startCreateWork(): void {
     this.workForm = this.emptyWorkForm(); this.fieldChanges = {}; this.fieldFiles = {};
     this.reportForm = {};
-    this.editingWork = false; this.detailView = false; this.showClientPanel = false; this.showWorkForm = true;
+    this.editingWork = false; this.detailView = false; this.showWorkForm = true;
   }
   startEditWork(): void {
     if (!this.selectedWork) return;
@@ -572,25 +600,54 @@ export class WorkBoardComponent implements OnInit, OnDestroy {
   }
   cancelForms(): void { this.showWorkForm = false; this.showSubWorkForm = false; this.editingSubWorkId = null; }
   cancelWorkEditor(): void { this.showWorkForm = false; this.detailView = Boolean(this.editingWork && this.selectedWork); }
-  openClientPanel(): void { this.showClientPanel = !this.showClientPanel; this.clientForm = this.emptyClientForm(); this.clientLookupFound = null; }
-  async lookupClient(): Promise<void> {
-    if (!this.clientForm.taxNumber.trim()) return this.notice('Tax number is required.');
+  openClients(): void {
+    void this.router.navigate([], { relativeTo: this.route, queryParams: { view: 'clients', work: null }, queryParamsHandling: 'merge' });
+  }
+  private resetClientForm(): void {
+    this.clientForm = this.emptyClientForm();
+    this.clientLookupFound = null;
+    this.clientLookupLinked = false;
+  }
+  private async reloadClients(): Promise<void> {
+    this.clientsLoading = true;
     try {
-      const result = await firstValueFrom(this.board.lookupClient(this.clientForm.taxNumber));
+      this.clients = await firstValueFrom(this.board.listClients());
+    } catch (error) { this.error(error, 'Clients could not be loaded.'); }
+    finally { this.clientsLoading = false; }
+  }
+  get clientTaxNumberRequired(): boolean { return (this.clientForm.country.trim().toUpperCase() || 'HU') === 'HU'; }
+  changeClientTaxNumber(value: string): void {
+    if (this.clientLookupFound) this.clientForm = this.emptyClientForm();
+    this.clientForm.taxNumber = value;
+    this.clientLookupFound = null;
+    this.clientLookupLinked = false;
+  }
+  async lookupClient(): Promise<void> {
+    const form = this.clientForm;
+    const taxNumber = form.taxNumber.trim();
+    if (!taxNumber) return;
+    try {
+      const result = await firstValueFrom(this.board.lookupClient(taxNumber));
+      if (this.clientForm !== form || form.taxNumber.trim() !== taxNumber) return;
       this.clientLookupFound = result.client; this.clientLookupLinked = result.linked;
       if (result.client) this.clientForm = { ...result.client };
       else this.notice('No existing company found. Enter the company details to create it.');
     } catch (error: any) { this.error(error, 'Client lookup failed.'); }
   }
   async saveClient(): Promise<void> {
-    if (!this.clientForm.taxNumber.trim() || !this.clientForm.name.trim()) return this.notice('Tax number and company name are required.');
+    if (this.saving || this.clientsLoading || this.clientLookupLinked) return;
+    if (!this.clientForm.name.trim()) return this.notice('Company name is required.');
+    if (this.clientTaxNumberRequired && !this.clientForm.taxNumber.trim()) return this.notice('Tax number is required for Hungarian clients.');
     this.saving = true;
+    const form = this.clientForm;
     try {
-      const result = await firstValueFrom(this.board.createOrLinkClient(this.clientForm));
-      this.clients = await firstValueFrom(this.board.listClients());
+      const result = await firstValueFrom(this.board.createOrLinkClient(form));
+      if (this.destroyed) return;
+      this.clients = [...this.clients.filter(({ id }) => id !== result.client.id), result.client]
+        .sort((a, b) => a.name.localeCompare(b.name));
       this.workForm.clientId = result.client.id;
+      if (this.clientForm === form) this.resetClientForm();
       this.notice(result.matchedExisting ? 'Existing company linked to this tenant.' : 'Client created.');
-      this.showClientPanel = false;
     } catch (error: any) { this.error(error, 'Client could not be saved.'); }
     finally { this.saving = false; }
   }

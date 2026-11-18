@@ -2,6 +2,7 @@ const mongoose = require('mongoose');
 const { WorkItem, WORK_STATUSES } = require('../models/workItem');
 const SubWorkItem = require('../models/subWorkItem');
 const ClientCompany = require('../models/clientCompany');
+const { clientCompanyDetails, normalizeTaxNumber } = require('../services/clientCompanyDetails');
 const User = require('../models/user');
 const Tenant = require('../models/tenant');
 const WorkSequence = require('../models/workSequence');
@@ -36,10 +37,6 @@ function cleanLongText(value) {
   return String(value || '').trim();
 }
 
-function normalizeTaxNumber(value) {
-  return String(value || '').trim().toUpperCase().replace(/[^0-9A-Z]/g, '');
-}
-
 function cleanFileName(value) {
   return cleanText(value).replace(/[\\/\u0000-\u001f\u007f]+/g, '_').slice(0, 180) || 'document';
 }
@@ -65,7 +62,7 @@ function userDisplayName(user) {
 
 function presentClient(client) {
   return {
-    id: String(client._id), taxNumber: client.taxNumber, name: client.name, country: client.country || 'HU',
+    id: String(client._id), taxNumber: client.taxNumber || '', name: client.name, country: client.country || 'HU',
     postalCode: client.postalCode || '', city: client.city || '', address: client.address || '',
     email: client.email || '', phone: client.phone || ''
   };
@@ -540,12 +537,10 @@ exports.lookupClientByTaxNumber = (req, res) => withErrors(res, async () => {
 });
 
 exports.createOrLinkClient = (req, res) => withErrors(res, async () => {
-  const normalizedTaxNumber = normalizeTaxNumber(req.body?.taxNumber);
-  const name = cleanText(req.body?.name);
-  if (!normalizedTaxNumber) throw httpError('Tax number is required');
-  if (!name) throw httpError('Company name is required');
+  const details = clientCompanyDetails(req.body);
+  const { normalizedTaxNumber } = details;
   const tenantId = req.scope?.tenantId || null;
-  const existing = await ClientCompany.findOne({ normalizedTaxNumber });
+  const existing = details.taxNumber ? await ClientCompany.findOne({ normalizedTaxNumber }) : null;
   if (existing) {
     await ClientCompany.updateOne({ _id: existing._id }, { $addToSet: { tenantIds: tenantId }, $set: { updatedBy: req.userId } });
     existing.tenantIds = [...(existing.tenantIds || []), tenantId];
@@ -553,14 +548,11 @@ exports.createOrLinkClient = (req, res) => withErrors(res, async () => {
   }
   try {
     const client = await ClientCompany.create({
-      taxNumber: cleanText(req.body.taxNumber), normalizedTaxNumber, name,
-      country: cleanText(req.body?.country || 'HU').toUpperCase(), postalCode: cleanText(req.body?.postalCode),
-      city: cleanText(req.body?.city), address: cleanText(req.body?.address), email: cleanText(req.body?.email).toLowerCase(),
-      phone: cleanText(req.body?.phone), tenantIds: [tenantId], createdBy: req.userId, updatedBy: req.userId
+      ...details, tenantIds: [tenantId], createdBy: req.userId, updatedBy: req.userId
     });
     return res.status(201).json({ client: presentClient(client), matchedExisting: false });
   } catch (error) {
-    if (error?.code !== 11000) throw error;
+    if (error?.code !== 11000 || !details.taxNumber) throw error;
     const client = await ClientCompany.findOneAndUpdate({ normalizedTaxNumber }, { $addToSet: { tenantIds: tenantId } }, { new: true });
     return res.json({ client: presentClient(client), matchedExisting: true });
   }

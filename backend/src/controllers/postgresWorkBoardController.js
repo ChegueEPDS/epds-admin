@@ -12,7 +12,7 @@ const TERMINAL = new Set(['completed_billable','invoiced','paid','closed','cance
 const CATEGORIES = new Set(['offer','contract_draft','contract','order','performance_certificate','other']);
 const LABELS = {offer:'Ajánlat',contract_draft:'Szerződéstervezet',contract:'Szerződés',order:'Megrendelés',performance_certificate:'Teljesítésigazolás',other:'Egyéb'};
 const clean = (v) => String(v || '').trim().replace(/\s+/g,' ');
-const tax = (v) => String(v || '').trim().toUpperCase().replace(/[^0-9A-Z]/g,'');
+const { normalizeTaxNumber, clientCompanyDetails } = require('../services/clientCompanyDetails');
 const fail = (message,statusCode=400) => Object.assign(new Error(message),{statusCode});
 const safeFile = (v) => clean(v).replace(/[\\/\u0000-\u001f\u007f]+/g,'_').slice(0,180)||'document';
 const userName = (u) => [u?.firstName,u?.lastName].filter(Boolean).join(' ').trim()||u?.email||'Unknown user';
@@ -24,7 +24,7 @@ function presentWork(w){const subs=(w.subWorks||[]).filter(s=>(w.archivedAt||!s.
   return {...w,marginPercent:total>0?(total-Number(w.costAmount||0))/total*100:0,allocatedAmount:allocated,
     allocatedPercentage:total>0?allocated/total*100:0,remainingAmount:total-allocated,paidAmount:paid,
     subWorkCount:subs.length,subWorks:subs.map(s=>presentSub(s,w))};}
-function presentClient(c){return c?{id:String(c.id||c._id),taxNumber:c.tax_number||c.taxNumber,name:c.name,country:c.country||'HU',
+function presentClient(c){return c?{id:String(c.id||c._id),taxNumber:c.tax_number??c.taxNumber??'',name:c.name,country:c.country||'HU',
   postalCode:c.postal_code||c.postalCode||'',city:c.city||'',address:c.address||'',email:c.email||'',phone:c.phone||''}:null;}
 function presentDoc(d){return {id:d.id,workItemId:d.workItemId,category:d.category,categoryLabel:LABELS[d.category]||d.category,
   displayName:d.displayName,fileName:d.fileName,contentType:d.contentType,size:d.size,uploadedByName:d.uploadedByName||'',uploadedAt:d.createdAt};}
@@ -83,9 +83,13 @@ exports.createSubWork=(req,res)=>run(res,async()=>{if(!clean(req.body?.name))thr
 exports.updateSubWork=(req,res)=>run(res,async()=>{const s=await store.updateSubWork(req.scope.tenantId,req.params.subWorkId,req.userId,req.body);if(!s)throw fail('Sub-work not found',404);const w=await store.findWork(req.scope.tenantId,s.workItemId);res.json({subWork:presentSub(s,w)});});
 exports.archiveSubWork=(req,res)=>run(res,async()=>{if(!await store.archiveSubWork(req.scope.tenantId,req.params.subWorkId,req.userId))throw fail('Sub-work not found',404);res.status(204).end();});
 exports.listClients=(req,res)=>run(res,async()=>res.json({clients:(await store.listClients(req.scope.tenantId)).map(presentClient)}));
-exports.lookupClientByTaxNumber=(req,res)=>run(res,async()=>{const n=tax(req.query.taxNumber);if(!n)throw fail('Tax number is required');const c=await store.findClientByTaxNumber(n);res.json({client:presentClient(c),linked:c?await store.isClientLinked(c.id,req.scope.tenantId):false});});
-exports.createOrLinkClient=(req,res)=>run(res,async()=>{const n=tax(req.body?.taxNumber),name=clean(req.body?.name);if(!n||!name)throw fail(!n?'Tax number is required':'Company name is required');
-  const existing=await store.findClientByTaxNumber(n);const c=await store.saveClient(req.scope.tenantId,req.userId,{...req.body,name,normalizedTaxNumber:n});res.status(existing?200:201).json({client:presentClient(c),matchedExisting:Boolean(existing)});});
+exports.lookupClientByTaxNumber=(req,res)=>run(res,async()=>{const n=normalizeTaxNumber(req.query.taxNumber);if(!n)throw fail('Tax number is required');const c=await store.findClientByTaxNumber(n);res.json({client:presentClient(c),linked:c?await store.isClientLinked(c.id,req.scope.tenantId):false});});
+exports.createOrLinkClient = (req, res) => run(res, async () => {
+  const details = clientCompanyDetails(req.body);
+  const existing = details.taxNumber ? await store.findClientByTaxNumber(details.normalizedTaxNumber) : null;
+  const client = await store.saveClient(req.scope.tenantId, req.userId, details);
+  res.status(existing ? 200 : 201).json({ client: presentClient(client), matchedExisting: Boolean(existing) });
+});
 exports.listTenantUsers=(req,res)=>run(res,async()=>res.json({users:(await store.listUsers(req.scope.tenantId)).map(u=>({id:u.id,fullName:`${u.firstName} ${u.lastName}`.trim()||u.email,email:u.email}))}));
 exports.listDocuments=(req,res)=>run(res,async()=>res.json({documents:(await store.listDocuments(req.scope.tenantId,req.params.id)).map(presentDoc)}));
 exports.uploadDocument=(req,res)=>run(res,async()=>{if(!req.file?.buffer?.length)throw fail('No file provided');const category=String(req.body?.category||'');if(!CATEGORIES.has(category))throw fail('Valid document category is required');const custom=clean(req.body?.customName);if(category==='other'&&!custom)throw fail('Custom document name is required for Other');
