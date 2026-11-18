@@ -444,7 +444,7 @@
                 @for (column of columns; track column.id) {
                   @switch (column.id) {
                     @case ('workNumber') {
-                      <td>
+                      <td class="work-number-column">
                         <div class="work-number-cell">
                           @if (operational) {
                             <ng-container *ngTemplateOutlet="expandWork; context: { $implicit: work }"/>
@@ -463,7 +463,7 @@
                     @case ('serviceTypeId') { <td>{{ catalogLabel('serviceTypes', operational?.serviceTypeId) }}</td> }
                     @case ('responsible') { <td>{{ operational?.responsible || '—' }}</td> }
                     @case ('status') {
-                      <td><span class="status" [attr.data-status]="operational?.archivedAt ? 'deleted' : work.status">{{ operational?.archivedAt ? 'Deleted' : statusLabel(work.status) }}</span></td>
+                      <td class="work-status-column"><span class="status" [attr.data-status]="operational?.archivedAt ? 'deleted' : work.status">{{ operational?.archivedAt ? 'Deleted' : statusLabel(work.status) }}</span></td>
                     }
                     @case ('deadline') {
                       <td [class.overdue]="isOverdue(operational?.deadline ?? null)">{{ (operational?.deadline | date:'yyyy.MM.dd') || '—' }}</td>

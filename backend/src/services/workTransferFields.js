@@ -162,20 +162,34 @@ function markConflicts(rows, works, issues) {
   const byNumber = new Map();
   const sequenceKey = (work) => work.year + ':' + work.sequenceNumber;
   for (const work of works) {
-    bySequence.set(sequenceKey(work), work.id);
+    bySequence.set(sequenceKey(work), work);
     if (!byNumber.has(work.workNumber)) byNumber.set(work.workNumber, []);
-    byNumber.get(work.workNumber).push(work.id);
+    byNumber.get(work.workNumber).push(work);
   }
+  const describe = (work) => {
+    const status = work.archivedAt ? 'Deleted' : (work.status || 'Unknown status').replace(/_/g, ' ');
+    const filter = work.archivedAt ? 'Deleted' : 'All';
+    return `"${work.name}" (work number ${work.workNumber}, status: ${status}). Set the work table filter to ${filter} and search for ${work.workNumber}.`;
+  };
   const seen = new Map();
   for (const item of rows) {
     if (!item.year || !item.sequenceNumber) continue;
     const key = sequenceKey(item);
     const conflicting = bySequence.get(key);
-    if ((conflicting && conflicting !== item.id) ||
-        (item.workNumber && byNumber.get(item.workNumber)?.some((id) => id !== item.id))) {
-      issues.push({ row: item.row, col: 3, message: 'This work number is already used by another work.' });
+    if (conflicting && conflicting.id !== item.id) {
+      issues.push({ row: item.row, col: 3,
+        message: `Year ${item.year}, sequence ${item.sequenceNumber} is already used by ${describe(conflicting)}` });
     }
-    for (const unique of [key, item.workNumber].filter(Boolean)) {
+    if (item.workNumber) {
+      for (const work of byNumber.get(item.workNumber) || []) {
+        if (work.id === item.id || work.id === conflicting?.id) continue;
+        issues.push({ row: item.row, col: 3,
+          message: `Work number ${item.workNumber} is already used by ${describe(work)}` });
+      }
+    }
+    const identifiers = ['sequence:' + key];
+    if (item.workNumber) identifiers.push('number:' + item.workNumber);
+    for (const unique of identifiers) {
       if (seen.has(unique)) {
         for (const row of [seen.get(unique), item.row]) issues.push({ row, col: 3, message: 'This work number occurs more than once in the file.' });
       } else seen.set(unique, item.row);

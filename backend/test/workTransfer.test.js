@@ -65,12 +65,13 @@ test('an invalid import workbook reports stale IDs, invalid fields and archived 
   sheet.getCell('C3').value = 8;
   sheet.getCell('D3').value = 'Another work';
   sheet.getCell('G3').value = 'inspection';
-  const archived = { ...existing, id: oldId, sequenceNumber: 8, workNumber: 'INSP26-0008', archivedAt: new Date() };
+  const archived = { ...existing, id: oldId, name: 'Archived project', sequenceNumber: 8, workNumber: 'OLD26-0008', archivedAt: new Date() };
   const { issues } = await validate(sheet, [{ ...existing, fieldRevision: 5 }, archived]);
   assert.ok(issues.some((issue) => issue.row === 2 && issue.col === 1 && /changed/.test(issue.message)));
   assert.ok(issues.some((issue) => issue.row === 3 && issue.col === 1 && /current tenant/.test(issue.message)));
   for (const row of [2, 3]) {
-    assert.ok(issues.some((issue) => issue.row === row && issue.col === 3 && /already used/.test(issue.message)));
+    assert.ok(issues.some((issue) => issue.row === row && issue.col === 3 &&
+      /Year 2026, sequence 8 is already used by "Archived project".*OLD26-0008.*filter to Deleted/.test(issue.message)));
     assert.ok(issues.some((issue) => issue.row === row && issue.col === 3 && /more than once/.test(issue.message)));
   }
   const report = await readWorkbook(await errorWorkbook(workbook, sheet, issues));
