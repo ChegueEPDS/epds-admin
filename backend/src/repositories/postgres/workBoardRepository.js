@@ -144,25 +144,30 @@ async function createWork(tenantId, actorId, input) {
       ? alignedWorkYear(tenant.created_at, tenant.work_turnover_day)
       : Number(input.year || alignedWorkYear(tenant.created_at));
     const sequence = await nextSequence(client, tenantId, year);
-    const workId = id();
     const suppliedWorkNumber = tenant.align_work_sequence ? null : input.workNumber;
     const workNumber = prefix + (suppliedWorkNumber || workNumberBase(year, sequence));
-    const result = await client.query(`INSERT INTO work_items
-      (id,tenant_id,year,sequence_number,work_number,name,client_id,customer,responsible_user_id,responsible,
-       contributors,status,deadline,description,currency,total_amount,cost_amount,subcontractor,payment_deadline_days,
-       offer_date,completion_date,invoice_date,invoice_payment_deadline,invoice_number,contract_signed,
-       performance_certificate,created_by,updated_by,created_at,updated_at,custom_fields,entity_id,service_type_id,reporting,paid_at)
-      VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11::jsonb,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$27,now(),now(),$28::jsonb,$29,$30,$31::jsonb,$32) RETURNING *`,
-    [workId, tenantId, year, sequence, workNumber,
-      input.name, input.clientId || null, input.customer || '', input.responsibleUserId || null, input.responsible || '',
-      JSON.stringify(input.contributors || []), input.status || 'inquiry', input.deadline || null, input.description || '',
-      input.currency || 'HUF', Number(input.totalAmount || 0), Number(input.costAmount || 0), input.subcontractor || '',
-      Number(input.paymentDeadlineDays ?? 30), input.offerDate || null, input.completionDate || null,
-      input.invoiceDate || null, input.invoicePaymentDeadline || null, input.invoiceNumber || '',
-      Boolean(input.contractSigned), Boolean(input.performanceCertificate), actorId, JSON.stringify(input.customFields || {}),
-      input.entityId || null, input.serviceTypeId || null, JSON.stringify(input.reporting || {}), input.paidAt || null]);
-    return work(result.rows[0]);
+    return insertWork(client, tenantId, actorId, { ...input, year, sequenceNumber: sequence, workNumber });
   });
+}
+
+async function insertWork(client, tenantId, actorId, input) {
+  const { year, sequenceNumber: sequence, workNumber } = input;
+  const workId = id();
+  const result = await client.query(`INSERT INTO work_items
+    (id,tenant_id,year,sequence_number,work_number,name,client_id,customer,responsible_user_id,responsible,
+     contributors,status,deadline,description,currency,total_amount,cost_amount,subcontractor,payment_deadline_days,
+     offer_date,completion_date,invoice_date,invoice_payment_deadline,invoice_number,contract_signed,
+     performance_certificate,created_by,updated_by,created_at,updated_at,custom_fields,entity_id,service_type_id,reporting,paid_at)
+    VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11::jsonb,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$27,now(),now(),$28::jsonb,$29,$30,$31::jsonb,$32) RETURNING *`,
+  [workId, tenantId, year, sequence, workNumber,
+    input.name, input.clientId || null, input.customer || '', input.responsibleUserId || null, input.responsible || '',
+    JSON.stringify(input.contributors || []), input.status || 'inquiry', input.deadline || null, input.description || '',
+    input.currency || 'HUF', Number(input.totalAmount || 0), Number(input.costAmount || 0), input.subcontractor || '',
+    Number(input.paymentDeadlineDays ?? 30), input.offerDate || null, input.completionDate || null,
+    input.invoiceDate || null, input.invoicePaymentDeadline || null, input.invoiceNumber || '',
+    Boolean(input.contractSigned), Boolean(input.performanceCertificate), actorId, JSON.stringify(input.customFields || {}),
+    input.entityId || null, input.serviceTypeId || null, JSON.stringify(input.reporting || {}), input.paidAt || null]);
+  return work(result.rows[0]);
 }
 
 const WORK_MUTABLE = new Map([
@@ -175,7 +180,7 @@ const WORK_MUTABLE = new Map([
   ['contractSigned','contract_signed'],['performanceCertificate','performance_certificate']
 ]);
 
-async function updateWork(tenantId, workId, actorId, input, expectedRevision) {
+async function updateWork(tenantId, workId, actorId, input, expectedRevision, transaction) {
   const sets = []; const params = [workId, tenantId];
   for (const [key, column] of WORK_MUTABLE) if (Object.hasOwn(input, key)) {
     params.push(input[key] === '' && ['clientId','responsibleUserId'].includes(key) ? null : input[key]);
@@ -187,6 +192,12 @@ async function updateWork(tenantId, workId, actorId, input, expectedRevision) {
     params.push(JSON.stringify(input.customFields));
     sets.push(`custom_fields=$${params.length}::jsonb`);
   }
+  if (transaction) {
+    for (const [key, column] of [['year', 'year'], ['sequenceNumber', 'sequence_number'], ['workNumber', 'work_number']]) {
+      params.push(input[key]);
+      sets.push(`${column}=$${params.length}`);
+    }
+  }
   if (!sets.length) return findWork(tenantId, workId);
   if (expectedRevision !== undefined || Object.hasOwn(input, 'customFields')) sets.push('field_revision=field_revision+1');
   params.push(actorId); sets.push(`updated_by=$${params.length}`, 'updated_at=now()');
@@ -195,7 +206,8 @@ async function updateWork(tenantId, workId, actorId, input, expectedRevision) {
     params.push(expectedRevision);
     revision = ` AND field_revision=$${params.length}`;
   }
-  const result = await query(`UPDATE work_items SET ${sets.join(',')} WHERE id=$1 AND tenant_id=$2 AND archived_at IS NULL${revision} RETURNING *`, params);
+  const execute = transaction ? transaction.query.bind(transaction) : query;
+  const result = await execute(`UPDATE work_items SET ${sets.join(',')} WHERE id=$1 AND tenant_id=$2 AND archived_at IS NULL${revision} RETURNING *`, params);
   return work(result.rows[0]);
 }
 
@@ -331,6 +343,6 @@ async function deleteDocument(tenantId, documentId) {
   return document(result.rows[0]);
 }
 
-module.exports = { list, listBoardOptions, findWork, createWork, updateWork, archiveWork, restoreWork, createSubWork,
+module.exports = { list, listBoardOptions, findWork, createWork, updateWork, insertWork, mapWork: work, archiveWork, restoreWork, createSubWork,
   updateSubWork, archiveSubWork, listClients, findClientByTaxNumber, isClientLinked, saveClient, listUsers,
   listDocuments, findDocument, createDocument, deleteDocument, work, subWork, document };

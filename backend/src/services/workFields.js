@@ -82,11 +82,11 @@ function updateCatalog(current, input) {
   const entry = { id: previous?.id || randomUUID(), label, archived };
   if (catalog.key === 'serviceTypes') {
     const value = Object.hasOwn(draft, 'code') ? draft.code : previous?.code ?? '';
-    if (typeof value !== 'string') throw fail('Enter a three-letter service type code.');
+    if (typeof value !== 'string') throw fail('Enter a service type code with 2 to 4 letters.');
     const original = value.trim().normalize('NFC');
     const code = original.toUpperCase().normalize('NFC');
     if (code && (!isServiceTypeCode(original) || !isServiceTypeCode(code))) {
-      throw fail('Enter a three-letter service type code.');
+      throw fail('Enter a service type code with 2 to 4 letters.');
     }
     if (code) entry.code = code;
   }
@@ -223,7 +223,7 @@ function workNumberPrefix(config, serviceTypeId) {
   if (config?.addServiceTypeCodeToWorkNumber !== true) return '';
   const code = config.serviceTypes?.find((entry) => entry.id === serviceTypeId && !entry.archived)?.code;
   if (!isServiceTypeCode(code)) {
-    throw fail('Select a service type with a three-letter code to create a work.', 422);
+    throw fail('Select a service type with a 2- to 4-letter code to create a work.', 422);
   }
   return code;
 }

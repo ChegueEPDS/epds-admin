@@ -138,7 +138,7 @@
                       <mat-form-field appearance="outline" subscriptSizing="dynamic">
                         <mat-label>Service type code</mat-label>
                         <input matInput name="entryCode" [(ngModel)]="pending.entry.code" autocapitalize="characters">
-                        <mat-hint>{{ validServiceTypeCode(pending.entry.code) ? 'Three letters, e.g. INS' : 'Use exactly three letters.' }}</mat-hint>
+                        <mat-hint>{{ validServiceTypeCode(pending.entry.code) ? '2 to 4 letters, e.g. INS' : 'Use 2 to 4 letters.' }}</mat-hint>
                       </mat-form-field>
                     }
                     <div class="actions">

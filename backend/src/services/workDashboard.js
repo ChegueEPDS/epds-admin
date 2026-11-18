@@ -32,7 +32,7 @@ const day = (value) => !value ? null : isoDay.test(value) ? value : workCalendar
 const dayNumber = (value) => Date.parse(value) / 86400000;
 const fail = (message) => Object.assign(new Error(message), { statusCode: 400 });
 
-async function workReporting(req, previous, sizeEnabled) {
+async function workReporting(req, previous, sizeEnabled, tenantHasUser) {
   const input = req.body?.reporting;
   if (input === undefined) return previous;
   if (req.scope.tenantType === 'client' || !input || typeof input !== 'object' || Array.isArray(input)) {
@@ -47,7 +47,7 @@ async function workReporting(req, previous, sizeEnabled) {
     if (key === 'backupId' && value !== previous.backupId) {
       if (typeof value !== 'string' || !/^[0-9a-f]{24}$/.test(value)) throw fail('Select a backup from this tenant.');
       const tenantId = req.scope.tenantId;
-      const exists = databaseEngine() === 'postgresql'
+      const exists = tenantHasUser ? tenantHasUser(value) : databaseEngine() === 'postgresql'
         ? (await query('SELECT 1 FROM users WHERE id=$1 AND tenant_id=$2', [value, tenantId])).rowCount
         : await User.exists({ _id: value, tenantId });
       if (!exists) throw fail('Select a backup from this tenant.');

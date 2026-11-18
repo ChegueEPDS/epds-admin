@@ -244,8 +244,8 @@ export class WorkFieldSettingsComponent implements OnInit {
   }
   validServiceTypeCode(value = ''): boolean {
     const code = value.trim().normalize('NFC');
-    const threeLetters = /^\p{L}{3}$/u;
-    return !code || (threeLetters.test(code) && threeLetters.test(code.toUpperCase().normalize('NFC')));
+    const allowedLetters = /^\p{L}{2,4}$/u;
+    return !code || (allowedLetters.test(code) && allowedLetters.test(code.toUpperCase().normalize('NFC')));
   }
   async saveWorkNumbering(confirmation: TemplateRef<unknown>): Promise<void> {
     if (this.busy || !this.config) return;

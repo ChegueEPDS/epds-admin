@@ -14,6 +14,9 @@
         <mat-icon class="material-symbols-outlined">arrow_back</mat-icon>{{ financeTenantId ? 'Vissza a táblához' : 'Back to table' }}
       </button>
       <ng-container *ngIf="!detailView && !showWorkForm && auth.canEditFeature('workBoard')">
+        @if (!financeTenantId && auth.canManageWorkFields()) {
+          <button mat-stroked-button type="button" (click)="openWorkTransfer()"><mat-icon class="material-symbols-outlined">sync_alt</mat-icon>Import / Export</button>
+        }
         <button mat-stroked-button type="button" (click)="openClientPanel()"><mat-icon class="material-symbols-outlined">business</mat-icon>Clients</button>
         <button mat-flat-button color="primary" type="button" (click)="startCreateWork()" [disabled]="loading"><mat-icon class="material-symbols-outlined">add</mat-icon>New work</button>
       </ng-container>

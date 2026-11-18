@@ -1,4 +1,4 @@
-import { HttpClient } from '@angular/common/http';
+import { HttpClient, HttpEvent } from '@angular/common/http';
 import { Injectable, signal } from '@angular/core';
 import { EMPTY, Observable, Subject, catchError, defer, expand, map, merge, switchMap, tap, timer } from 'rxjs';
 import { environment } from '../../environments/environment';
@@ -6,6 +6,10 @@ import { WorkFieldFiles, WorkFieldSettings, WorkFieldValues, WorkReporting, Work
 import { AuthService, FinanceTenant } from './auth.service';
 
 export type WorkStatus = 'inquiry' | 'offer' | 'to_start' | 'in_progress' | 'on_hold' | 'completed_billable' | 'invoiced' | 'paid' | 'closed' | 'cancelled' | 'lost';
+export type WorkImportJob = {
+  id: string; state: 'reading' | 'validating' | 'saving' | 'succeeded' | 'rejected' | 'failed';
+  processed: number; total: number; created?: number; updated?: number; unchanged?: number; errors?: number; canDownload?: boolean; message?: string;
+};
 
 export type SubWorkItem = {
   id: string; workItemId: string; sequenceNumber: number; subWorkNumber: string; name: string; description: string;
@@ -223,6 +227,23 @@ export class WorkBoardService {
   }
   createOrLinkClient(payload: ClientPayload): Observable<{ client: WorkBoardClient; matchedExisting: boolean }> {
     return this.refreshAfterSave(this.http.post<{ client: WorkBoardClient; matchedExisting: boolean }>(`${this.baseUrl}/clients`, payload, { withCredentials: true }));
+  }
+  downloadWorkTransfer(kind: 'template' | 'export'): Observable<Blob> {
+    return this.http.get(`${this.baseUrl}/transfer/${kind}`, { withCredentials: true, responseType: 'blob' });
+  }
+  startWorkImport(workbook: File, archive?: File): Observable<HttpEvent<WorkImportJob>> {
+    const body = new FormData();
+    body.append('workbook', workbook);
+    if (archive) body.append('attachments', archive);
+    return this.http.post<WorkImportJob>(`${this.baseUrl}/transfer/import`, body, {
+      withCredentials: true, reportProgress: true, observe: 'events'
+    });
+  }
+  workImportStatus(id: string): Observable<WorkImportJob> {
+    return this.http.get<WorkImportJob>(`${this.baseUrl}/transfer/import/${encodeURIComponent(id)}`, { withCredentials: true });
+  }
+  downloadWorkImportErrors(id: string): Observable<Blob> {
+    return this.http.get(`${this.baseUrl}/transfer/import/${encodeURIComponent(id)}/errors`, { withCredentials: true, responseType: 'blob' });
   }
   listTenantUsers(): Observable<TenantUserOption[]> {
     return this.http.get<{ users: TenantUserOption[] }>(`${this.baseUrl}/users`, { withCredentials: true }).pipe(map((res) => res.users || []));

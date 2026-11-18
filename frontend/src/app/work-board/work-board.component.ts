@@ -1,11 +1,12 @@
 import { CommonModule, formatDate, formatNumber } from '@angular/common';
-import { Component, Input, OnDestroy, OnInit } from '@angular/core';
+import { Component, Input, OnDestroy, OnInit, inject } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute } from '@angular/router';
 import { firstValueFrom } from 'rxjs';
 import { MatButtonModule } from '@angular/material/button';
 import { MatCheckboxModule } from '@angular/material/checkbox';
 import { MatDatepickerModule } from '@angular/material/datepicker';
+import { MatDialog } from '@angular/material/dialog';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatIconModule } from '@angular/material/icon';
 import { MatInputModule } from '@angular/material/input';
@@ -18,6 +19,7 @@ import { AuthService } from '../services/auth.service';
 import { ClientPayload, FinanceWork, FinanceWorkChanges, FinanceWorkStatus, SubWorkItem, SubWorkPayload, TenantUserOption, WorkBoardClient, WorkBoardService, WorkDocument, WorkItem, WorkPayload, WorkStatus } from '../services/work-board.service';
 import { WorkFieldValuesComponent } from './work-field-values.component';
 import { WorkLayoutListComponent } from './work-layout-list.component';
+import { WorkTransferDialogComponent } from './work-transfer-dialog.component';
 import { cardLayout, orderLayout, LayoutItem, WorkFieldOrder, displayWorkField, isWorkFieldFile, PROJECT_SIZES, REPORT_PAYMENT_STATUSES, WORK_CATALOGS, WorkCatalog, WorkCatalogEntry, WorkField, WorkFieldCard, WorkFieldFiles, WorkFieldValues, WorkReporting, workCatalogLabel } from './work-fields';
 
 const billingCalendar = new Intl.DateTimeFormat('sv-SE', { timeZone: 'Europe/Budapest' });
@@ -60,6 +62,7 @@ export class WorkBoardComponent implements OnInit, OnDestroy {
     { id: 'partially_paid', label: 'Részben fizetve' }, { id: 'paid', label: 'Fizetve' }
   ];
   private destroyed = false;
+  private readonly dialog = inject(MatDialog);
   works: WorkItem[] = [];
   clients: WorkBoardClient[] = [];
   tenantUsers: TenantUserOption[] = [];
@@ -132,6 +135,10 @@ export class WorkBoardComponent implements OnInit, OnDestroy {
   private resetColumnDraft = false;
 
   constructor(private board: WorkBoardService, private snackBar: MatSnackBar, public auth: AuthService, private route: ActivatedRoute) {}
+  openWorkTransfer(): void {
+    this.dialog.open(WorkTransferDialogComponent, { width: '560px', ariaLabelledBy: 'work-transfer-title' })
+      .afterClosed().subscribe((saved) => { if (saved && !this.destroyed) void this.load(); });
+  }
   ngOnInit(): void {
     try {
       const saved = JSON.parse(localStorage.getItem(this.columnStorageKey()) ?? 'null');
@@ -422,7 +429,7 @@ export class WorkBoardComponent implements OnInit, OnDestroy {
     if (!this.workForm.name.trim()) return this.notice('Work name is required.');
     if (this.requiresServiceTypeCode && !this.catalogs.serviceTypes.some((entry) =>
       entry.id === this.workForm.serviceTypeId && !!entry.code && !entry.archived)) {
-      return this.notice('Select a service type with a three-letter code.');
+      return this.notice('Select a service type with a 2- to 4-letter code.');
     }
     const active = this.customFields.filter((field) => this.isFieldVisible(field.id) && this.fieldRelevant(field, this.workForm.status));
     const missing = active.find((field) => {

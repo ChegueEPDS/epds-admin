@@ -69,8 +69,13 @@ test('work numbering prefixes use the active service type code when enabled', ()
   const addService = (code) => buildSettings(initial, {
     version: 0, catalog: 'serviceTypes', entry: { label: 'Inspection', code }
   });
-  for (const code of ['IN', 'INSP', 'IN5', 'I-S', 'ßA', 'ßAB']) {
+  for (const code of ['I', 'INSPE', 'IN5', 'I-S', 'ß', 'ßABC']) {
     assert.throws(() => addService(code), { statusCode: 400 });
+  }
+  for (const code of ['in', 'insp']) {
+    const saved = addService(code);
+    const service = saved.serviceTypes[1];
+    assert.equal(workNumberPrefix({ ...saved, addServiceTypeCodeToWorkNumber: true }, service.id), code.toUpperCase());
   }
   const catalog = addService(' ko\u0301d ');
   const service = catalog.serviceTypes[1];
@@ -95,8 +100,8 @@ test('existing work numbers retain their sequence when a prefix is added, replac
     id, year: 2026, sequenceNumber, workNumber, serviceTypeId
   });
   const works = [
-    work('old', 1, '26-0001'), work('stale', 2, 'INS26-0002'), work('current', 3, 'KÓD26-0003'),
-    work('missing', 4, '26-0004', null), work('custom', 5, 'EXT-2026-5'), work('long', 12345, '26-12345')
+    work('old', 1, '26-0001'), work('stale', 2, 'IN26-0002'), work('current', 3, 'KÓD26-0003'),
+    work('missing', 4, '26-0004', null), work('custom', 5, 'EXT-2026-5'), work('long', 12345, 'INSP26-12345')
   ];
   const enabled = planWorkNumberUpdates(works, settings);
   assert.deepEqual(enabled.changes.map(({ next }) => next), ['KÓD26-0001', 'KÓD26-0002', 'KÓD26-12345']);
@@ -105,8 +110,8 @@ test('existing work numbers retain their sequence when a prefix is added, replac
   const replacements = new Map(enabled.changes.map(({ id, next }) => [id, next]));
   const updated = works.map((item) => ({ ...item, workNumber: replacements.get(item.id) ?? item.workNumber }));
   assert.deepEqual(planWorkNumberUpdates(updated, settings).changes, []);
-  const disabled = planWorkNumberUpdates(updated, { ...settings, addServiceTypeCodeToWorkNumber: false });
-  assert.deepEqual(disabled.changes.map(({ next }) => next), ['26-0001', '26-0002', '26-0003', '26-12345']);
+  const disabled = planWorkNumberUpdates(works, { ...settings, addServiceTypeCodeToWorkNumber: false });
+  assert.deepEqual(disabled.changes.map(({ next }) => next), ['26-0002', '26-0003', '26-12345']);
   assert.equal(disabled.missingCode, 0);
 });
 

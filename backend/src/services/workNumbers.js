@@ -1,6 +1,6 @@
 const { WorkItem } = require('../models/workItem');
 
-const serviceTypeCodePattern = /^\p{L}{3}$/u;
+const serviceTypeCodePattern = /^\p{L}{2,4}$/u;
 const isServiceTypeCode = (code) => typeof code === 'string' && serviceTypeCodePattern.test(code);
 const workNumberBase = (year, sequence) => `${String(year).slice(-2)}-${String(sequence).padStart(4, '0')}`;
 
