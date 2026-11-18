@@ -4,6 +4,26 @@ const { buildSettings, planValues, catalogSelections } = require('../src/service
 
 const field = (id, type, extra) => ({ id, label: id, type, card: 'basic', ...extra });
 
+test('a layout saves multiple cards, new fields and table defaults under one settings version', () => {
+  const initial = { version: 5, fields: [] };
+  const key = 'new:aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee';
+  const layout = {
+    fields: [{ key, field: field('', 'text', { label: 'Reference' }) }],
+    orders: { basic: [key, 'name'], offer: ['deadline', 'currency'] },
+    hidden: [key, 'deadline'],
+    columns: { [key]: true, responsible: false }
+  };
+  const saved = buildSettings(initial, { version: 5, layout });
+  const [created] = saved.fields;
+  assert.equal(saved.version, 6);
+  assert.deepEqual(saved.fieldOrder, { basic: [created.id, 'name'], offer: ['deadline', 'currency'] });
+  assert.deepEqual(saved.hiddenFields, [created.id, 'deadline']);
+  assert.deepEqual(saved.columnVisibility, { [created.id]: true, responsible: false });
+  assert.throws(() => buildSettings(initial, { version: 5, layout: { ...layout, hidden: ['currency'] } }), { statusCode: 400 });
+  assert.throws(() => buildSettings(initial, { version: 5, layout: { ...layout, columns: { foreign: true } } }), { statusCode: 400 });
+  assert.deepEqual(initial, { version: 5, fields: [] });
+});
+
 test('card visibility protects required fields and preserves other cards when saving', () => {
   const optional = field('reference', 'text', { multiple: false });
   const required = field('approval', 'boolean', { required: true });

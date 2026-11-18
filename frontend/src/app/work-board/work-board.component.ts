@@ -124,8 +124,10 @@ export class WorkBoardComponent implements OnInit, OnDestroy {
   protected referencesLoaded = false;
   private fieldOrder?: WorkFieldOrder;
   private hiddenFields = new Set<string>();
+  private tenantColumnVisibility: Record<string, boolean> = {};
   private columnPreferences: { order?: string[]; visibility?: Record<string, boolean> } = {};
   columnDraft?: LayoutItem[];
+  private resetColumnDraft = false;
 
   constructor(private board: WorkBoardService, private snackBar: MatSnackBar, public auth: AuthService, private route: ActivatedRoute) {}
   ngOnInit(): void {
@@ -295,6 +297,7 @@ export class WorkBoardComponent implements OnInit, OnDestroy {
         this.customFields = settings.fields.filter((field) => !field.archived);
         this.fieldOrder = settings.fieldOrder;
         this.hiddenFields = new Set(settings.hiddenFields);
+        this.tenantColumnVisibility = settings.columnVisibility ?? {};
         this.catalogs = { entities: settings.entities ?? [], serviceTypes: settings.serviceTypes ?? [] };
       }
       this.referencesLoaded = true;
@@ -659,9 +662,10 @@ export class WorkBoardComponent implements OnInit, OnDestroy {
       ...this.financeTenantId
         ? [{ id: 'invoiceNumber', label: 'Számlaszám' }, { id: 'paymentDeadline', label: 'Fizetési határidő' }]
         : [{ id: 'subWorkCount', label: 'Sub-works' }]
-    ].filter(({ id }) => this.isFieldVisible(id)).map((column) => ({ ...column, visible: true }));
+    ].filter(({ id }) => this.isFieldVisible(id))
+      .map((column) => ({ ...column, visible: this.tenantColumnVisibility[column.id] ?? true }));
     return [...columns, ...this.customFields.filter(({ id }) => this.isFieldVisible(id))
-      .map((field) => ({ id: 'field:' + field.id, label: field.label, visible: field.showInList }))];
+      .map((field) => ({ id: 'field:' + field.id, label: field.label, visible: this.tenantColumnVisibility[field.id] ?? field.showInList }))];
   }
   get columnOptions(): LayoutItem[] {
     return orderLayout(this.defaultColumns, this.columnPreferences.order).map((column) => ({
@@ -672,17 +676,35 @@ export class WorkBoardComponent implements OnInit, OnDestroy {
   get visibleColumns(): LayoutItem[] {
     const options = this.columnDraft ?? this.columnOptions;
     const visible = options.filter((column) => column.visible);
-    return visible.length ? visible : this.defaultColumns.slice(0, 1);
+    return visible.length ? visible : this.defaultColumns.slice(0, 1).map((column) => ({ ...column, visible: true }));
   }
+  get availableColumns(): LayoutItem[] {
+    const visibleIds = new Set(this.visibleColumns.map(({ id }) => id));
+    return (this.columnDraft ?? this.columnOptions).filter(({ id }) => !visibleIds.has(id));
+  }
+  changeColumns(items: LayoutItem[]): void {
+    const visible = items.filter((item) => item.visible);
+    const selected = new Set(visible.map(({ id }) => id));
+    this.columnDraft = [...visible, ...this.defaultColumns
+      .filter(({ id }) => !selected.has(id)).map((column) => ({ ...column, visible: false }))];
+    this.resetColumnDraft = false;
+  }
+  showColumn(column: LayoutItem): void { this.changeColumns([...this.visibleColumns, { ...column, visible: true }]); }
+  resetColumns(): void { this.columnDraft = this.defaultColumns; this.resetColumnDraft = true; }
+  cancelColumns(): void { this.columnDraft = undefined; this.resetColumnDraft = false; }
   hasWorkNumber(columns: LayoutItem[]): boolean { return columns.some(({ id }) => id === 'workNumber'); }
   saveColumns(): void {
     if (!this.columnDraft) return;
     const draft = this.columnDraft;
-    this.columnPreferences = { order: draft.map(({ id }) => id),
-      visibility: Object.fromEntries(draft.map(({ id, visible }) => [id, visible === true])) };
-    this.columnDraft = undefined;
-    try { localStorage.setItem(this.columnStorageKey(), JSON.stringify(this.columnPreferences)); }
+    this.columnPreferences = this.resetColumnDraft ? {} : {
+      order: draft.map(({ id }) => id), visibility: Object.fromEntries(draft.map(({ id, visible }) => [id, visible === true]))
+    };
+    try {
+      if (this.resetColumnDraft) localStorage.removeItem(this.columnStorageKey());
+      else localStorage.setItem(this.columnStorageKey(), JSON.stringify(this.columnPreferences));
+    }
     catch { this.notice('Column settings are available for this view only.'); }
+    this.cancelColumns();
   }
   private columnStorageKey(): string {
     const user = this.auth.getCurrentUser();
@@ -694,7 +716,7 @@ export class WorkBoardComponent implements OnInit, OnDestroy {
   }
   private fieldRelevant(field: WorkField, status: WorkStatus): boolean {
     const card = field.card;
-    return card === 'basic' || card === 'description' || card === 'documents' || card === 'reporting' || this.showFrom(card, status);
+    return card === 'basic' || card === 'documents' || card === 'reporting' || this.showFrom(card, status);
   }
   showFrom(stage: 'offer' | 'execution' | 'completion' | 'invoice' | 'payment', status: WorkStatus = this.workForm.status): boolean {
     const required = { offer: 1, execution: 2, completion: 3, invoice: 4, payment: 5 }[stage];

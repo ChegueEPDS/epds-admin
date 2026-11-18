@@ -1,6 +1,5 @@
 export const WORK_FIELD_CARDS = [
   { id: 'basic', label: 'Basic information' },
-  { id: 'description', label: 'Description' },
   { id: 'offer', label: 'Offer and schedule' },
   { id: 'execution', label: 'Execution' },
   { id: 'completion', label: 'Completion' },
@@ -10,14 +9,17 @@ export const WORK_FIELD_CARDS = [
 ] as const;
 export type WorkFieldCard = typeof WORK_FIELD_CARDS[number]['id'];
 export type WorkFieldOrder = Partial<Record<WorkFieldCard, string[]>>;
-export type LayoutItem = { id: string; label: string; visible?: boolean; required?: boolean };
+export type LayoutItem = { id: string; label: string; visible?: boolean; required?: boolean;
+  fieldType?: string; editable?: boolean; tableVisible?: boolean };
+export const WORK_TABLE_COLUMNS: ReadonlySet<string> = new Set([
+  'workNumber', 'name', 'entityId', 'serviceTypeId', 'responsible', 'status', 'deadline', 'totalAmount', 'subWorkCount'
+]);
 
 const requiredWorkFields = new Set(['name', 'status', 'currency']);
 
 export const WORK_CARD_FIELDS = {
   basic: { name: 'Name', client: 'Client', entityId: 'Entity', serviceTypeId: 'Service type',
-    responsible: 'Responsible', status: 'Status', projectSize: 'Project size' },
-  description: { description: 'Description' },
+    responsible: 'Responsible', status: 'Status', projectSize: 'Project size', description: 'Description' },
   offer: { totalAmount: 'Total value', currency: 'Currency', offerDate: 'Offer date', deadline: 'Deadline', paymentDays: 'Payment term' },
   execution: { cost: 'Cost', subcontractor: 'Subcontractor', contract: 'Contract', margin: 'Margin' },
   completion: { completionDate: 'Completion date', paymentDeadline: 'Invoice payment deadline', certificate: 'Performance certificate' },
@@ -64,8 +66,11 @@ export const WORK_CATALOGS = [
   { key: 'serviceTypes', reference: 'serviceTypeId', label: 'Service type', title: 'Service types' }
 ] as const;
 export type WorkCatalog = typeof WORK_CATALOGS[number]['key'];
-export type WorkFieldSettings = { version: number; fields: WorkField[]; projectSizeGrouping: boolean; fieldOrder?: WorkFieldOrder; hiddenFields?: string[] } & Record<WorkCatalog, WorkFieldOption[]>;
-export type WorkSettingsChange = { field: WorkField } | { catalog: WorkCatalog; entry: WorkFieldOption } | { projectSizeGrouping: boolean } | { fieldOrder: { card: WorkFieldCard; order: string[]; hidden?: string[] } };
+export type WorkFieldSettings = { version: number; fields: WorkField[]; projectSizeGrouping: boolean;
+  fieldOrder?: WorkFieldOrder; hiddenFields?: string[]; columnVisibility?: Record<string, boolean> } & Record<WorkCatalog, WorkFieldOption[]>;
+export type WorkSettingsChange = { field: WorkField } | { catalog: WorkCatalog; entry: WorkFieldOption } | { projectSizeGrouping: boolean } |
+  { fieldOrder: { card: WorkFieldCard; order: string[]; hidden?: string[] } } |
+  { layout: { fields: { key: string; field: WorkField }[]; orders: WorkFieldOrder; hidden: string[]; columns: Record<string, boolean> } };
 
 export const PROJECT_SIZES = ['Small', 'Medium', 'Large'] as const;
 export const REPORT_PAYMENT_STATUSES = [

@@ -119,16 +119,6 @@
                 </mat-form-field>
               }
             }
-            @default { <ng-container *ngTemplateOutlet="customEditor; context: { $implicit: item.id }"/> }
-          }
-        }
-      </div>
-    </section>
-    <section class="form-group" *ngIf="orderedFields('description').length">
-      <div class="group-heading"><div><h2>Description</h2></div></div>
-      <div class="form-grid">
-        @for (item of orderedFields('description'); track item.id) {
-          @switch (item.id) {
             @case ('description') {
               <mat-form-field appearance="outline" class="wide"><mat-label>Description</mat-label><textarea matInput rows="3" name="workDescription" [(ngModel)]="workForm.description"></textarea></mat-form-field>
             }
@@ -381,17 +371,34 @@
           <mat-icon class="material-symbols-outlined">expand_more</mat-icon>
         </button>
       </ng-template>
-      <details class="table-view-settings" (toggle)="!columnPanel.open && (columnDraft = undefined)" #columnPanel>
+      <details class="table-view-settings" (toggle)="!columnPanel.open && cancelColumns()" #columnPanel>
         <summary>{{ financeTenantId ? 'Nézetbeállítások' : 'View settings' }}</summary>
         <div class="table-view-content">
           <div class="table-view-actions">
-            <button mat-button type="button" (click)="columnDraft = undefined; columnPanel.open = false">{{ financeTenantId ? 'Mégse' : 'Cancel' }}</button>
-            <button mat-stroked-button type="button" (click)="columnDraft = defaultColumns">{{ financeTenantId ? 'Alapnézet' : 'Reset' }}</button>
+            <button mat-button type="button" (click)="cancelColumns(); columnPanel.open = false">{{ financeTenantId ? 'Mégse' : 'Cancel' }}</button>
+            <button mat-stroked-button type="button" (click)="resetColumns()">{{ financeTenantId ? 'Alapnézet' : 'Reset to tenant defaults' }}</button>
             <button mat-flat-button type="button" [disabled]="!columnDraft"
               (click)="saveColumns(); columnPanel.open = false">{{ financeTenantId ? 'Mentés' : 'Save' }}</button>
           </div>
           @if (columnPanel.open) {
-            <app-work-layout-list [items]="columnDraft ?? columnOptions" (itemsChange)="columnDraft = $event"/>
+            <div class="table-column-groups">
+              <section aria-labelledby="visible-columns-heading">
+                <h3 id="visible-columns-heading">{{ financeTenantId ? 'Megjelenített oszlopok' : 'Displayed columns' }}</h3>
+                <app-work-layout-list [items]="visibleColumns" (itemsChange)="changeColumns($event)"/>
+              </section>
+              <section aria-labelledby="available-columns-heading">
+                <h3 id="available-columns-heading">{{ financeTenantId ? 'Elérhető oszlopok' : 'Available columns' }}</h3>
+                <div class="available-columns">
+                  @for (column of availableColumns; track column.id) {
+                    <button mat-stroked-button type="button" (click)="showColumn(column)">
+                      <mat-icon class="material-symbols-outlined">add</mat-icon>{{ column.label }}
+                    </button>
+                  } @empty {
+                    <p>{{ financeTenantId ? 'Minden oszlop látható.' : 'All columns are displayed.' }}</p>
+                  }
+                </div>
+              </section>
+            </div>
           }
         </div>
       </details>
@@ -580,10 +587,6 @@
         <section class="detail-group" *ngIf="reportingEnabled && hasCardDetails('reporting', work)">
           <div class="record-section-title"><mat-icon class="material-symbols-outlined">dashboard</mat-icon><h3>Dashboard reporting</h3></div>
           <ng-container *ngTemplateOutlet="cardDetails; context: { $implicit: 'reporting', work: work }"/>
-        </section>
-        <section class="detail-group" *ngIf="hasCardDetails('description', work)">
-          <div class="record-section-title"><mat-icon class="material-symbols-outlined">notes</mat-icon><h3>Description</h3></div>
-          <ng-container *ngTemplateOutlet="cardDetails; context: { $implicit: 'description', work: work }"/>
         </section>
         <section class="detail-group" *ngIf="showFrom('offer', work.status)">
           <div class="record-section-title"><mat-icon class="material-symbols-outlined">event</mat-icon><h3>Offer and schedule</h3></div>

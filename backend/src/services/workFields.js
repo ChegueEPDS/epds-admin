@@ -5,10 +5,9 @@ const Tenant = require('../models/tenant');
 const storage = require('./fileStorageService');
 const { workReporting } = require('./workDashboard');
 
-const cards = { basic: 0, description: 0, offer: 1, execution: 2, completion: 3, invoice: 4, reporting: 0, documents: 0 };
+const cards = { basic: 0, offer: 1, execution: 2, completion: 3, invoice: 4, reporting: 0, documents: 0 };
 const builtInFields = {
-  basic: ['name', 'client', 'entityId', 'serviceTypeId', 'responsible', 'status', 'projectSize'],
-  description: ['description'],
+  basic: ['name', 'client', 'entityId', 'serviceTypeId', 'responsible', 'status', 'projectSize', 'description'],
   offer: ['totalAmount', 'currency', 'offerDate', 'deadline', 'paymentDays'],
   execution: ['cost', 'subcontractor', 'contract', 'margin'],
   completion: ['completionDate', 'paymentDeadline', 'certificate'],
@@ -17,6 +16,7 @@ const builtInFields = {
   documents: []
 };
 const requiredBuiltInFields = new Set(['name', 'status', 'currency']);
+const tableColumns = ['workNumber', 'name', 'entityId', 'serviceTypeId', 'responsible', 'status', 'deadline', 'totalAmount', 'subWorkCount'];
 const ranks = { inquiry: 0, offer: 1, to_start: 2, in_progress: 2, on_hold: 2,
   completed_billable: 3, invoiced: 4, paid: 5, closed: 6, cancelled: 6, lost: 1 };
 const types = ['text', 'longText', 'integer', 'decimal', 'date', 'amount', 'list', 'boolean', 'file'];
@@ -33,13 +33,34 @@ const relevant = (field, status) => Object.hasOwn(cards, field.card) && Object.h
 const missing = (value) => value == null || value === '' || (Array.isArray(value) && !value.length);
 const text = (value, max) => typeof value === 'string' && value.trim().length <= max ? value.trim() : null;
 
+function normalizeSettings(stored) {
+  const config = { ...empty, ...stored };
+  const legacyFields = config.fields.filter((field) => field.card === 'description');
+  const { description: descriptionOrder, ...fieldOrder } = config.fieldOrder || {};
+  if (!legacyFields.length && !descriptionOrder) return config;
+
+  const basicIds = [...builtInFields.basic.filter((id) => id !== 'description'),
+    ...config.fields.filter((field) => field.card === 'basic').map((field) => field.id)];
+  const descriptionIds = ['description', ...legacyFields.map((field) => field.id)];
+  const orderWithin = (ids, order = []) => [
+    ...order.filter((id) => ids.includes(id)), ...ids.filter((id) => !order.includes(id))
+  ];
+  return {
+    ...config,
+    fields: config.fields.map((field) => field.card === 'description' ? { ...field, card: 'basic' } : field),
+    fieldOrder: { ...fieldOrder, basic: [
+      ...orderWithin(basicIds, fieldOrder.basic), ...orderWithin(descriptionIds, descriptionOrder)
+    ] }
+  };
+}
+
 async function settings(tenantId) {
   if (databaseEngine() === 'postgresql') {
     const { rows } = await query('SELECT work_field_settings FROM tenants WHERE id=$1', [tenantId]);
-    return { ...empty, ...rows[0]?.work_field_settings };
+    return normalizeSettings(rows[0]?.work_field_settings);
   }
   const tenant = await Tenant.findById(tenantId).select('workFieldSettings').lean();
-  return { ...empty, ...tenant?.workFieldSettings };
+  return normalizeSettings(tenant?.workFieldSettings);
 }
 
 function updateCatalog(current, input) {
@@ -63,6 +84,38 @@ function updateCatalog(current, input) {
 
 function buildSettings(current, input) {
   if (!object(input) || input.version !== current.version) throw fail('Settings changed. Reload and try again.', 409);
+  if (Object.hasOwn(input, 'layout')) {
+    const { fields, orders, hidden, columns } = input.layout || {};
+    if (!Array.isArray(fields) || fields.length > 50 || !object(orders) || !Array.isArray(hidden) || !object(columns)) {
+      throw fail('Invalid work layout.');
+    }
+    let next = current;
+    const ids = new Map();
+    for (const change of fields) {
+      if (!object(change) || typeof change.key !== 'string' || !object(change.field) || ids.has(change.key) ||
+          (change.field.id ? change.field.id !== change.key : !/^new:[\da-f-]+$/.test(change.key))) {
+        throw fail('Invalid field change.');
+      }
+      next = buildSettings(next, { version: next.version, field: change.field });
+      ids.set(change.key, change.field.id || next.fields.at(-1).id);
+    }
+    const resolve = (id) => ids.get(id) || id;
+    for (const [card, order] of Object.entries(orders)) {
+      if (!Array.isArray(order)) throw fail('Invalid field order.');
+      next = buildSettings(next, { version: next.version, fieldOrder: { card, order: order.map(resolve) } });
+    }
+    const resolvedHidden = hidden.map(resolve);
+    const available = new Set([...Object.values(builtInFields).flat(),
+      ...next.fields.filter((field) => !field.archived && !field.required).map(({ id }) => id)]);
+    if (resolvedHidden.length > available.size || new Set(resolvedHidden).size !== resolvedHidden.length ||
+        resolvedHidden.some((id) => !available.has(id) || requiredBuiltInFields.has(id))) {
+      throw fail('Only optional fields can be hidden.');
+    }
+    const validColumns = new Set([...tableColumns, ...next.fields.filter((field) => !field.archived).map(({ id }) => id)]);
+    const visibility = Object.entries(columns).map(([id, value]) => [resolve(id), value]);
+    if (visibility.some(([id, value]) => !validColumns.has(id) || typeof value !== 'boolean')) throw fail('Invalid table columns.');
+    return { ...next, version: current.version + 1, hiddenFields: resolvedHidden, columnVisibility: Object.fromEntries(visibility) };
+  }
   if (typeof input.projectSizeGrouping === 'boolean') {
     return { ...current, version: current.version + 1, projectSizeGrouping: input.projectSizeGrouping };
   }
