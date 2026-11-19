@@ -2,6 +2,7 @@ const express = require('express');
 const multer = require('multer');
 const controller = require('../controllers/workBoardControllerFacade');
 const workFields = require('../services/workFields');
+const { latestRates } = require('../services/mnbExchangeRates');
 const tenantCurrency = require('../services/tenantCurrency');
 const { dashboardWorks } = require('../services/workDashboard');
 const { getDashboardSnapshot, markMongoDashboardDirty } = require('../services/workDashboardSnapshots');
@@ -135,6 +136,10 @@ router.put('/work-board/custom-fields', requireTenantFeature('workBoard', 'edit'
       if (databaseEngine() === 'mongodb' && req.body?.updateExistingWorkNumbers === true) await markMongoDashboardDirty(req.scope);
     }
   }));
+router.get('/work-board/exchange-rates', requireTenantFeature('workBoard'), settingsRoute(async () => {
+  const { snapshot } = await latestRates();
+  return { snapshot: snapshot || null };
+}));
 router.get('/work-board/default-currency', requireTenantFeature('workBoard'), companyOnly, manageFields,
   settingsRoute((req) => tenantCurrency.preference(req.scope.tenantId)));
 router.put('/work-board/default-currency', requireTenantFeature('workBoard', 'edit'), companyOnly, manageFields,

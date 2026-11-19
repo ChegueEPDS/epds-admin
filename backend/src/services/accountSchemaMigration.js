@@ -2,7 +2,7 @@ const { readFileSync } = require('node:fs');
 const { join } = require('node:path');
 const { withTransaction } = require('../postgres');
 
-const migrationIds = ['015_account_invitations', '016_local_mfa', '017_security_audit'];
+const migrationIds = ['015_account_invitations', '016_local_mfa', '017_security_audit', '018_tenant_logo'];
 
 async function ensureAccountSchema() {
   await withTransaction(async (client) => {

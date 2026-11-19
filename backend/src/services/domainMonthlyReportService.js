@@ -8,8 +8,9 @@ const operations=require('../repositories/domainOperationRepository');
 const {monthPeriod,previousMonth,monthKey,calculateMonthlyMetrics}=require('./domainMonthlyMetrics');
 const {generateMonthlyPdf}=require('./domainMonthlyPdfService');
 const { buildPageSpeedHistory, lcpStatus } = require('./pageSpeedService');
-const {recipientConfiguration,tenantId,escape}=require('./domainNotificationService');
+const {recipientConfiguration,tenantId}=require('./domainNotificationService');
 const {withJobLease}=require('./scheduledJobLeaseService');
+const { monthlyReportMail } = require('./mailTemplates');
 const PDF_VERSION = 2;
 
 async function buildDomainSummary(domain, period, comparisonPeriod, retentionStart, postgres) {
@@ -75,8 +76,7 @@ async function ensureMonthlyReport(tenant,month) {
     if(!report.domains.length)return null;
     const content=await generateMonthlyPdf(report);
     const to=recipientConfiguration()[tenant]||[];
-    return operations.insert({key,kind:'monthly',tenantId:tenant,month,content,payload:{to,report,pdfVersion:PDF_VERSION,
-      subject:`Monthly service report - ${month}`,html:`<h2>Monthly service report</h2><p>${escape(month)}</p><p>The attached report contains service availability, measurement coverage, interruptions and recovery times.</p>`}});
+    return operations.insert({key,kind:'monthly',tenantId:tenant,month,content,payload:{to,report,pdfVersion:PDF_VERSION, ...monthlyReportMail(month)}});
   });
   if(outcome.acquired)return outcome.value;
   const cached=await operations.find(key);

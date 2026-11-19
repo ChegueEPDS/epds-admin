@@ -247,3 +247,14 @@ p {
     grid-template-columns: 1fr;
   }
 }
+
+.tenant-logo {
+  width: 76px;
+  height: 54px;
+  flex: 0 0 76px;
+  object-fit: contain;
+}
+
+.tenant-logo:not([hidden]) + .logo-fallback {
+  display: none;
+}

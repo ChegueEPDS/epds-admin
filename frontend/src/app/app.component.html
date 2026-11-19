@@ -1,7 +1,7 @@
 <div class="app-shell">
   <mat-toolbar class="toolbar" *ngIf="!isPublicRoute">
     <a class="brand" [routerLink]="auth.defaultRouteAfterLogin()" aria-label="EPDS Admin home">
-      <img src="/public/logo.svg" alt="EPDS Admin">
+      <img src="/public/panda.png" alt="">
     </a>
 
     <nav class="nav desktop-nav" *ngIf="(auth.isLoggedIn$ | async) && auth.canAccessAdminFeatures() && !auth.hasSingleFeatureAccess()">
@@ -133,12 +133,16 @@
           Webhook Tester
         </a>
 
-        <ng-container *ngIf="auth.canManageWorkFields()">
+        <ng-container *ngIf="auth.canManageWorkFields() || mobileUser.role === 'SuperAdmin'">
           <div class="mobile-menu-divider"></div>
           <div class="mobile-menu-label" (click)="$event.stopPropagation()">Settings</div>
-          <a mat-menu-item routerLink="/settings/work-fields" routerLinkActive="active-menu-item">
+          <a mat-menu-item *ngIf="auth.canManageWorkFields()" routerLink="/settings/work-fields" routerLinkActive="active-menu-item">
             <mat-icon class="material-symbols-outlined">tune</mat-icon>
             Project Tracker settings
+          </a>
+          <a mat-menu-item routerLink="/admin/email-templates" routerLinkActive="active-menu-item" *ngIf="mobileUser.role === 'SuperAdmin'">
+            <mat-icon class="material-symbols-outlined">outgoing_mail</mat-icon>
+            Email templates
           </a>
         </ng-container>
         <ng-container *ngIf="auth.canManageUsers()">
@@ -205,6 +209,10 @@
           <a mat-menu-item routerLink="/admin/tenants">
             <mat-icon class="material-symbols-outlined">business</mat-icon>
             Tenants
+          </a>
+          <a mat-menu-item routerLink="/admin/email-templates">
+            <mat-icon class="material-symbols-outlined">outgoing_mail</mat-icon>
+            Email templates
           </a>
           <a mat-menu-item routerLink="/admin/integrations">
             <mat-icon class="material-symbols-outlined">api</mat-icon>

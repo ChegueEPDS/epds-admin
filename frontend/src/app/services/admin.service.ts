@@ -8,6 +8,7 @@ export type AdminTenant = {
   id: string;
   name: string;
   displayName?: string;
+  logoDataUrl?: string | null;
   type: TenantType;
   defaultCurrency?: string;
   workTurnoverDay?: string;
@@ -22,6 +23,7 @@ export type AdminTenant = {
 export type TenantType = 'company' | 'client' | 'finance';
 
 export type TenantPayload = {
+  logoDataUrl?: string | null;
   name: string;
   displayName?: string;
   type: TenantType;

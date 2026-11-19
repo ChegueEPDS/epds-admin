@@ -1,5 +1,6 @@
 const repository = require('../repositories/domainOperationRepository');
 const mail = require('./mailService');
+const { transitionMail } = require('./mailTemplates');
 const { withJobLease } = require('./scheduledJobLeaseService');
 function recipientConfiguration(raw = process.env.DOMAIN_HEALTH_CUSTOMER_RECIPIENTS || '{}') {
   const input = JSON.parse(raw);
@@ -12,16 +13,14 @@ function recipientConfiguration(raw = process.env.DOMAIN_HEALTH_CUSTOMER_RECIPIE
   return result;
 }
 function tenantId(domain) { return String(domain.tenantId?._id || domain.tenantId || ''); }
-function escape(value) { return String(value || '').replace(/[&<>"']/g, character => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[character]); }
 async function enqueueDomainTransition(domain, event, recordedAt) {
   const tenant = tenantId(domain);
   if (!tenant) return;
   const to = recipientConfiguration()[tenant] || [];
   if (!to.length) return;
   const time = recordedAt || (event === 'down' ? domain.currentIssueSince : domain.lastRecoveryAt);
-  const label = event === 'down' ? 'Service interruption confirmed' : 'Service restored';
   await repository.insert({ key:`transition:${domain._id}:${event}:${new Date(time).toISOString()}`, kind:'transition', tenantId:tenant,
-    payload:{ to, subject:`${label}: ${domain.name}`, html:`<h2>${escape(label)}</h2><p>${escape(domain.name)}</p><p>${escape(new Date(time).toISOString())}</p><p>${event === 'down' ? 'Repeated measurements confirmed that this service is unavailable.' : 'Repeated measurements confirmed that this service is available again.'}</p>` } });
+    payload:{ to, ...transitionMail(event, domain.name, time) } });
 }
 async function deliverPending() {
   const items = await repository.pending();
@@ -43,4 +42,4 @@ function startDomainNotifications() {
   timer=setInterval(()=>void deliverPending().catch(error=>console.error('[domain-mail]',error.message)),60000);
   timer.unref?.();
 }
-module.exports={recipientConfiguration,tenantId,escape,enqueueDomainTransition,deliverPending,startDomainNotifications};
+module.exports={recipientConfiguration,tenantId,enqueueDomainTransition,deliverPending,startDomainNotifications};

@@ -2,7 +2,7 @@ import { HttpClient, HttpEvent } from '@angular/common/http';
 import { Injectable, signal } from '@angular/core';
 import { EMPTY, Observable, Subject, catchError, defer, expand, map, merge, switchMap, tap, timer } from 'rxjs';
 import { environment } from '../../environments/environment';
-import { WorkFieldFiles, WorkFieldSettings, WorkFieldValues, WorkReporting, WorkSettingsChange } from '../work-board/work-fields';
+import { WorkFieldFiles, WorkFieldSettings, WorkFieldValues, WorkExchangeRate, WorkReporting, WorkSettingsChange } from '../work-board/work-fields';
 import { AuthService, FinanceTenant } from './auth.service';
 
 export type WorkStatus = 'inquiry' | 'offer' | 'to_start' | 'in_progress' | 'on_hold' | 'completed_billable' | 'invoiced' | 'paid' | 'closed' | 'cancelled' | 'lost';
@@ -188,6 +188,12 @@ export class WorkBoardService {
     if (options.sort) params['sort'] = options.sort;
     if (options.direction) params['direction'] = options.direction;
     return params;
+  }
+
+  exchangeRates(): Observable<WorkExchangeRate['snapshot'] | undefined> {
+    return this.http.get<{ snapshot: WorkExchangeRate['snapshot'] | null }>(
+      `${this.baseUrl}/exchange-rates`, { withCredentials: true }
+    ).pipe(map(({ snapshot }) => snapshot ?? undefined));
   }
 
   listWorks(options: WorkListOptions = {}): Observable<WorkPage> {

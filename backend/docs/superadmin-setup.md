@@ -71,17 +71,23 @@ node /app/scripts/superadmin.js rotate --reset-mfa
 
 A parancs a jelszócserével és a munkamenetek visszavonásával egy tranzakcióban törli a regisztrált hitelesítési módszereket. A következő belépéskor állítsd be az új autentikátort, és mentsd az új helyreállító kódokat. Ezután ellenőrizd az új belépést, majd állítsd vissza a külső elérést. A jelszócsere önmagában megőrzi az MFA-beállításokat.
 
-Más helyi fióknál ugyanezt az üzemeltetői eljárást használd, ha az identitást ellenőriztétek és minden hitelesítési mód elveszett.
+### Felhasználói fiók helyreállítása
+
+1. Ellenőrizd a fiók tulajdonosának személyazonosságát.
+2. SuperAdminként nyisd meg a **Users** táblázatot. Az aktív, jelszavas felhasználó sorában válaszd a **Start account recovery** műveletet, majd erősítsd meg a küldést.
+3. A rendszer a fiókhoz rögzített e-mail-címre küld egy 30 percig érvényes, egyszer használható linket. Az új jelszó mentésekor egy tranzakcióban törli a korábbi MFA-beállításokat és visszavonja a munkameneteket. Az Admin és Finance fiókok a következő belépéskor újra beállítják az MFA-t. A User a profiljában kapcsolhatja vissza.
+
+A webes művelethez működő Graph-levélküldés szükséges. MongoDB-n a helyreállítás tranzakcióképes adatbázist igényel. A SuperAdmin saját fiókjához a fenti **SuperAdmin helyreállítása** eljárást használd.
+
+#### Terminálos tartalék eljárás
+
+Ha a levélküldés nem működik, az igazolt tulajdonos aktív helyi fiókjához futtasd a Coolify backendtermináljában az alábbi parancsot. A példacímet cseréld ki a tényleges fiókcímre.
 
 ```bash
-node /app/scripts/superadmin.js reset-user-mfa person@example.com
+node /app/scripts/superadmin.js reset-user-mfa user@example.com
 ```
 
-A terminál kéri az új jelszót, amelyet jóváhagyott csatornán adj át a fiók igazolt tulajdonosának. Jegyezd fel az érintett fiókot, az időpontot és a visszaállítás okát. Admin és Finance fióknál a következő belépés újra kéri az autentikátor beállítását. Normál User a profiljában aktiválhatja újra.
-
-### Helyreállítás a Users táblázatból
-
-A SuperAdmin a helyi, aktivált felhasználó sorában a **Start account recovery** művelettel indíthat helyreállítást. A tulajdonos ellenőrzése után erősítsd meg a küldést a párbeszédablakban. A rendszer a fiókhoz rögzített címre küld egy 30 percig érvényes, egyszer használható linket. Az új jelszó mentésekor egy tranzakcióban törli a korábbi MFA-eszközöket és visszavonja a munkameneteket. A levélküldéshez működő Graph-konfiguráció, MongoDB-n pedig tranzakcióképes adatbázis szükséges. A SuperAdmin saját fiókjának helyreállítására a terminálos eljárás szolgál.
+A parancs új jelszót kér, törli a régi MFA-beállításokat, és visszavonja a munkameneteket. Az új jelszót jóváhagyott csatornán add át a fiók igazolt tulajdonosának. Jegyezd fel az érintett fiókot, az időpontot és a helyreállítás okát.
 
 ## Biztonsági audit és észlelés
 
@@ -90,3 +96,11 @@ A SuperAdmin a helyi, aktivált felhasználó sorában a **Start account recover
 - Élesben az auditobjektumok tulajdonosa külön adatbázis-üzemeltetői szerepkör legyen. A backend szerepköre kapjon INSERT jogot a PostgreSQL-táblára vagy a MongoDB-gyűjteményre, az ellenőrző szerepkör pedig külön olvasási jogot. A PostgreSQL-migráció fusson le a tulajdonosváltás előtt. Az adatbázis-tulajdonos és infrastruktúra-adminisztrátor elleni védelemhez irányítsd a JSON-eseményeket külön üzemeltetett, csak hozzáfűzést engedő naplógyűjtőbe.
 - Riasztásnak használd a `security-audit-error` eseményt adatbázisba írási hibánál, és a `security-audit` eseményeket a privilegizált szerepkörváltások, exportok és helyreállítások figyelésére. Az alkalmazás a HTTP-műveletek eredménye után rögzíti az eseményt.
 - Átadáskor próbálj szerepkörváltást, munkatábla-exportot, archiválást és számlázási státuszváltást egy teszttenantban. Ellenőrizd az UTC időpontot, az operátor- és tenantazonosítót, a célrekordot és a változás előtti és utáni értékeket. Ellenőrizd, hogy a webhook URL tokenje egyik hozzáférési naplóban sem jelenik meg.
+
+## E-mail-sablonok tesztelése
+
+SuperAdminként nyisd meg a **Settings → Email templates** menüpontot, válaszd ki a levéltípust, add meg a címzettet, majd kattints a **Send test email** gombra. A tesztlevél tárgya `[TEST]` jelölést kap, a fiókkezelési linkek az example.com oldalra mutatnak, a havi riporthoz pedig minta-PDF tartozik. A sikeres visszajelzés azt jelzi, hogy a Microsoft Graph befogadta a küldést.
+
+A PandA-logó a levélbe ágyazott PNG. A postafiókból indított éles továbbításnál a Graph az eredeti üzenetből piszkozatot készít, hogy a mellékletek is megmaradjanak. Ehhez a feladói postafiókon a `Mail.Send` mellett a `Mail.ReadWrite` alkalmazásjogosultság is szükséges.
+
+[Microsoft Graph továbbítási piszkozat](https://learn.microsoft.com/en-us/graph/api/message-createforward?view=graph-rest-1.0)

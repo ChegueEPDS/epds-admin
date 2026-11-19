@@ -134,8 +134,10 @@ router.use('/finance', requireSessionAuth, financeOnly);
 router.get('/finance/tenants', handle(async (_req, res) => {
   const candidates = pg() ? await tenants.list() : await Tenant.find({
     'features.workBoard.enabled': true, 'features.financeAccess.enabled': true
-  }).select('name displayName type features.workBoard features.financeAccess').lean();
-  res.json({ tenants: candidates.filter(eligible).map(presentTenant).sort((a, b) => a.name.localeCompare(b.name, 'hu')) });
+  }).select('name displayName logoDataUrl type features.workBoard features.financeAccess').lean();
+  res.json({ tenants: candidates.filter(eligible).map((tenant) => ({
+    ...presentTenant(tenant), logoDataUrl: tenant.logoDataUrl || undefined
+  })).sort((a, b) => a.name.localeCompare(b.name, 'hu')) });
 }));
 
 router.get('/finance/tenants/:tenantId/works', handle(async (req, res) => {

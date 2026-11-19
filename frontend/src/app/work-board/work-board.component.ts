@@ -22,9 +22,9 @@ import { ClientPayload, FinanceWork, FinanceWorkChanges, FinanceWorkStatus, SubW
 import { WorkFieldValuesComponent } from './work-field-values.component';
 import { WorkLayoutListComponent } from './work-layout-list.component';
 import { WorkTransferDialogComponent } from './work-transfer-dialog.component';
-import { WorkFinancialEntriesComponent } from './work-financial-entries.component';
+import { WorkMoneyComponent, WorkRateSnapshot } from './work-money.component';
 import { WorkRateInfoComponent } from './work-rate-info.component';
-import { cardLayout, orderLayout, LayoutItem, WorkFieldOrder, displayWorkField, isWorkFieldFile, PROJECT_SIZES, REPORT_PAYMENT_STATUSES, WORK_CATALOGS, WorkCatalog, WorkCatalogEntry, WorkField, WorkFieldCard, WorkFieldFiles, WorkFieldValues, WorkReporting, workCatalogLabel } from './work-fields';
+import { cardLayout, orderLayout, LayoutItem, WorkFieldOrder, displayWorkField, isWorkFieldFile, PROJECT_SIZES, REPORT_PAYMENT_STATUSES, WORK_CATALOGS, WorkCatalog, WorkCatalogEntry, WorkField, WorkFieldAmount, WorkFieldCard, WorkFieldFiles, WorkFieldValues, WorkReporting, workCatalogLabel } from './work-fields';
 
 const billingCalendar = new Intl.DateTimeFormat('sv-SE', { timeZone: 'Europe/Budapest' });
 const billingDateFields = ['completionDate', 'invoiceDate', 'invoicePaymentDeadline', 'paidAt'] as const;
@@ -45,11 +45,32 @@ type SubWorkForm = {
 @Component({
   selector: 'app-work-board',
   standalone: true,
-  imports: [CommonModule, FormsModule, MatButtonModule, MatCheckboxModule, MatDatepickerModule, MatNativeDateModule, MatFormFieldModule, MatIconModule, MatInputModule, MatProgressSpinnerModule, MatSelectModule, MatSnackBarModule, MatSortModule, WorkFieldValuesComponent, WorkLayoutListComponent, WorkFinancialEntriesComponent, WorkRateInfoComponent, WorkNextActionsComponent],
+  imports: [CommonModule, FormsModule, MatButtonModule, MatCheckboxModule, MatDatepickerModule, MatNativeDateModule, MatFormFieldModule, MatIconModule, MatInputModule, MatProgressSpinnerModule, MatSelectModule, MatSnackBarModule, MatSortModule, WorkFieldValuesComponent, WorkLayoutListComponent, WorkMoneyComponent, WorkRateInfoComponent, WorkNextActionsComponent],
   templateUrl: './work-board.component.html',
   styleUrl: './work-board.component.scss'
 })
 export class WorkBoardComponent implements OnInit, OnDestroy {
+  currentRates?: WorkRateSnapshot;
+
+  customAmount(work: WorkItem, id: string): WorkFieldAmount | undefined {
+    const value = work.customFields?.[id];
+    return value && typeof value === 'object' && 'amount' in value ? value : undefined;
+  }
+
+  contractRate(work: WorkItem) {
+    return work.status === 'inquiry' || work.status === 'offer' ? undefined : work.reporting?.exchangeRates?.contract;
+  }
+
+  detailAmount(work: WorkItem, id: string): number | null {
+    switch (id) {
+      case 'totalAmount': return work.totalAmount;
+      case 'cost': return work.costAmount;
+      case 'invoiced': return work.reporting?.invoicedAmount ?? null;
+      case 'paid': return work.reporting?.paidAmount ?? null;
+      default: return null;
+    }
+  }
+
   @Input() financeTenantId?: string;
   financeTenantName = '';
   financeWorks: FinanceWork[] = [];
@@ -159,6 +180,10 @@ export class WorkBoardComponent implements OnInit, OnDestroy {
       void this.loadFinance(this.financeTenantId, id);
       return;
     }
+    this.board.exchangeRates().pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
+      next: (snapshot) => { this.currentRates = snapshot; },
+      error: () => { this.currentRates = undefined; }
+    });
     this.route.queryParamMap.pipe(takeUntilDestroyed(this.destroyRef)).subscribe((params) => {
       const showClients = params.get('view') === 'clients' && this.auth.canEditFeature('workBoard');
       if (showClients === this.showClients) return;

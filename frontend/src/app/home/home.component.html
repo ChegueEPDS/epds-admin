@@ -19,7 +19,12 @@
             <a class="feature-card" [routerLink]="['/project-tracker', 'finance', tenant.id]">
               <mat-card appearance="outlined">
                 <mat-card-content>
-                  <span class="icon-wrap"><mat-icon class="material-symbols-outlined">apartment</mat-icon></span>
+                  @if (tenant.logoDataUrl) {
+                    <img #tenantLogo class="tenant-logo" [src]="tenant.logoDataUrl" alt="" (error)="tenantLogo.hidden = true">
+                  }
+                  <span class="icon-wrap" [class.logo-fallback]="tenant.logoDataUrl">
+                    <mat-icon class="material-symbols-outlined">apartment</mat-icon>
+                  </span>
                   <div><h2>{{ tenant.name }}</h2><p>Project Tracker · Table</p></div>
                 </mat-card-content>
               </mat-card>

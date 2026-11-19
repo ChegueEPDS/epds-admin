@@ -1,7 +1,16 @@
 <section class="login-page">
   <mat-card class="login-card" [class.shake]="isShaking()">
     <mat-card-header>
-      <img src="/public/logo.svg" alt="EPDS Admin" class="brand-logo">
+      <div class="panda-brand">
+        <button #panda class="panda" type="button" aria-label="Panda animálása" (click)="animatePanda(panda)">
+          <span class="panda-art" aria-hidden="true">
+            <img src="/public/panda.png" alt="">
+            <span class="panda-eye panda-eye-left"></span>
+            <span class="panda-eye panda-eye-right"></span>
+          </span>
+        </button>
+        <span class="panda-name">PandA</span>
+      </div>
     </mat-card-header>
 
     <mat-card-content>

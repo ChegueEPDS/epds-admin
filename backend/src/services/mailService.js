@@ -1,3 +1,5 @@
+const { randomUUID } = require('node:crypto');
+const { brandMail, escapeHtml, forwardedMail } = require('./mailTemplates');
 const { getGraphClient } = require('./graphClient');
 const { fetch } = require('undici');
 
@@ -77,10 +79,11 @@ class GraphMailService {
     };
   }
 
-  async sendMail({ to, subject, html, from, cc = [], bcc = [], attachments = [] }) {
+  async sendMail({ to, subject, html, branding, from, cc = [], bcc = [], attachments = [] }) {
     const sender = from || this.defaultSender;
     if (!sender) throw new Error('MAIL_SENDER_UPN is not set');
-    const final = await this.maybeInlineLogo({ html, attachments });
+    const legacy = await this.maybeInlineLogo({ html, attachments });
+    const final = brandMail({ subject, ...legacy, branding }, randomUUID());
     const message = {
       subject: subject || '',
       body: { contentType: 'HTML', content: final.html || '' },
@@ -150,10 +153,25 @@ class GraphMailService {
   }
 
   async forwardMailboxMessage(id, { to, comment }) {
-    await this.client.api(`${this.mailboxMessagePath(id)}/forward`).post({
-      toRecipients: this.recipients(to),
-      comment
+    const client = this.client;
+    const draft = await client.api(`${this.mailboxMessagePath(id)}/createForward`).post({
+      toRecipients: this.recipients(to)
     });
+    const path = this.mailboxMessagePath(draft.id);
+    try {
+      const body = draft.body || (await client.api(path).select('body').get()).body;
+      if (typeof body?.content !== 'string') throw new Error('Forward draft body is missing');
+      const original = body.contentType?.toLowerCase() === 'html'
+        ? body.content.match(/<body\b[^>]*>([\s\S]*)<\/body\s*>/i)?.[1] ?? body.content
+        : escapeHtml(body.content).replace(/\r?\n/g, '<br>');
+      const branded = brandMail(forwardedMail(comment, original), randomUUID());
+      await client.api(path).patch({ body: { contentType: 'HTML', content: branded.html } });
+      await client.api(`${path}/attachments`).post(this.attachment(branded.attachments[0]));
+      await client.api(`${path}/send`).post();
+    } catch (error) {
+      await client.api(path).delete().catch(() => {});
+      throw error;
+    }
   }
 }
 

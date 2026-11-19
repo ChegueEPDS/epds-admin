@@ -72,6 +72,8 @@ export const routes: Routes = [
     canActivate: [AuthGuard], data: { requiresWorkFieldAdmin: true } },
   { path: 'admin/users', component: AdminUsersComponent, canActivate: [AuthGuard], data: { requiresUserManager: true } },
   { path: 'admin/tenants', component: AdminTenantsComponent, canActivate: [AuthGuard], data: { requiresSuperAdmin: true } },
+  { path: 'admin/email-templates', canActivate: [AuthGuard], data: { requiresSuperAdmin: true },
+    loadComponent: () => import('./admin/admin-email-templates/admin-email-templates.component').then((m) => m.AdminEmailTemplatesComponent) },
   { path: 'admin/integrations', component: AdminIntegrationsComponent, canActivate: [AuthGuard], data: { requiresSuperAdmin: true } },
   { path: '', pathMatch: 'full', redirectTo: 'home' },
   { path: '**', redirectTo: 'home' }

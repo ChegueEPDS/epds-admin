@@ -32,7 +32,7 @@ export type AuthUser = {
   tenantFeatures?: Partial<TenantFeatures>;
 };
 
-export type FinanceTenant = { id: string; name: string };
+export type FinanceTenant = { id: string; name: string; logoDataUrl?: string | null };
 type FinanceTenantList = { tenants: FinanceTenant[]; loading?: boolean; error?: boolean };
 
 export type TenantContext = {

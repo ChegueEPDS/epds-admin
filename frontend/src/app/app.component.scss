@@ -27,14 +27,9 @@
 }
 
 .brand img {
-  width: 92px;
-  max-height: 36px;
+  width: 36px;
+  height: 36px;
   object-fit: contain;
-}
-
-:host-context(.dark-theme) .brand img {
-  filter: brightness(0) invert(1);
-  opacity: 0.92;
 }
 
 .nav {
@@ -227,10 +222,6 @@ button mat-icon {
 
   .mobile-menu-trigger {
     display: inline-flex;
-  }
-
-  .brand img {
-    width: 84px;
   }
 
   .tenant-context-label {

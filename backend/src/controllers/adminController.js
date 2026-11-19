@@ -1,3 +1,4 @@
+const { tenantLogoError } = require('../services/tenantLogo');
 const Tenant = require('../models/tenant');
 const DomainMonitor = require('../models/domainMonitor');
 const LicenseCustomer = require('../models/licenseCustomer');
@@ -123,6 +124,7 @@ function presentTenant(tenant) {
     name: tenant.name,
     displayName: tenant.displayName || tenant.name,
     type: tenant.type,
+    logoDataUrl: tenant.logoDataUrl ?? null,
     defaultCurrency: tenant.defaultCurrency || DEFAULT_CURRENCY,
     workTurnoverDay: tenant.workTurnoverDay ?? DEFAULT_WORK_TURNOVER_DAY,
     alignWorkSequence: tenant.alignWorkSequence === true,
@@ -153,6 +155,10 @@ exports.createTenant = async (req, res) => {
     if (!type) return res.status(400).json({ error: 'Valid tenant type is required' });
     const currency = req.body?.defaultCurrency === undefined ? DEFAULT_CURRENCY : validateDefaultCurrency(req.body.defaultCurrency);
     if (!currency) return res.status(400).json({ error: 'Select an available default currency.' });
+    const logoDataUrl = req.body?.logoDataUrl;
+    const logoError = tenantLogoError(logoDataUrl);
+    if (logoError) return res.status(400).json({ error: logoError });
+
     const { workTurnoverDay, alignWorkSequence } = req.body || {};
     const turnoverError = workTurnoverError({ workTurnoverDay, alignWorkSequence });
     if (turnoverError) return res.status(400).json({ error: turnoverError });
@@ -164,6 +170,7 @@ exports.createTenant = async (req, res) => {
       name,
       displayName,
       type,
+      logoDataUrl,
       defaultCurrency: currency,
       workTurnoverDay,
       alignWorkSequence,
@@ -191,6 +198,10 @@ exports.updateTenant = async (req, res) => {
     if (!name) return res.status(400).json({ error: 'Tenant name is required' });
     if (!type) return res.status(400).json({ error: 'Valid tenant type is required' });
 
+    const logoDataUrl = req.body?.logoDataUrl;
+    const logoError = tenantLogoError(logoDataUrl);
+    if (logoError) return res.status(400).json({ error: logoError });
+
     const { workTurnoverDay, alignWorkSequence } = req.body || {};
     const turnoverError = workTurnoverError({ workTurnoverDay, alignWorkSequence });
     if (turnoverError) return res.status(400).json({ error: turnoverError });
@@ -204,6 +215,7 @@ exports.updateTenant = async (req, res) => {
     tenant.name = name;
     tenant.displayName = displayName;
     tenant.type = type;
+    if (logoDataUrl !== undefined) tenant.logoDataUrl = logoDataUrl;
     if (req.body?.defaultCurrency !== undefined) {
       const currency = validateDefaultCurrency(req.body.defaultCurrency, tenant.defaultCurrency);
       if (!currency) return res.status(400).json({ error: 'Select an available default currency.' });

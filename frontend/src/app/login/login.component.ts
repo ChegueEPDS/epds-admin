@@ -1,5 +1,5 @@
 import { CommonModule } from '@angular/common';
-import { Component, signal } from '@angular/core';
+import { Component, ElementRef, afterNextRender, signal, viewChild } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { HttpClient } from '@angular/common/http';
 import { environment } from '../../environments/environment';
@@ -17,6 +17,9 @@ import { AuthResponse, AuthService } from '../services/auth.service';
 
 @Component({
   selector: 'app-login',
+  host: {
+    '(document:pointermove)': 'trackPanda($event, pandaButton())'
+  },
   standalone: true,
   imports: [
     CommonModule,
@@ -35,6 +38,34 @@ import { AuthResponse, AuthService } from '../services/auth.service';
   styleUrl: './login.component.scss'
 })
 export class LoginComponent {
+  readonly pandaButton = viewChild.required<ElementRef<HTMLButtonElement>>('panda');
+  private pandaAnimation?: Animation;
+
+  trackPanda(event: PointerEvent, panda: ElementRef<HTMLButtonElement>): void {
+    if (event.pointerType !== 'mouse') return;
+    const button = panda.nativeElement;
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    const bounds = button.getBoundingClientRect();
+    const x = event.clientX - bounds.left - bounds.width / 2;
+    const y = event.clientY - bounds.top - bounds.height / 2;
+    const distance = Math.max(48, Math.hypot(x, y));
+    button.style.setProperty('--panda-eye-opacity', '1');
+    button.style.setProperty('--panda-look-x', `${1.5 * x / distance}px`);
+    button.style.setProperty('--panda-look-y', `${1.5 * y / distance}px`);
+    button.style.setProperty('--panda-tilt-x', `${-12 * y / distance}deg`);
+    button.style.setProperty('--panda-tilt-y', `${12 * x / distance}deg`);
+  }
+
+  animatePanda(button: HTMLButtonElement, delay = 0): void {
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    this.pandaAnimation?.cancel();
+    this.pandaAnimation = button.animate([
+      { transform: 'translateY(0) rotate(0)' },
+      { transform: 'translateY(-10px) rotate(-12deg)', offset: 0.32 },
+      { transform: 'translateY(-5px) rotate(10deg)', offset: 0.64 },
+      { transform: 'translateY(0) rotate(0)' }
+    ], { duration: 560, delay, easing: 'ease-in-out' });
+  }
   isLoading = signal(false);
   isShaking = signal(false);
   readonly passwordFormOpen = signal(false);
@@ -68,6 +99,7 @@ export class LoginComponent {
     private http: HttpClient,
     private router: Router
   ) {
+    afterNextRender(() => this.animatePanda(this.pandaButton().nativeElement, 650));
     this.route.fragment.subscribe((fragment) => {
       this.notice = '';
       this.linkError = '';

@@ -1,5 +1,6 @@
 const { createHash, randomBytes } = require('node:crypto');
 const mail = require('./mailService');
+const { accountMail } = require('./mailTemplates');
 const { updateAccount, findById } = require('./accountStore');
 
 const clearToken = { accountTokenHash: null, accountTokenPurpose: null, accountTokenExpiresAt: null };
@@ -32,13 +33,13 @@ async function sendAccountLink(user, purpose) {
   });
   if (!saved) return false;
   url.hash = new URLSearchParams({ [purpose]: token, account: String(user._id) }).toString();
-  const action = recovery ? 'Recover your account' : reset ? 'Reset password' : user.loginMethod === 'microsoft' ? 'Connect Microsoft account' : 'Set your password';
+  const microsoft = user.loginMethod === 'microsoft';
+  const type = recovery ? 'account-recovery' : reset ? 'password-reset' :
+    user.role === 'SuperAdmin' ? 'invite-superadmin' : microsoft ? 'invite-microsoft' : 'invite-password';
   try {
     await mail.sendMail({
       to: user.email,
-      subject: recovery ? 'EPDS Admin – Account recovery' : reset ? 'EPDS Admin – Password reset' :
-        user.role === 'SuperAdmin' ? 'EPDS Admin – SuperAdmin invitation' : 'EPDS Admin – Account invitation',
-      html: `<p><a href="${url.href.replaceAll('&', '&amp;')}">${action}</a></p><p>This link can be used once and expires in ${shortLived ? '30 minutes' : '72 hours'}.</p>`
+      ...accountMail(type, url.href, shortLived ? '30 minutes' : '72 hours', microsoft)
     });
   } catch {
     // Clear only this attempt. Another request may already have issued a replacement.

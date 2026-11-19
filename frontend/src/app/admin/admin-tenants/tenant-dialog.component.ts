@@ -42,6 +42,12 @@ type TenantFeatureOption = {
 })
 export class TenantDialogComponent {
   saving = signal(false);
+  readingLogo = signal(false);
+  logoChange?: string | null;
+
+  get logoPreview(): string | null {
+    return this.logoChange === undefined ? this.data.tenant?.logoDataUrl ?? null : this.logoChange;
+  }
   name = '';
   financeAccess = false;
   displayName = '';
@@ -135,11 +141,37 @@ export class TenantDialogComponent {
     return this.isEditDisabled(feature) || (this.type === 'client' && feature.key === 'domainHealth');
   }
 
+  async selectLogo(event: Event): Promise<void> {
+    const input = event.target as HTMLInputElement;
+    const file = input.files?.[0];
+    input.value = '';
+    if (!file) return;
+    if (file.size === 0 || file.size > 256 * 1024 || !['image/png', 'image/jpeg', 'image/webp'].includes(file.type)) {
+      this.snackBar.open('Choose a PNG, JPEG or WebP image up to 256 KB.', 'Close', { duration: 4500 });
+      return;
+    }
+
+    this.readingLogo.set(true);
+    try {
+      this.logoChange = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result));
+        reader.onerror = () => reject(reader.error);
+        reader.readAsDataURL(file);
+      });
+    } catch {
+      this.snackBar.open('Logo could not be read.', 'Close', { duration: 4500 });
+    } finally {
+      this.readingLogo.set(false);
+    }
+  }
+
   save(): void {
-    if (this.saving()) return;
+    if (this.saving() || this.readingLogo()) return;
     this.saving.set(true);
     this.applyFeaturePolicy();
     const payload = { name: this.name, displayName: this.displayName, type: this.type, features: this.features,
+      logoDataUrl: this.logoChange,
       financeAccess: this.type !== 'finance' && this.features.workBoard.enabled && this.financeAccess };
     const request = this.data.tenant
       ? this.admin.updateTenant(this.data.tenant.id, payload)

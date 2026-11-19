@@ -1,4 +1,5 @@
 const mailService = require('./mailService');
+const { escapeHtml } = require('./mailTemplates');
 const { buildDomainList } = require('./domainMonitorService');
 const { withJobLease } = require('./scheduledJobLeaseService');
 
@@ -19,15 +20,6 @@ function recipientList() {
     .split(',')
     .map((address) => address.trim())
     .filter(Boolean);
-}
-
-function escapeHtml(value) {
-  return String(value ?? '')
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
 }
 
 function timeZoneParts(date, timeZone = REPORT_TIME_ZONE) {
@@ -146,48 +138,37 @@ function buildReportHtml(domains) {
     timeStyle: 'short'
   }).format(new Date());
 
-  const rows = domains.map((domain) => `
-    <tr style="background:${rowColor(domain)}">
-      <td>${escapeHtml(domain.name)}</td>
-      <td>${escapeHtml(domain.baseUrl)}</td>
-      <td>${escapeHtml(domain.owner || '-')}</td>
-      <td><strong>${escapeHtml(statusLabel(domain))}</strong></td>
-      <td>${escapeHtml(performanceLabel(domain))}</td>
-      <td>${escapeHtml(msText(domain.lastResponseMs))}</td>
-      <td>${escapeHtml(tlsText(domain))}</td>
-      <td>${escapeHtml(redirectText(domain))}</td>
-      <td>${escapeHtml(uptimeText(domain))}</td>
-      <td>${escapeHtml(formatDate(domain.lastCheckedAt))}</td>
-      <td>${escapeHtml(issueText(domain))}</td>
-    </tr>
-  `).join('');
+  const cards = domains.map((domain) => {
+    const metrics = [
+      ['Válaszidő', msText(domain.lastResponseMs)], ['24 órás rendelkezésre állás', uptimeText(domain)],
+      ['TLS', tlsText(domain)], ['Átirányítások', redirectText(domain)],
+      ['Teljesítmény', performanceLabel(domain)], ['Utolsó mérés', formatDate(domain.lastCheckedAt)]
+    ];
+    const rows = metrics.map(([label, value]) => `
+      <tr><th scope="row" align="left" style="padding:4px 8px 4px 0;color:#575048;font-weight:normal">${label}</th>
+      <td align="right" style="padding:4px 0;font-weight:bold">${escapeHtml(value)}</td></tr>`).join('');
+    return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 16px;border:1px solid #e5dfd5">
+      <tr><td bgcolor="${rowColor(domain)}" style="padding:12px 14px;border-bottom:1px solid #e5dfd5">
+        <strong>${escapeHtml(domain.name)}</strong> &nbsp;·&nbsp; ${escapeHtml(statusLabel(domain))}<br>
+        <span style="font-size:13px;color:#575048">${escapeHtml(domain.baseUrl)} &nbsp;·&nbsp; ${escapeHtml(domain.owner || '-')}</span>
+      </td></tr>
+      <tr><td style="padding:10px 14px;font-size:13px">
+        <table width="100%" cellpadding="0" cellspacing="0" aria-label="Domain metrikák">${rows}</table>
+        <p style="margin:10px 0 0;color:#575048">${escapeHtml(issueText(domain))}</p>
+      </td></tr>
+    </table>`;
+  }).join('');
 
-  return `
-    <div style="font-family:Arial,sans-serif;color:#111827">
-      <h2 style="margin:0 0 8px">EPDS Admin - Domain Health napi riport</h2>
-      <p style="margin:0 0 18px;color:#6b7280">Generálva: ${escapeHtml(generatedAt)}</p>
-      <table cellpadding="0" cellspacing="0" style="width:100%;border-collapse:collapse;border:1px solid #e5e7eb;font-size:13px">
-        <thead>
-          <tr style="background:#f8fafc">
-            <th align="left" style="padding:10px;border-bottom:1px solid #e5e7eb">Domain</th>
-            <th align="left" style="padding:10px;border-bottom:1px solid #e5e7eb">URL</th>
-            <th align="left" style="padding:10px;border-bottom:1px solid #e5e7eb">Tulajdonos</th>
-            <th align="left" style="padding:10px;border-bottom:1px solid #e5e7eb">Státusz</th>
-            <th align="left" style="padding:10px;border-bottom:1px solid #e5e7eb">Performance</th>
-            <th align="left" style="padding:10px;border-bottom:1px solid #e5e7eb">Utolsó válasz</th>
-            <th align="left" style="padding:10px;border-bottom:1px solid #e5e7eb">TLS</th>
-            <th align="left" style="padding:10px;border-bottom:1px solid #e5e7eb">Redirect</th>
-            <th align="left" style="padding:10px;border-bottom:1px solid #e5e7eb">24h uptime</th>
-            <th align="left" style="padding:10px;border-bottom:1px solid #e5e7eb">Utolsó mérés</th>
-            <th align="left" style="padding:10px;border-bottom:1px solid #e5e7eb">Issue</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${rows || '<tr><td colspan="11" style="padding:12px;color:#6b7280">Nincs aktív domain.</td></tr>'}
-        </tbody>
-      </table>
-    </div>
-  `;
+  return `<p style="margin:0 0 18px;color:#575048">Generálva: ${escapeHtml(generatedAt)}</p>
+    ${cards || '<p>Nincs aktív domain.</p>'}`;
+}
+
+function dailyReportMail(domains) {
+  return {
+    subject: `Domain Health napi riport – ${new Intl.DateTimeFormat('hu-HU', { timeZone: REPORT_TIME_ZONE }).format(new Date())}`,
+    html: buildReportHtml(domains),
+    branding: { title: 'Domain Health napi riport', category: 'Monitoring', preheader: 'A figyelt szolgáltatások aktuális állapota.', lang: 'hu' }
+  };
 }
 
 async function sendDomainDailyReport() {
@@ -200,11 +181,7 @@ async function sendDomainDailyReport() {
       if (!to.length) throw new Error('DOMAIN_DAILY_REPORT_TO is empty');
       const domains = (await buildDomainList({ role: 'SuperAdmin' }))
         .filter((domain) => domain.enabled !== false);
-      await mailService.sendMail({
-        to,
-        subject: `EPDS Admin Domain Health riport - ${new Intl.DateTimeFormat('hu-HU', { timeZone: REPORT_TIME_ZONE }).format(new Date())}`,
-        html: buildReportHtml(domains)
-      });
+      await mailService.sendMail({ to, ...dailyReportMail(domains) });
       console.log(`[domain-report] daily report sent to ${to.join(', ')}`);
     }, { holdOnSuccess: true });
   } catch (err) {
@@ -237,6 +214,7 @@ function startDomainDailyReportScheduler() {
 
 module.exports = {
   buildReportHtml,
+  dailyReportMail,
   nextReportDate,
   sendDomainDailyReport,
   startDomainDailyReportScheduler

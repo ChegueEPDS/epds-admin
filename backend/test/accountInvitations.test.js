@@ -3,6 +3,7 @@ const assert = require('node:assert/strict');
 const { createHash } = require('node:crypto');
 const accountStore = require('../src/services/accountStore');
 const mail = require('../src/services/mailService');
+const { brandMail } = require('../src/services/mailTemplates');
 const invitations = require('../src/services/accountInvitations');
 const verifier = require('../src/services/microsoftTokenVerifier');
 const sessions = require('../src/services/authSessionService');
@@ -40,7 +41,8 @@ test('invitation reissue replaces the old token and a failed delivery leaves the
     return account;
   });
   const delivery = t.mock.method(mail, 'sendMail', async (message) => {
-    const link = message.html.match(/href="([^"]+)"/)[1].replaceAll('&amp;', '&');
+    const { html } = brandMail(message, 'test-logo');
+    const link = html.match(/href="([^"]+)"/)[1].replaceAll('&amp;', '&');
     links.push(new URLSearchParams(new URL(link).hash.slice(1)).get('invite'));
   });
 

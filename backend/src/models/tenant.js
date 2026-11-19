@@ -13,6 +13,7 @@ const FeatureAccessSchema = new mongoose.Schema(
 const TenantSchema = new mongoose.Schema(
   {
     name: { type: String, required: true, trim: true, lowercase: true, unique: true },
+    logoDataUrl: String,
     displayName: { type: String, trim: true },
     type: { type: String, enum: ['company', 'client', 'finance'], default: 'company', required: true },
     ownerUserId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', index: true },

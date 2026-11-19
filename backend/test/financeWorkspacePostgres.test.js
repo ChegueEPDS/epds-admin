@@ -100,6 +100,13 @@ test('Finance access scopes tenants, records and writes to the billing workflow'
   assert.equal((await (await request('/auth/me')).json()).user.tenantType, 'finance');
   const directory = await (await request('/finance/tenants')).json();
   assert.deepEqual(directory.tenants.filter(({ id }) => tenantIds.includes(id)), [{ id: allowed.id, name: allowed.displayName }]);
+  const logoDataUrl = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jR9sAAAAASUVORK5CYII=';
+  await tenants.save({ ...allowed, logoDataUrl });
+  await tenants.save({ ...allowed, logoDataUrl: undefined });
+  const brandedDirectory = await (await request('/finance/tenants')).json();
+  assert.equal(brandedDirectory.tenants.find(({ id }) => id === allowed.id).logoDataUrl, logoDataUrl);
+  await tenants.save({ ...allowed, logoDataUrl: null });
+  assert.equal((await tenants.findById(allowed.id)).logoDataUrl, null);
   assert.equal((await request('/finance/tenants', { session: ordinaryFinance })).status, 403);
   assert.equal((await request('/finance/tenants', { session: otherMember })).status, 403);
   assert.equal((await request('/work-board/options')).status, 403);

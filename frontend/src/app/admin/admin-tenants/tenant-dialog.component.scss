@@ -63,3 +63,17 @@ mat-form-field {
     justify-self: center;
   }
 }
+
+.tenant-logo-field {
+  display: grid;
+  justify-items: start;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.tenant-logo-field img {
+  width: 124px;
+  height: 56px;
+  object-fit: contain;
+  object-position: left center;
+}

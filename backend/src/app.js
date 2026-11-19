@@ -116,17 +116,26 @@ app.use((err, req, res, next) => {
 
 if (require.main === module) {
   const port = Number(process.env.PORT || 4301);
+  let startupStage = 'MFA_ENCRYPTION_KEY validation';
   Promise.resolve()
     .then(() => {
       if (process.env.NODE_ENV !== 'production') return;
       validateEncryptionKey();
+      startupStage = 'public HTTPS origin validation (MFA_WEBAUTHN_ORIGIN or EPDS_ADMIN_PUBLIC_URL)';
       if (!configuredContext()) {
         throw new Error('Configure the public HTTPS origin with MFA_WEBAUTHN_ORIGIN or EPDS_ADMIN_PUBLIC_URL');
       }
     })
-    .then(connectDb)
-    .then(() => normalizeTenantTypes())
     .then(() => {
+      startupStage = 'database connection and schema migrations';
+      return connectDb();
+    })
+    .then(() => {
+      startupStage = 'tenant normalization';
+      return normalizeTenantTypes();
+    })
+    .then(() => {
+      startupStage = 'background services and HTTP server';
       startDomainNotifications();
       startDomainMonthlyReports();
       startDomainHealthMonitor();
@@ -141,7 +150,7 @@ if (require.main === module) {
       app.listen(port, () => console.log(`[app] EPDS Admin API listening on ${port}`));
     })
     .catch((err) => {
-      console.error('[app] startup failed:', err);
+      console.error('[app] startup failed during', startupStage, err);
       process.exit(1);
     });
 }

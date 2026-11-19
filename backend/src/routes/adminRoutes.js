@@ -1,6 +1,8 @@
+const rateLimit = require('express-rate-limit');
 const express = require('express');
 const controller = require('../controllers/adminControllerFacade');
 const accounts = require('../controllers/accountAdminController');
+const mailTemplates = require('../controllers/mailTemplateAdminController');
 const integrationController = require('../controllers/integrationAdminController');
 const { currencyOptions } = require('../services/tenantCurrency');
 const { requireAuth, requireSuperAdmin } = require('../middlewares/authMiddleware');
@@ -14,6 +16,15 @@ function requireUserManager(req, res, next) {
 }
 
 const userManager = [requireAuth, requireUserManager];
+const testMailLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 20,
+  keyGenerator: (req) => String(req.userId),
+  message: { error: 'Test email limit reached. Try again in 15 minutes.' }
+});
+router.get('/admin/email-templates', superAdminOnly, mailTemplates.list);
+router.post('/admin/email-templates/:template/test', superAdminOnly, testMailLimiter, mailTemplates.sendTest);
+
 router.get('/admin/users', userManager, accounts.listUsers);
 router.get('/admin/users/tenant-options', userManager, accounts.tenantOptions);
 router.post('/admin/users', userManager, accounts.createUser);

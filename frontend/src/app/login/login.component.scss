@@ -20,10 +20,66 @@ mat-card-header {
   padding: 0 0 28px;
 }
 
-.brand-logo {
-  max-width: 190px;
-  max-height: 82px;
-  object-fit: contain;
+.panda-brand {
+  display: grid;
+  justify-items: center;
+  gap: 6px;
+}
+
+.panda-name {
+  font-size: 22px;
+  font-weight: 750;
+}
+
+.panda {
+  display: block;
+  width: 112px;
+  padding: 0;
+  border: 0;
+  border-radius: 20px;
+  background: transparent;
+  cursor: pointer;
+}
+
+.panda-art {
+  position: relative;
+  display: block;
+  transform: perspective(420px) rotateX(var(--panda-tilt-x, 0deg)) rotateY(var(--panda-tilt-y, 0deg));
+  transition: transform 120ms ease-out;
+}
+
+.panda-art img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 1;
+}
+
+.panda-eye {
+  position: absolute;
+  top: 23.15%;
+  width: 12.9%;
+  height: 13.1%;
+  overflow: hidden;
+  border-radius: 50%;
+  background: #f3f3ea;
+  opacity: var(--panda-eye-opacity, 0);
+}
+
+.panda-eye-left { left: 28.85%; }
+.panda-eye-right { left: 58.25%; }
+
+.panda-eye::after {
+  content: '';
+  position: absolute;
+  inset: 11%;
+  border-radius: 50%;
+  background: radial-gradient(circle at 66% 27%, #fff 0 13%, transparent 15%), #16241f;
+  translate: var(--panda-look-x, 0) var(--panda-look-y, 0);
+  transition: translate 90ms ease-out;
+}
+
+.panda-eye-right::after {
+  background: radial-gradient(circle at 34% 27%, #fff 0 13%, transparent 15%), #16241f;
 }
 
 mat-card-content {
@@ -139,10 +195,6 @@ mat-card-content mat-icon {
   flex: 1 1 auto;
   height: 1px;
   background: var(--brand-border);
-}
-
-:host-context(.dark-theme) .brand-logo {
-  filter: brightness(0) invert(1);
 }
 
 .shake {
