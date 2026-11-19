@@ -39,7 +39,8 @@ mat-card-content {
 }
 
 .login-form button,
-.password-toggle {
+.password-toggle,
+.microsoft-sign-in {
   width: 100%;
   min-height: 48px;
 }
@@ -73,14 +74,14 @@ mat-card-content {
 }
 
 .microsoft-sign-in {
-  align-self: center;
+  box-sizing: border-box;
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 12px;
-  min-height: 41px;
-  max-width: 100%;
-  padding: 0 12px;
+  padding: 8px 12px;
   border: 1px solid #8c8c8c;
+  border-radius: var(--mat-button-outlined-container-shape, var(--mat-sys-corner-full));
   background: #fff;
   color: #5e5e5e;
   font: 600 15px 'Segoe UI', Arial, sans-serif;
