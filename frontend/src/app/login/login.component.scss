@@ -33,7 +33,7 @@ mat-card-header {
 
 .panda {
   display: block;
-  width: 112px;
+  width: clamp(160px, 55vw, 216px);
   padding: 0;
   border: 0;
   border-radius: 20px;
@@ -49,10 +49,8 @@ mat-card-header {
   --atex-gold: #fcb040;
   position: relative;
   display: block;
-  aspect-ratio: 1;
+  aspect-ratio: 330 / 380;
   transform-style: preserve-3d;
-  transform: perspective(420px) rotateX(var(--panda-tilt-x, 0deg)) rotateY(var(--panda-tilt-y, 0deg));
-  transition: transform 120ms ease-out;
 }
 
 .panda-layer {
@@ -64,9 +62,51 @@ mat-card-header {
   transform: translateZ(var(--depth));
 }
 
-.panda-pupil {
-  translate: var(--panda-look-x, 0px) var(--panda-look-y, 0px);
-  transition: translate 90ms ease-out;
+.panda-eyes {
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+.panda-ear-right {
+  --ear-turn: 17deg;
+}
+
+.panda-ear-left {
+  --ear-turn: -17deg;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .panda-art {
+    animation: panda-idle 4s ease-in-out infinite;
+  }
+
+  .panda-eyes {
+    animation: panda-blink 4.7s ease-in-out infinite 1s;
+  }
+
+  .panda-ear {
+    animation: panda-ear-twitch 6s ease-in-out infinite;
+  }
+
+  .panda-ear-right {
+    animation-delay: 1.7s;
+  }
+}
+
+@keyframes panda-idle {
+  0%, 100% { transform: perspective(420px) rotateY(-4deg); }
+  50% { transform: perspective(420px) translateY(-4px) rotateY(4deg); }
+}
+
+@keyframes panda-blink {
+  0%, 41%, 46%, 100% { transform: scaleY(1); }
+  43.5% { transform: scaleY(0.08); }
+}
+
+@keyframes panda-ear-twitch {
+  0%, 43%, 53%, 100% { transform: rotate(0); }
+  46% { transform: rotate(var(--ear-turn)); }
+  50% { transform: rotate(calc(var(--ear-turn) * -0.45)); }
 }
 
 mat-card-content {

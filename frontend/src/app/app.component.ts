@@ -11,7 +11,7 @@ import { MatMenuModule } from '@angular/material/menu';
 import { MatToolbarModule } from '@angular/material/toolbar';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { filter } from 'rxjs';
-import { AuthService } from './services/auth.service';
+import { AuthService, FinanceTenant } from './services/auth.service';
 import { AdminService, AdminTenant } from './services/admin.service';
 import { ThemeService } from './services/theme.service';
 
@@ -116,6 +116,16 @@ export class AppComponent {
 
   get financeTenantId(): string {
     return this.currentPath.match(/^\/project-tracker\/finance\/([^/]+)$/)?.[1] || '';
+  }
+
+  activeTenantLogo(financeTenants: FinanceTenant[] = []): string | null {
+    if (this.auth.isFinanceWorkspace()) {
+      return financeTenants.find(tenant => tenant.id === this.financeTenantId)?.logoDataUrl || null;
+    }
+    if (this.auth.isSuperAdmin() && this.tenantContextId) {
+      return this.tenants.find(tenant => tenant.id === this.tenantContextId)?.logoDataUrl || null;
+    }
+    return this.auth.getCurrentUser()?.tenantLogoDataUrl || null;
   }
 
   changeFinanceTenant(tenantId: string): void {

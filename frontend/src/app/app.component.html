@@ -1,7 +1,11 @@
 <div class="app-shell">
   <mat-toolbar class="toolbar" *ngIf="!isPublicRoute">
     <a class="brand" [routerLink]="auth.defaultRouteAfterLogin()" aria-label="EPDS Admin home">
-      <img src="/public/panda.png" alt="">
+      @if (activeTenantLogo((auth.financeTenants$ | async)?.tenants); as logo) {
+        <img class="tenant-brand-logo" [src]="logo" alt="">
+      } @else {
+        <img src="/public/panda.png" alt="">
+      }
     </a>
 
     <nav class="nav desktop-nav" *ngIf="(auth.isLoggedIn$ | async) && auth.canAccessAdminFeatures() && !auth.hasSingleFeatureAccess()">

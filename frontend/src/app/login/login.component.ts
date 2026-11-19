@@ -17,9 +17,6 @@ import { AuthResponse, AuthService } from '../services/auth.service';
 
 @Component({
   selector: 'app-login',
-  host: {
-    '(document:pointermove)': 'trackPanda($event, pandaButton())'
-  },
   standalone: true,
   imports: [
     CommonModule,
@@ -39,32 +36,29 @@ import { AuthResponse, AuthService } from '../services/auth.service';
 })
 export class LoginComponent {
   readonly pandaButton = viewChild.required<ElementRef<HTMLButtonElement>>('panda');
-  private pandaAnimation?: Animation;
-
-  trackPanda(event: PointerEvent, panda: ElementRef<HTMLButtonElement>): void {
-    if (event.pointerType !== 'mouse') return;
-    const button = panda.nativeElement;
-    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
-    const bounds = button.getBoundingClientRect();
-    const x = event.clientX - bounds.left - bounds.width / 2;
-    const y = event.clientY - bounds.top - bounds.height / 2;
-    const distance = Math.max(48, Math.hypot(x, y));
-    button.style.setProperty('--panda-look-x', `${6 * x / distance}px`);
-    button.style.setProperty('--panda-look-y', `${6 * y / distance}px`);
-    button.style.setProperty('--panda-tilt-x', `${-12 * y / distance}deg`);
-    button.style.setProperty('--panda-tilt-y', `${12 * x / distance}deg`);
-  }
+  private pandaGreeting: Animation[] = [];
 
   animatePanda(button: HTMLButtonElement, delay = 0): void {
     if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
-    this.pandaAnimation?.cancel();
-    this.pandaAnimation = button.animate([
-      { transform: 'translateY(0) rotate(0)' },
-      { transform: 'translateY(-10px) rotate(-12deg)', offset: 0.32 },
-      { transform: 'translateY(-5px) rotate(10deg)', offset: 0.64 },
-      { transform: 'translateY(0) rotate(0)' }
-    ], { duration: 560, delay, easing: 'ease-in-out' });
+    this.pandaGreeting.forEach(animation => animation.cancel());
+    this.pandaGreeting = [button.animate([
+      { transform: 'scale(1) translateY(0)' },
+      { transform: 'scale(0.95, 1.04) translateY(6px)', offset: 0.25 },
+      { transform: 'scale(1.04, 0.97) translateY(-10px)', offset: 0.55 },
+      { transform: 'scale(0.99, 1.01) translateY(2px)', offset: 0.8 },
+      { transform: 'scale(1) translateY(0)' }
+    ], { duration: 650, delay, easing: 'cubic-bezier(0.34, 1.56, 0.64, 1)' })];
+
+    const badge = button.querySelector('.panda-badge');
+    if (badge) {
+      this.pandaGreeting.push(badge.animate([
+        { filter: 'drop-shadow(0 0 0 transparent)' },
+        { filter: 'drop-shadow(0 0 18px rgba(252, 176, 64, 0.85))', offset: 0.4 },
+        { filter: 'drop-shadow(0 0 0 transparent)' }
+      ], { duration: 700, delay, easing: 'ease-out' }));
+    }
   }
+
   isLoading = signal(false);
   isShaking = signal(false);
   readonly passwordFormOpen = signal(false);

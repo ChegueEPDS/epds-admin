@@ -32,6 +32,11 @@
   object-fit: contain;
 }
 
+.brand .tenant-brand-logo {
+  width: auto;
+  max-width: 96px;
+}
+
 .nav {
   display: flex;
   align-items: center;

@@ -28,6 +28,7 @@ export type AuthUser = {
   tenantId?: string | null;
   tenantName?: string | null;
   tenantDisplayName?: string | null;
+  tenantLogoDataUrl?: string | null;
   tenantType?: string | null;
   tenantFeatures?: Partial<TenantFeatures>;
 };

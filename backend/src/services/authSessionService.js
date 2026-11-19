@@ -89,7 +89,7 @@ async function buildUserContext(user, session = null) {
   const tenant = user.tenantId
     ? (usingPostgres()
       ? await tenantStore().findById(user.tenantId)
-      : await Tenant.findById(user.tenantId).lean().select('name displayName type features professionRbacEnabled'))
+      : await Tenant.findById(user.tenantId).lean().select('name displayName logoDataUrl type features professionRbacEnabled'))
     : null;
   const featureAccess = (value) => {
     if (typeof value === 'boolean') return { enabled: value, edit: value, delete: value };
@@ -116,6 +116,7 @@ async function buildUserContext(user, session = null) {
     tenantId: user.tenantId ? String(user.tenantId) : null,
     tenantName: tenant?.name || null,
     tenantDisplayName: tenant?.displayName || tenant?.name || null,
+    tenantLogoDataUrl: tenant?.logoDataUrl || null,
     tenantType: tenant?.type || null,
     firstName: user.firstName || '',
     lastName: user.lastName || '',
