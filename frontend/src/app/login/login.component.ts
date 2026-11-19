@@ -49,9 +49,8 @@ export class LoginComponent {
     const x = event.clientX - bounds.left - bounds.width / 2;
     const y = event.clientY - bounds.top - bounds.height / 2;
     const distance = Math.max(48, Math.hypot(x, y));
-    button.style.setProperty('--panda-eye-opacity', '1');
-    button.style.setProperty('--panda-look-x', `${1.5 * x / distance}px`);
-    button.style.setProperty('--panda-look-y', `${1.5 * y / distance}px`);
+    button.style.setProperty('--panda-look-x', `${6 * x / distance}px`);
+    button.style.setProperty('--panda-look-y', `${6 * y / distance}px`);
     button.style.setProperty('--panda-tilt-x', `${-12 * y / distance}deg`);
     button.style.setProperty('--panda-tilt-y', `${12 * x / distance}deg`);
   }

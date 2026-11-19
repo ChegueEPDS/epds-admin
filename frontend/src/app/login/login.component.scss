@@ -42,44 +42,31 @@ mat-card-header {
 }
 
 .panda-art {
+  --panda-dark: #17201e;
+  --panda-dark-highlight: #253330;
+  --panda-light: #f4f5f1;
+  --panda-light-shade: #e2e6de;
+  --atex-gold: #fcb040;
   position: relative;
   display: block;
+  aspect-ratio: 1;
+  transform-style: preserve-3d;
   transform: perspective(420px) rotateX(var(--panda-tilt-x, 0deg)) rotateY(var(--panda-tilt-y, 0deg));
   transition: transform 120ms ease-out;
 }
 
-.panda-art img {
-  display: block;
+.panda-layer {
+  position: absolute;
+  inset: 0;
   width: 100%;
-  aspect-ratio: 1;
+  height: 100%;
+  overflow: visible;
+  transform: translateZ(var(--depth));
 }
 
-.panda-eye {
-  position: absolute;
-  top: 23.15%;
-  width: 12.9%;
-  height: 13.1%;
-  overflow: hidden;
-  border-radius: 50%;
-  background: #f3f3ea;
-  opacity: var(--panda-eye-opacity, 0);
-}
-
-.panda-eye-left { left: 28.85%; }
-.panda-eye-right { left: 58.25%; }
-
-.panda-eye::after {
-  content: '';
-  position: absolute;
-  inset: 11%;
-  border-radius: 50%;
-  background: radial-gradient(circle at 66% 27%, #fff 0 13%, transparent 15%), #16241f;
-  translate: var(--panda-look-x, 0) var(--panda-look-y, 0);
+.panda-pupil {
+  translate: var(--panda-look-x, 0px) var(--panda-look-y, 0px);
   transition: translate 90ms ease-out;
-}
-
-.panda-eye-right::after {
-  background: radial-gradient(circle at 34% 27%, #fff 0 13%, transparent 15%), #16241f;
 }
 
 mat-card-content {
