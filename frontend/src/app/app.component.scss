@@ -128,15 +128,18 @@ button mat-icon {
 }
 
 .theme-toggle {
-  margin-right: 4px;
-  color: var(--brand-muted);
-  border: 1px solid var(--brand-border);
-  background: var(--brand-panel-soft);
+  flex: 0 0 auto;
+  margin-inline: 2px 4px;
+  color: var(--brand-ink);
+}
+
+.theme-toggle mat-icon {
+  margin: 0;
 }
 
 .theme-toggle:hover {
   color: var(--brand-accent-ink);
-  border-color: var(--brand-accent-border);
+  background: var(--brand-hover);
 }
 
 .profile-button {
@@ -243,16 +246,40 @@ button mat-icon {
   }
 }
 
-.language-select {
+.language-trigger {
+  display: inline-flex;
   flex: 0 0 auto;
-  margin-inline-end: 6px;
-  padding: 5px;
-  border: 1px solid var(--brand-border);
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 44px;
+  padding-inline: 12px;
+  border: 1px solid var(--brand-border-strong);
   border-radius: 8px;
-  background: var(--brand-panel-soft);
+  background: var(--brand-panel);
   color: var(--brand-ink);
   font: inherit;
-  font-size: 12px;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.language-trigger mat-icon {
+  width: 20px;
+  height: 20px;
+  margin: 0;
+  font-size: 20px;
+}
+
+.language-trigger:hover,
+.language-trigger[aria-expanded='true'] {
+  background: var(--brand-hover);
+}
+
+.language-trigger:focus-visible,
+.theme-toggle:focus-visible {
+  outline: 2px solid var(--brand-accent-ink);
+  outline-offset: 2px;
 }
 
 .public-language {

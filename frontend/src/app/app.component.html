@@ -1,10 +1,22 @@
 <div class="app-shell">
   <ng-template #languageControl>
-    <select class="language-select" [attr.aria-label]="'Language' | uiText"
-            [ngModel]="ui.language()" (ngModelChange)="ui.setLanguage($event)">
-      <option value="en" lang="en">English</option>
-      <option value="hu" lang="hu">Magyar</option>
-    </select>
+    <button class="language-trigger" type="button" [matMenuTriggerFor]="languageMenu"
+            [attr.aria-label]="('Language' | uiText) + ' (' + (ui.language() | uppercase) + ')'">
+      {{ ui.language() | uppercase }}
+      <mat-icon class="material-symbols-outlined" aria-hidden="true">expand_more</mat-icon>
+    </button>
+    <mat-menu #languageMenu="matMenu" class="toolbar-language-menu">
+      <button mat-menu-item class="language-option" type="button" role="menuitemradio"
+              lang="en" [attr.aria-checked]="ui.language() === 'en'" (click)="ui.setLanguage('en')">
+        <mat-icon class="material-symbols-outlined" aria-hidden="true">check</mat-icon>
+        English
+      </button>
+      <button mat-menu-item class="language-option" type="button" role="menuitemradio"
+              lang="hu" [attr.aria-checked]="ui.language() === 'hu'" (click)="ui.setLanguage('hu')">
+        <mat-icon class="material-symbols-outlined" aria-hidden="true">check</mat-icon>
+        Magyar
+      </button>
+    </mat-menu>
   </ng-template>
 
   <mat-toolbar class="toolbar" *ngIf="!isPublicRoute">
@@ -88,6 +100,16 @@
     }
 
     <ng-container *ngTemplateOutlet="languageControl"></ng-container>
+
+    <button
+      mat-icon-button
+      class="theme-toggle"
+      type="button"
+      [matTooltip]="(theme.theme() === 'dark' ? 'Switch to light mode' : 'Switch to dark mode') | uiText"
+      [attr.aria-label]="(theme.theme() === 'dark' ? 'Switch to light mode' : 'Switch to dark mode') | uiText"
+      (click)="theme.toggle()">
+      <mat-icon class="material-symbols-outlined">{{ theme.theme() === 'dark' ? 'light_mode' : 'dark_mode' }}</mat-icon>
+    </button>
 
     <button
       mat-icon-button
@@ -178,10 +200,6 @@
       </ng-container>
 
       <div class="mobile-menu-divider"></div>
-      <button mat-menu-item type="button" (click)="theme.toggle()">
-        <mat-icon class="material-symbols-outlined">{{ theme.theme() === 'dark' ? 'light_mode' : 'dark_mode' }}</mat-icon>
-        {{ (theme.theme() === 'dark' ? 'Light mode' : 'Dark mode') | uiText }}
-      </button>
       <a mat-menu-item routerLink="/login" *ngIf="!(auth.isLoggedIn$ | async)">
         <mat-icon class="material-symbols-outlined">login</mat-icon>
         {{ 'Login' | uiText }}
@@ -195,16 +213,6 @@
         {{ 'Logout' | uiText }}
       </button>
     </mat-menu>
-
-    <button
-      mat-icon-button
-      class="theme-toggle desktop-action"
-      type="button"
-      [matTooltip]="(theme.theme() === 'dark' ? 'Switch to light mode' : 'Switch to dark mode') | uiText"
-      [attr.aria-label]="(theme.theme() === 'dark' ? 'Switch to light mode' : 'Switch to dark mode') | uiText"
-      (click)="theme.toggle()">
-      <mat-icon class="material-symbols-outlined">{{ theme.theme() === 'dark' ? 'light_mode' : 'dark_mode' }}</mat-icon>
-    </button>
 
     <ng-container *ngIf="auth.user$ | async as user">
       <button mat-icon-button class="desktop-action" *ngIf="auth.canManageUsers() || auth.canManageWorkFields()" [matMenuTriggerFor]="settingsMenu" aria-label="{{ 'Settings' | uiText }}">
