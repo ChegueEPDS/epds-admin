@@ -1,5 +1,5 @@
 import { CommonModule } from '@angular/common';
-import { Component, ElementRef, afterNextRender, signal, viewChild } from '@angular/core';
+import { Component, DestroyRef, ElementRef, NgZone, afterNextRender, inject, signal, viewChild } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { HttpClient } from '@angular/common/http';
 import { environment } from '../../environments/environment';
@@ -36,27 +36,161 @@ import { AuthResponse, AuthService } from '../services/auth.service';
 })
 export class LoginComponent {
   readonly pandaButton = viewChild.required<ElementRef<HTMLButtonElement>>('panda');
+  private readonly zone = inject(NgZone);
+  private readonly destroyRef = inject(DestroyRef);
   private pandaGreeting: Animation[] = [];
+  private pandaGreetingStartsAt = -Infinity;
 
-  animatePanda(button: HTMLButtonElement, delay = 0): void {
+  animatePanda(delay = 0): void {
     if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    const button = this.pandaButton().nativeElement;
+    const bounce = button.querySelector('.panda-bounce')!;
+    const badge = button.querySelector('.panda-badge')!;
     this.pandaGreeting.forEach(animation => animation.cancel());
-    this.pandaGreeting = [button.animate([
-      { transform: 'scale(1) translateY(0)' },
-      { transform: 'scale(0.95, 1.04) translateY(6px)', offset: 0.25 },
-      { transform: 'scale(1.04, 0.97) translateY(-10px)', offset: 0.55 },
-      { transform: 'scale(0.99, 1.01) translateY(2px)', offset: 0.8 },
-      { transform: 'scale(1) translateY(0)' }
-    ], { duration: 650, delay, easing: 'cubic-bezier(0.34, 1.56, 0.64, 1)' })];
-
-    const badge = button.querySelector('.panda-badge');
-    if (badge) {
-      this.pandaGreeting.push(badge.animate([
+    this.pandaGreetingStartsAt = performance.now() + delay;
+    this.pandaGreeting = [
+      bounce.animate([
+        { transform: 'scale(1) translateY(0)' },
+        { transform: 'scale(0.95, 1.04) translateY(6px)', offset: 0.25 },
+        { transform: 'scale(1.04, 0.97) translateY(-10px)', offset: 0.55 },
+        { transform: 'scale(0.99, 1.01) translateY(2px)', offset: 0.8 },
+        { transform: 'scale(1) translateY(0)' }
+      ], { duration: 650, delay, easing: 'cubic-bezier(0.34, 1.56, 0.64, 1)' }),
+      badge.animate([
         { filter: 'drop-shadow(0 0 0 transparent)' },
         { filter: 'drop-shadow(0 0 18px rgba(252, 176, 64, 0.85))', offset: 0.4 },
         { filter: 'drop-shadow(0 0 0 transparent)' }
-      ], { duration: 700, delay, easing: 'ease-out' }));
-    }
+      ], { duration: 700, delay, easing: 'ease-out' })
+    ];
+  }
+
+  private startPandaMotion(): void {
+    const rig = this.pandaButton().nativeElement.querySelector<HTMLElement>('.panda-art')!;
+    const layers = Array.from(rig.querySelectorAll<HTMLElement>('.panda-layer'), element => ({
+      element,
+      depth: Number(element.dataset['depth']),
+      parallax: Number(element.dataset['parallax'])
+    }));
+    const pupils = Array.from(rig.querySelectorAll('#pupilLeft, #pupilRight'));
+    const eyelids = Array.from(rig.querySelectorAll('.eyelid'), element => ({
+      element, x: element.getAttribute('cx'), y: element.getAttribute('cy')
+    }));
+    const ears = [rig.querySelector('#earLeft')!, rig.querySelector('#earRight')!];
+    const earPoses = [
+      { time: 0, angle: 0, scale: 1 },
+      { time: 0.25, angle: 16, scale: 1.03 },
+      { time: 0.55, angle: -7, scale: 1 },
+      { time: 0.8, angle: 6, scale: 1 },
+      { time: 1, angle: 0, scale: 1 }
+    ];
+    const shadow = rig.querySelector('#shadowGroup')!;
+    const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
+    let frame = 0;
+    let previous = 0;
+    let time = 0;
+    let nextBlink = 2800 + Math.random() * 3400;
+    let blinkAt = -Infinity;
+    let doubleBlink = false;
+    let nextWiggle = 4600 + Math.random() * 1900;
+    let wiggleAt = -Infinity;
+    let wiggleChoice = 0;
+    let glanceDuration = 0;
+    let glanceDirection = -1;
+    let glance = 0;
+    let eyeX = 0;
+    let eyeY = 0;
+    let rotationX = 0;
+    let rotationY = 0;
+    let floatY = 0;
+
+    // Use elapsed time so the reference motion keeps the same pace on high-refresh displays.
+    const animate = (now: number) => {
+      const elapsed = previous ? Math.min(now - previous, 50) : 0;
+      previous = now;
+      time += elapsed;
+      const phase = time * 0.0009;
+      const smooth = 1 - Math.pow(0.95, elapsed / (1000 / 60));
+      const eyeSmooth = 1 - Math.pow(0.93, elapsed / (1000 / 60));
+      if (time >= nextBlink) {
+        blinkAt = time;
+        doubleBlink = Math.random() < 0.22;
+        nextBlink += 2800 + Math.random() * 3400;
+      }
+      if (time >= nextWiggle) {
+        wiggleAt = time;
+        wiggleChoice = Math.random();
+        glanceDirection *= -1;
+        const interval = 4600 + Math.random() * 1900;
+        glanceDuration = Math.min(2200, interval - 2600);
+        nextWiggle += interval;
+      }
+
+      const sinceBlink = time - blinkAt;
+      const blinkPhase = doubleBlink && sinceBlink >= 285 ? sinceBlink - 285 : sinceBlink;
+      const lid = Math.max(0, Math.min(1, blinkPhase / 80, (205 - blinkPhase) / 80));
+      for (const { element, x, y } of eyelids) {
+        element.setAttribute('transform', `translate(${x} ${y}) scale(1 ${lid}) translate(-${x} -${y})`);
+      }
+
+      const sinceWiggle = time - wiggleAt;
+      const sinceGreeting = now - this.pandaGreetingStartsAt;
+      const greeting = sinceGreeting >= 0 && sinceGreeting < 650;
+      const progress = greeting ? sinceGreeting / 650 : Math.min(1, sinceWiggle / 550);
+      const poseIndex = earPoses.findIndex(pose => pose.time >= progress && pose.time > 0);
+      const nextPose = earPoses[poseIndex];
+      const previousPose = earPoses[poseIndex - 1];
+      const fraction = (progress - previousPose.time) / (nextPose.time - previousPose.time);
+      const eased = (1 - Math.cos(fraction * Math.PI)) / 2;
+      const angle = previousPose.angle + (nextPose.angle - previousPose.angle) * eased;
+      const scale = previousPose.scale + (nextPose.scale - previousPose.scale) * eased;
+      ears.forEach((ear, index) => {
+        const moves = greeting || (index === 0 ? wiggleChoice < 0.42 || wiggleChoice >= 0.84 : wiggleChoice >= 0.42);
+        const x = index === 0 ? 124 : 276;
+        const rotation = moves ? (index === 0 ? -angle : angle) : 0;
+        ear.setAttribute('transform', `translate(${x} 104) rotate(${rotation}) scale(${moves ? scale : 1}) translate(-${x} -104)`);
+      });
+
+      const looking = sinceWiggle >= 1200 && sinceWiggle < 1200 + glanceDuration;
+      glance += (Number(looking) - glance) * smooth;
+      eyeX += ((looking ? 1.1 * glanceDirection : 0) - eyeX) * eyeSmooth;
+      eyeY += ((looking ? 2.4 : 0) - eyeY) * eyeSmooth;
+      rotationX += (Math.cos(phase * 0.5) * 2.6 - glance * 2.2 - rotationX) * smooth;
+      rotationY += (Math.sin(phase * 0.7) * 5.4 + glance * 1.6 * glanceDirection - rotationY) * smooth;
+      const targetFloatY = Math.sin(phase * 0.95) * 2.5;
+      floatY += (targetFloatY - floatY) * smooth;
+
+      pupils.forEach(pupil => pupil.setAttribute('transform', `translate(${eyeX} ${eyeY})`));
+      shadow.setAttribute('transform', `translate(200 364) scale(${1 - targetFloatY / 35} 1) translate(-200 -364)`);
+      rig.style.transform = `translateY(${floatY}px) rotateX(${rotationX}deg) rotateY(${rotationY}deg)`;
+      for (const { element, depth, parallax } of layers) {
+        element.style.transform = `translate3d(${rotationY * 0.72 * parallax}px, ${-rotationX * 0.72 * parallax}px, ${depth}px)`;
+      }
+      frame = requestAnimationFrame(animate);
+    };
+
+    const updateMotion = () => {
+      cancelAnimationFrame(frame);
+      previous = 0;
+      if (reducedMotion.matches) {
+        this.pandaGreeting.forEach(animation => animation.cancel());
+        rig.style.removeProperty('transform');
+        layers.forEach(({ element }) => element.style.removeProperty('transform'));
+        [...pupils, ...ears, shadow, ...eyelids.map(({ element }) => element)]
+          .forEach(element => element.removeAttribute('transform'));
+        return;
+      }
+      frame = requestAnimationFrame(animate);
+    };
+    this.zone.runOutsideAngular(() => {
+      reducedMotion.addEventListener('change', updateMotion);
+      updateMotion();
+      this.animatePanda(650);
+    });
+    this.destroyRef.onDestroy(() => {
+      cancelAnimationFrame(frame);
+      reducedMotion.removeEventListener('change', updateMotion);
+      this.pandaGreeting.forEach(animation => animation.cancel());
+    });
   }
 
   isLoading = signal(false);
@@ -92,7 +226,7 @@ export class LoginComponent {
     private http: HttpClient,
     private router: Router
   ) {
-    afterNextRender(() => this.animatePanda(this.pandaButton().nativeElement, 650));
+    afterNextRender(() => this.startPandaMotion());
     this.route.fragment.subscribe((fragment) => {
       this.notice = '';
       this.linkError = '';
