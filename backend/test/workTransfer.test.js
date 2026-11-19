@@ -36,6 +36,9 @@ test('tenant export uses A for ID and supports unchanged, updated and new rows i
   assert.equal(sheet.getCell('A1').value, 'ID');
   assert.equal(sheet.getCell('A2').value, id);
   assert.equal(sheet.getColumn(sheet.columnCount).hidden, true);
+  for (const label of ['Invoiced amount', 'Paid amount', 'Payment status']) {
+    assert.ok(!sheet.getRow(1).values.includes(label));
+  }
   const same = await validate(sheet, [existing]);
   assert.deepEqual(same.issues, []);
   assert.equal(same.rows[0].modified, false);

@@ -7,7 +7,8 @@ const { databaseEngine } = require('../postgres');
 const tenants = require('../repositories/postgres/tenantRepository');
 const works = require('../repositories/postgres/workBoardRepository');
 const { workBoardSort, mongoSortStages } = require('../services/workBoardSort');
-const { workReporting } = require('../services/workDashboard');
+const SubWorkItem = require('../models/subWorkItem');
+const { workPaymentSummary } = require('../services/workPaymentSummary');
 const { workBillingDates } = require('../services/workBillingDates');
 const { lockWorkRates } = require('../services/workExchangeRates');
 const { markMongoDashboardDirty } = require('../services/workDashboardSnapshots');
@@ -15,9 +16,8 @@ const { markMongoDashboardDirty } = require('../services/workDashboardSnapshots'
 const router = express.Router();
 const statuses = ['completed_billable', 'invoiced', 'paid'];
 const sorts = ['workNumber', 'name', 'status', 'totalAmount'];
-const reportingFields = ['invoicedAmount', 'paidAmount', 'paymentStatus', 'invoices', 'payments'];
 const dateFields = ['completionDate', 'invoiceDate', 'invoicePaymentDeadline', 'paidAt'];
-const editFields = ['fieldRevision', 'status', 'invoiceNumber', ...dateFields, 'reporting'];
+const editFields = ['fieldRevision', 'status', 'invoiceNumber', ...dateFields];
 const object = (value) => value && typeof value === 'object' && !Array.isArray(value);
 const objectId = (value) => typeof value === 'string' && /^[a-f\d]{24}$/i.test(value);
 const pg = () => databaseEngine() === 'postgresql';
@@ -42,12 +42,8 @@ function presentTenant(tenant) {
   return { id: String(tenant._id), name: tenant.displayName || tenant.name };
 }
 
-function presentWork(work) {
-  const reporting = Object.fromEntries(reportingFields.filter((key) => Object.hasOwn(work.reporting || {}, key))
-    .map((key) => [key, work.reporting[key]]));
-  if (work.reporting?.exchangeRates) reporting.exchangeRates = Object.fromEntries(
-    ['invoices', 'payments'].filter((key) => work.reporting.exchangeRates[key])
-      .map((key) => [key, work.reporting.exchangeRates[key]]));
+function presentWork(work, subWorks) {
+  const { invoicedAmount, paidAmount, paymentStatus } = workPaymentSummary(subWorks);
   return {
     id: String(work._id), workNumber: work.workNumber, name: work.name, customer: work.customer || '',
     status: work.status, currency: work.currency || 'HUF',
@@ -55,7 +51,7 @@ function presentWork(work) {
     invoiceNumber: work.invoiceNumber || '', invoiceDate: work.invoiceDate || null,
     invoicePaymentDeadline: work.invoicePaymentDeadline || null, paidAt: work.paidAt || null,
     paymentDeadlineDays: work.paymentDeadlineDays ?? 30,
-    reporting, fieldRevision: work.fieldRevision ?? work.__v ?? 0
+    reporting: { invoicedAmount, paidAmount, paymentStatus }, fieldRevision: work.fieldRevision ?? work.__v ?? 0
   };
 }
 
@@ -88,6 +84,10 @@ async function findWork(tenantId, id) {
   return work;
 }
 
+function financeSubWorks(tenantId, work) {
+  return work.subWorks || SubWorkItem.find({ tenantId, workItemId: work._id, archivedAt: { $exists: false } }).lean();
+}
+
 function dateValue(value) {
   if (value === null) return null;
   if (typeof value !== 'string' || !/^[1-9]\d{3}-\d{2}-\d{2}$/.test(value)
@@ -97,7 +97,7 @@ function dateValue(value) {
   return new Date(value);
 }
 
-async function billingChanges(input, work, tenant) {
+async function billingChanges(input, work) {
   if (!object(input) || Object.keys(input).some((key) => !editFields.includes(key))) {
     throw fail('Csak pénzügyi mezők szerkeszthetők.');
   }
@@ -122,18 +122,9 @@ async function billingChanges(input, work, tenant) {
   for (const key of dateFields) {
     if (Object.hasOwn(input, key)) changes[key] = dateValue(input[key]);
   }
-  if (Object.hasOwn(input, 'reporting')) {
-    if (!object(input.reporting) || Object.keys(input.reporting).some((key) => !reportingFields.includes(key))) {
-      throw fail('Csak pénzügyi mezők szerkeszthetők.');
-    }
-    changes.reporting = await workReporting(
-      { body: { reporting: input.reporting }, scope: { tenantId: String(tenant._id), tenantType: tenant.type } },
-      work.reporting || {}, false
-    );
-  }
   if (!Object.keys(changes).length) throw fail('Adj meg legalább egy pénzügyi mezőt.');
   Object.assign(changes, workBillingDates(changes, work));
-  changes.reporting = await lockWorkRates(work, { ...work, ...changes, reporting: changes.reporting || work.reporting });
+  changes.reporting = await lockWorkRates(work, { ...work, ...changes, reporting: work.reporting });
   return changes;
 }
 
@@ -172,20 +163,33 @@ router.get('/finance/tenants/:tenantId/works', handle(async (req, res) => {
     ]);
     result = { works: rows, total };
   }
-  res.json({ tenant: presentTenant(tenant), works: result.works.map(presentWork),
+  const subWorksById = new Map();
+  if (!pg()) {
+    for (const sub of await SubWorkItem.find({ tenantId, workItemId: { $in: result.works.map((work) => work._id) },
+      archivedAt: { $exists: false } }).lean()) {
+      const id = String(sub.workItemId);
+      const group = subWorksById.get(id) || [];
+      group.push(sub);
+      subWorksById.set(id, group);
+    }
+  }
+  res.json({ tenant: presentTenant(tenant), works: result.works.map((work) =>
+    presentWork(work, work.subWorks || subWorksById.get(String(work._id)) || [])),
     pagination: { page, limit, total: result.total, pages: Math.max(1, Math.ceil(result.total / limit)) } });
 }));
 
 router.get('/finance/tenants/:tenantId/works/:id', handle(async (req, res) => {
   const tenant = await target(req);
-  res.json({ work: presentWork(await findWork(String(tenant._id), req.params.id)) });
+  const tenantId = String(tenant._id);
+  const work = await findWork(tenantId, req.params.id);
+  res.json({ work: presentWork(work, await financeSubWorks(tenantId, work)) });
 }));
 
 router.patch('/finance/tenants/:tenantId/works/:id', handle(async (req, res) => {
   const tenant = await target(req);
   const tenantId = String(tenant._id);
   const work = await findWork(tenantId, req.params.id);
-  const changes = await billingChanges(req.body, work, tenant);
+  const changes = await billingChanges(req.body, work);
   let updated;
   if (pg()) {
     updated = await works.updateWork(tenantId, work.id, req.userId, changes, req.body.fieldRevision);
@@ -198,9 +202,9 @@ router.patch('/finance/tenants/:tenantId/works/:id', handle(async (req, res) => 
   console.info('[finance] updated work', {
     actorId: req.userId, tenantId, workId: String(work._id),
     fields: Object.keys(changes).filter((key) => key !== 'reporting')
-      .concat(Object.keys(req.body.reporting || {}).map((key) => 'reporting.' + key))
   });
-  res.json({ work: presentWork(updated) });
+  const subWorks = await financeSubWorks(tenantId, work);
+  res.json({ work: presentWork(updated, subWorks) });
 }));
 
 module.exports = router;

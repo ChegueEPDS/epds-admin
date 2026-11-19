@@ -54,7 +54,8 @@ test('financial dates reject invalid/future values and transaction totals cannot
   assert.throws(() => validateFinancialReporting({ payments: [{ ...entry, date: '2099-01-01' }] }, {}, {}), /date/);
   assert.throws(() => validateFinancialReporting({ contractDate: '2026-02-30' }, {}, {}), /valid acceptance/);
   const req = { scope: { tenantType: 'company' }, body: { reporting: { invoicedAmount: 100 } } };
-  await assert.rejects(workReporting(req, result, false), /itemized total/);
+  assert.deepEqual(await workReporting(req, result, false), result);
+  assert.deepEqual(await workReporting(req, {}, false), {});
 });
 
 test('each dated entry keeps its own quote; editing an amount retains its quote and changing its date fetches the new date', async () => {

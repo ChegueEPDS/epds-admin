@@ -4,10 +4,13 @@ const { databaseEngine, query } = require('../postgres');
 const User = require('../models/user');
 const { WorkItem } = require('../models/workItem');
 const SubWorkItem = require('../models/subWorkItem');
+const EffortProject = require('../models/effortProject');
+const EffortTask = require('../models/effortTask');
 const { latestRates, convertTotals } = require('./mnbExchangeRates');
 const { getDefaultCurrency } = require('./tenantCurrency');
 const { workCalendar, workPeriodStart } = require('./workTurnover');
 const Tenant = require('../models/tenant');
+const { calculatedReporting } = require('./workPaymentSummary');
 const { validateFinancialReporting, partsFor, rateHealth } = require('./workExchangeRates');
 
 const stages = {
@@ -23,7 +26,6 @@ const financeMetrics = [
   { key: 'unbilled', label: 'Not yet invoiced' }
 ];
 const sizeNames = ['Small', 'Medium', 'Large', 'Unclassified'];
-const paymentStatuses = ['not_invoiced', 'invoiced', 'partially_paid', 'paid'];
 const checkNames = ['No owner', 'No backup', 'No status', 'No client', 'No service type', 'No amount', 'No currency',
   'Payment status missing', 'Paid amount missing', 'Invoiced amount missing', "'Not Invoiced' but amount invoiced",
   'Marked Paid but balance open', 'Paid > invoiced', 'No deadline', 'No next action', 'Action overdue',
@@ -40,7 +42,7 @@ async function workReporting(req, previous, sizeEnabled, tenantHasUser) {
     throw fail('Invalid work reporting fields.');
   }
   const result = { ...previous };
-  for (const key of ['backupId', 'nextAction', 'actionDue', 'invoicedAmount', 'paidAmount', 'paymentStatus', 'projectSize']) {
+  for (const key of ['backupId', 'nextAction', 'actionDue', 'projectSize']) {
     if (!Object.hasOwn(input, key)) continue;
     const value = input[key];
     if (key === 'projectSize' && !sizeEnabled) throw fail('Project size grouping is disabled.');
@@ -56,48 +58,58 @@ async function workReporting(req, previous, sizeEnabled, tenantHasUser) {
     if (key === 'nextAction' && (typeof value !== 'string' || !value.trim() || value.trim().length > 500)) throw fail('Invalid next action.');
     if (key === 'actionDue' && (typeof value !== 'string' || !isoDay.test(value) ||
         !Number.isFinite(Date.parse(value)) || new Date(value).toISOString().slice(0, 10) !== value)) throw fail('Invalid action deadline.');
-    if (key.endsWith('Amount') && (typeof value !== 'number' || !Number.isFinite(value) || value < 0 ||
-        value > 999999999999 || new Decimal(value).decimalPlaces() > 2)) throw fail('Enter a nonnegative amount with up to two decimals.');
-    if (key === 'paymentStatus' && !paymentStatuses.includes(value)) throw fail('Invalid payment status.');
     if (key === 'projectSize' && !sizeNames.slice(0, 3).includes(value)) throw fail('Invalid project size.');
     result[key] = key === 'nextAction' ? value.trim() : value;
   }
-  return validateFinancialReporting(input, result, previous);
+  const { invoicedAmount, paidAmount, paymentStatus, invoices, payments, ...editable } = input;
+  return validateFinancialReporting(editable, result, previous);
 }
 
 async function reportWorks(tenantId) {
+  let works;
+  let subWorks;
+  let actions;
   if (databaseEngine() === 'postgresql') {
-    const { rows } = await query(`SELECT w.id,w.work_number AS "workNumber",w.name,w.status,w.customer,w.responsible,w.currency,w.deadline,w.reporting,
-      w.responsible_user_id AS "ownerId",w.entity_id AS "entityId",w.service_type_id AS "serviceTypeId",
-      w.total_amount AS "totalAmount",w.created_at AS "createdAt",w.updated_at AS "updatedAt",w.invoice_number AS "invoiceNumber",
-      w.invoice_date AS "invoiceDate",w.invoice_payment_deadline AS "paymentDue",p.paid AS "subPaid",p.invoiced AS "subInvoice",p.entries AS "subPaymentEntries"
-      FROM work_items w LEFT JOIN (
-        SELECT work_item_id,sum(paid_amount) FILTER (WHERE paid_amount>0) AS paid,
-          jsonb_agg(jsonb_build_object('amount',paid_amount,'currency',currency,'rate',exchange_rates->'payments')) FILTER (WHERE paid_amount>0) AS entries,
-          bool_or(invoice_number<>'' OR invoice_date IS NOT NULL OR status IN ('invoiced','paid')) AS invoiced
-        FROM sub_work_items WHERE tenant_id=$1 AND archived_at IS NULL AND status NOT IN ('cancelled','lost') GROUP BY work_item_id
-      ) p ON p.work_item_id=w.id
-      WHERE w.tenant_id=$1 AND w.archived_at IS NULL ORDER BY w.id`, [tenantId]);
-    return rows;
+    const [workResult, subResult, actionResult] = await Promise.all([
+      query(`SELECT w.id,w.work_number AS "workNumber",w.name,w.status,w.customer,w.responsible,w.currency,w.deadline,w.reporting,
+        w.responsible_user_id AS "ownerId",w.entity_id AS "entityId",w.service_type_id AS "serviceTypeId",
+        w.total_amount AS "totalAmount",w.created_at AS "createdAt",w.updated_at AS "updatedAt",
+        w.invoice_payment_deadline AS "paymentDue"
+        FROM work_items w WHERE w.tenant_id=$1 AND w.archived_at IS NULL ORDER BY w.id`, [tenantId]),
+      query(`SELECT id,work_item_id AS "workItemId",status,amount,paid_amount AS "paidAmount",paid_at AS "paidAt",
+        invoice_number AS "invoiceNumber",invoice_date AS "invoiceDate",exchange_rates AS "exchangeRates"
+        FROM sub_work_items WHERE tenant_id=$1 AND archived_at IS NULL`, [tenantId]),
+      query(`SELECT p.work_item_id AS "workItemId", min(t.due_date)::text AS "dueDate"
+        FROM effort_projects p JOIN effort_tasks t ON t.project_id=p.id AND t.tenant_id=p.tenant_id
+        WHERE p.tenant_id=$1 AND p.shared AND p.status='open' AND p.work_item_id IS NOT NULL AND t.status<>'closed'
+        GROUP BY p.work_item_id`, [tenantId])
+    ]);
+    works = workResult.rows;
+    subWorks = subResult.rows;
+    actions = actionResult.rows;
+  } else {
+    const scope = { tenantId: new mongoose.Types.ObjectId(tenantId), archivedAt: { $exists: false } };
+    [works, subWorks, actions] = await Promise.all([
+      WorkItem.find(scope).select('workNumber name status customer responsible responsibleUserId entityId serviceTypeId currency deadline totalAmount reporting createdAt updatedAt invoicePaymentDeadline').sort('_id').lean(),
+      SubWorkItem.find(scope).select('workItemId status amount paidAmount paidAt invoiceNumber invoiceDate exchangeRates').lean(),
+      EffortProject.aggregate([
+        { $match: { tenantId: scope.tenantId, shared: true, status: 'open', workItemId: { $type: 'objectId' } } },
+        { $lookup: { from: EffortTask.collection.name, localField: '_id', foreignField: 'projectId',
+          pipeline: [{ $match: { tenantId: scope.tenantId, status: { $ne: 'closed' } } },
+            { $group: { _id: null, dueDate: { $min: '$dueDate' } } }], as: 'action' } },
+        { $unwind: '$action' },
+        { $project: { workItemId: 1, dueDate: '$action.dueDate' } }
+      ])
+    ]);
   }
-  const scope = { tenantId: new mongoose.Types.ObjectId(tenantId), archivedAt: { $exists: false } };
-  const [works, subPayments] = await Promise.all([
-    WorkItem.find(scope).select('workNumber name status customer responsible responsibleUserId entityId serviceTypeId currency deadline totalAmount reporting createdAt updatedAt invoiceNumber invoiceDate invoicePaymentDeadline').sort('_id').lean(),
-    SubWorkItem.aggregate([{ $match: { ...scope, status: { $nin: ['cancelled', 'lost'] } } },
-      { $group: { _id: '$workItemId', paid: { $sum: { $toDecimal: '$paidAmount' } },
-        entries: { $push: { amount: '$paidAmount', currency: '$currency', rate: '$exchangeRates.payments' } },
-        invoiced: { $max: { $or: [
-          { $ne: [{ $ifNull: ['$invoiceNumber', ''] }, ''] },
-          { $ne: [{ $ifNull: ['$invoiceDate', null] }, null] },
-          { $in: ['$status', ['invoiced', 'paid']] }
-        ] } } } }])
-  ]);
-  const payments = new Map(subPayments.map((row) => [String(row._id), row]));
+  const byWork = group(subWorks, (sub) => String(sub.workItemId), () => '').reduce(
+    (map, item) => map.set(item.id, item.rows), new Map());
+  const actionsByWork = new Map(actions.map((action) => [String(action.workItemId), action]));
   return works.map((work) => {
-    const payment = payments.get(String(work._id));
-    return { ...work, ownerId: work.responsibleUserId, paymentDue: work.invoicePaymentDeadline,
-      subPaid: Number(payment?.paid) > 0 ? payment.paid.toString() : null, subInvoice: payment?.invoiced,
-      subPaymentEntries: payment?.entries };
+    const id = String(work.id ?? work._id);
+    return { ...work, ownerId: work.ownerId ?? work.responsibleUserId, nextAction: actionsByWork.get(id),
+      paymentDue: work.paymentDue ?? work.invoicePaymentDeadline,
+      reporting: calculatedReporting(work.reporting, byWork.get(id) || []) };
   });
 }
 
@@ -143,8 +155,8 @@ function prepareWork(work, asOf, today, config, snapshot) {
     [payment === 'not_invoiced' && invoiced?.gt(0), "'Not Invoiced' but amount invoiced"],
     [payment === 'paid' && receivable?.gt('0.01'), 'Marked Paid but balance open'],
     [paid !== null && invoiced !== null && paid.minus(invoiced).gt('0.01'), 'Paid > invoiced'],
-    [active && !work.deadline, 'No deadline'], [(active || lead) && !reporting.nextAction, 'No next action'],
-    [(active || lead) && reporting.actionDue && reporting.actionDue < asOf, 'Action overdue'],
+    [active && !work.deadline, 'No deadline'], [(active || lead) && !reporting.nextAction && !work.nextAction, 'No next action'],
+    [(active || lead) && [reporting.actionDue, work.nextAction?.dueDate].some((date) => date && date < asOf), 'Action overdue'],
     [stale, 'Not updated >14 days'], [work.paymentDue && day(work.paymentDue) < asOf && receivable?.gt('0.01'), 'Payment overdue']
   ].filter(([condition]) => condition).map(([, label]) => label);
   let size = reporting.projectSize || 'Unclassified';

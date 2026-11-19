@@ -86,7 +86,9 @@ exports.listProjects = respond(async (req, client) => {
   const access = scope(req);
   if (!board) access[2] = false;
   const limit = board ? null : Math.max(1, Math.min(200, Math.floor(Number(req.query.limit) || 100)));
-  const projects = await store.listProjects(client, access, limit);
+  const workItemId = req.query.workItemId;
+  if (workItemId !== undefined && !/^[a-f\d]{24}$/i.test(workItemId)) throw httpError('Invalid work');
+  const projects = await store.listProjects(client, access, limit, workItemId);
   const tasks = await store.listTasks(client, access[0], projects.map((project) => project._id));
   const byProject = new Map();
   for (const task of tasks) {

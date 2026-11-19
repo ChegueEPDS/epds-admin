@@ -145,6 +145,7 @@
                       cdkDrag [cdkDragData]="task" [cdkDragDisabled]="saving || !canEditTask(task)" (dblclick)="startTaskEditor(row, task)">
                       <div class="task-title">
                         <h2 cdkDragHandle [class.draggable]="canEditTask(task)" [cdkDragHandleDisabled]="!canEditTask(task)">{{ task.name }}</h2>
+                        @if (task.dueDate) { <small>Due {{ task.dueDate }}</small> }
                         <button type="button" mat-icon-button class="task-editor-button" aria-label="Open task"
                           matTooltip="Open task" (click)="startTaskEditor(row, task)" (dblclick)="$event.stopPropagation()">
                           <mat-icon class="material-symbols-outlined">open_in_new</mat-icon>
@@ -216,6 +217,9 @@
       <fieldset class="editor-fields" [disabled]="saving || !editableTask">
         <label class="full-width">Task name
           <input name="title" [(ngModel)]="taskForm.name" required maxlength="200" cdkFocusInitial>
+        </label>
+        <label>Due date
+          <input type="date" name="dueDate" [(ngModel)]="taskForm.dueDate">
         </label>
         <label>Sub-work
           <select name="sub" [(ngModel)]="taskForm.sub">

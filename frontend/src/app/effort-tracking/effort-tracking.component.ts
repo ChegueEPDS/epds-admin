@@ -292,7 +292,7 @@ export class EffortTrackingComponent implements OnInit, OnDestroy {
     this.rowInEditor = row;
     this.taskInEditor = task ?? null;
     this.taskForm = task ? {
-      name: task.name, note: task.note, sub: task.subWorkItemId || '', who: task.assigneeId || '',
+      name: task.name, note: task.note, dueDate: task.dueDate || '', sub: task.subWorkItemId || '', who: task.assigneeId || '',
       estimate: task.estimateMs === null ? null : task.estimateMs / 60_000,
       net: null, reason: ''
     } : this.emptyTaskForm();
@@ -317,7 +317,7 @@ export class EffortTrackingComponent implements OnInit, OnDestroy {
     const form = this.taskForm;
     if (!row || !this.editableTask || !form.name.trim()) return;
     const payload: EffortTaskPayload = {
-      name: form.name.trim(), note: form.note, subWorkItemId: form.sub || null,
+      name: form.name.trim(), note: form.note, dueDate: form.dueDate || null, subWorkItemId: form.sub || null,
       assigneeId: form.who || null, estimateMs: form.estimate === null ? null : minutesToMs(form.estimate)
     };
     if (form.net !== null && !task?.active) {
@@ -553,7 +553,7 @@ export class EffortTrackingComponent implements OnInit, OnDestroy {
 
   private resetFilters(): void { this.filters = { project: all, who: all, status: all, sub: all }; }
   private emptyTaskForm() {
-    return { name: '', note: '', sub: '', who: '', estimate: null as number | null, net: null as number | null, reason: '' };
+    return { name: '', note: '', dueDate: '', sub: '', who: '', estimate: null as number | null, net: null as number | null, reason: '' };
   }
   private emptyProjectForm() { return { name: '', customer: '', client: '', note: '', work: '' }; }
   private message(error: unknown, fallback: string): string {

@@ -1,3 +1,4 @@
+const { subWorkBilling } = require('./workPaymentSummary');
 const { randomUUID } = require('node:crypto');
 const Decimal = require('decimal.js').clone({ precision: 40 });
 const { ratesOn } = require('./mnbExchangeRates');
@@ -145,9 +146,15 @@ function partsFor(row, key) {
 }
 
 async function lockSubWorkRates(previous, next, options) {
+  const before = subWorkBilling(previous);
+  const after = subWorkBilling(next);
   const reporting = await lockWorkRates({ ...previous, reporting: {
-    paidAmount: previous.paidAmount, exchangeRates: previous.exchangeRates
-  } }, { ...next, totalAmount: 0, reporting: { paidAmount: next.paidAmount } }, options);
+    invoicedAmount: before.billed ? before.amount.toNumber() : 0,
+    paidAmount: before.received.toNumber(), exchangeRates: previous.exchangeRates
+  } }, { ...next, totalAmount: 0, reporting: {
+    invoicedAmount: after.billed ? after.amount.toNumber() : 0,
+    paidAmount: after.received.toNumber()
+  } }, options);
   return reporting.exchangeRates;
 }
 

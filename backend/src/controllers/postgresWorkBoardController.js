@@ -1,3 +1,4 @@
+const { calculatedReporting } = require('../services/workPaymentSummary');
 const crypto = require('crypto');
 const { pipeline } = require('stream/promises');
 const store = require('../repositories/postgres/workBoardRepository');
@@ -20,9 +21,10 @@ const userName = (u) => [u?.firstName,u?.lastName].filter(Boolean).join(' ').tri
 function presentSub(s,w){const amount=Number(s.amount||0),total=Number(w.totalAmount||0);return {...s,
   subWorkNumber:`${w.workNumber}/${String(s.sequenceNumber).padStart(2,'0')}`,percentage:total>0?amount/total*100:0};}
 function presentWork(w){const subs=(w.subWorks||[]).filter(s=>(w.archivedAt||!s.archivedAt)&&s.status!=='cancelled');
-  const total=Number(w.totalAmount||0),allocated=subs.reduce((n,s)=>n+Number(s.amount||0),0),paid=subs.reduce((n,s)=>n+Number(s.paidAmount||0),0);
-  return {...w,marginPercent:total>0?(total-Number(w.costAmount||0))/total*100:0,allocatedAmount:allocated,
-    allocatedPercentage:total>0?allocated/total*100:0,remainingAmount:total-allocated,paidAmount:paid,
+  const total=Number(w.totalAmount||0),allocated=subs.reduce((n,s)=>n+Number(s.amount||0),0);
+  const reporting = calculatedReporting(w.reporting, w.subWorks || []);
+  return {...w,reporting,marginPercent:total>0?(total-Number(w.costAmount||0))/total*100:0,allocatedAmount:allocated,
+    allocatedPercentage:total>0?allocated/total*100:0,remainingAmount:total-allocated,paidAmount:reporting.paidAmount,
     subWorkCount:subs.length,subWorks:subs.map(s=>presentSub(s,w))};}
 function presentClient(c){return c?{id:String(c.id||c._id),taxNumber:c.tax_number??c.taxNumber??'',name:c.name,country:c.country??'',
   postalCode:c.postal_code||c.postalCode||'',city:c.city||'',address:c.address||'',email:c.email||'',phone:c.phone||''}:null;}

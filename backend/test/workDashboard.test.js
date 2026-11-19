@@ -110,3 +110,10 @@ test('the aligned sequence year advances on the local turnover and handles leap 
   assert.ok(workTurnoverError({ workTurnoverDay: '04-31' }));
   assert.ok(workTurnoverError({ alignWorkSequence: 'false' }));
 });
+
+test('a linked Effort Tracker task satisfies the next action check and uses its own deadline', () => {
+  const rows = [{ ...work, status: 'in_progress', nextAction: { dueDate: '2026-11-08' } }];
+  const result = buildDashboard(rows, config, 'EUR', fx, '2026-11-09');
+  assert.equal(result.checks.find(({ label }) => label === 'No next action').count, 0);
+  assert.equal(result.checks.find(({ label }) => label === 'Action overdue').count, 1);
+});

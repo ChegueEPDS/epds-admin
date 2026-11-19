@@ -38,11 +38,11 @@ export type FinanceWorkStatus = 'completed_billable' | 'invoiced' | 'paid';
 export type FinanceWork = Pick<WorkItem, 'id' | 'workNumber' | 'name' | 'customer' | 'currency' |
   'totalAmount' | 'completionDate' | 'paymentDeadlineDays' | 'invoiceNumber' | 'invoiceDate' | 'invoicePaymentDeadline' | 'paidAt'> & {
   status: FinanceWorkStatus;
-  reporting: Pick<WorkReporting, 'invoicedAmount' | 'paidAmount' | 'paymentStatus' | 'invoices' | 'payments' | 'exchangeRates'>;
+  reporting: Pick<WorkReporting, 'invoicedAmount' | 'paidAmount' | 'paymentStatus'>;
   fieldRevision: number;
 };
 export type FinanceWorkChanges = Pick<FinanceWork, 'fieldRevision'> &
-  Partial<Pick<FinanceWork, 'status' | 'completionDate' | 'invoiceNumber' | 'invoiceDate' | 'invoicePaymentDeadline' | 'paidAt' | 'reporting'>>;
+  Partial<Pick<FinanceWork, 'status' | 'completionDate' | 'invoiceNumber' | 'invoiceDate' | 'invoicePaymentDeadline' | 'paidAt'>>;
 type WorkListOptions = { page?: number; limit?: number; search?: string; status?: string; sort?: string; direction?: 'asc' | 'desc' };
 
 export type WorkOption = {

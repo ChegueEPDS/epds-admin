@@ -35,11 +35,86 @@ mat-card-content {
 .login-form {
   display: grid;
   gap: 10px;
+  padding-top: 16px;
 }
 
-mat-card-content button {
+.login-form button,
+.password-toggle {
   width: 100%;
   min-height: 48px;
+}
+
+.password-toggle {
+  height: auto;
+  padding-block: 8px;
+}
+
+.password-toggle mat-icon {
+  transition: transform 220ms ease;
+}
+
+.password-toggle[aria-expanded='true'] mat-icon {
+  transform: rotate(180deg);
+}
+
+.password-panel {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 220ms ease;
+}
+
+.password-panel.expanded {
+  grid-template-rows: 1fr;
+}
+
+.password-panel-content {
+  min-height: 0;
+  overflow: hidden;
+}
+
+.microsoft-sign-in {
+  align-self: center;
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 41px;
+  max-width: 100%;
+  padding: 0 12px;
+  border: 1px solid #8c8c8c;
+  background: #fff;
+  color: #5e5e5e;
+  font: 600 15px 'Segoe UI', Arial, sans-serif;
+  cursor: pointer;
+}
+
+.microsoft-sign-in:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.microsoft-mark {
+  flex: 0 0 19px;
+  height: 19px;
+  background:
+    linear-gradient(#f25022, #f25022) top left,
+    linear-gradient(#7fba00, #7fba00) top right,
+    linear-gradient(#00a4ef, #00a4ef) bottom left,
+    linear-gradient(#ffb900, #ffb900) bottom right;
+  background-size: 9px 9px;
+  background-repeat: no-repeat;
+}
+
+:host-context(.dark-theme) .microsoft-sign-in {
+  border-color: #2f2f2f;
+  background: #2f2f2f;
+  color: #fff;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .password-panel,
+  .password-toggle mat-icon {
+    transition: none;
+  }
 }
 
 mat-card-content mat-icon {

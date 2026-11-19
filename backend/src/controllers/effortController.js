@@ -1,3 +1,4 @@
+const { markMongoDashboardDirty } = require('../services/workDashboardSnapshots');
 const { isObjectIdOrHexString } = require('mongoose');
 const EffortProject = require('../models/effortProject');
 const EffortTask = require('../models/effortTask');
@@ -122,7 +123,10 @@ async function withErrors(res, fn) {
 exports.listProjects = (req, res) => withErrors(res, async () => {
   const board = req.query.board === '1';
   const limit = requestLimit(req.query.limit);
-  const query = EffortProject.find(projectScope(req.scope, req.userId, board)).sort({ status: 1, updatedAt: -1 });
+  const workItemId = req.query.workItemId;
+  if (workItemId !== undefined && !isObjectIdOrHexString(workItemId)) throw httpError('Invalid work');
+  const query = EffortProject.find({ ...projectScope(req.scope, req.userId, board),
+    ...(workItemId ? { workItemId } : {}) }).sort({ status: 1, updatedAt: -1 });
   const projects = await (board ? query : query.limit(limit));
   const projectIds = projects.map((project) => project._id);
   const tasks = await EffortTask.find({ ...scopeQuery(req.scope), projectId: { $in: projectIds } }).sort({ updatedAt: -1 });
@@ -301,6 +305,7 @@ exports.createTask = (req, res) => withErrors(res, async () => {
   await taskFields(req, task);
   await task.save();
 
+  if (project.shared) await markMongoDashboardDirty(req.scope);
   res.status(201).json(presentTask(task, new Date(), req.userId));
 });
 
@@ -323,14 +328,16 @@ const updateTask = (req, res) => withErrors(res, async () => {
   setNetOverride(task, req.body || {}, now, req.userId, req.user);
   task.updatedBy = req.userId;
   await task.save();
+  if (project.shared) await markMongoDashboardDirty(req.scope);
   res.json(presentTask(task, now, req.userId));
 });
 
 exports.deleteTask = (req, res) => withErrors(res, async () => {
-  const { task } = await getScopedTask(req.params.taskId, req.scope, req.userId);
+  const { task, project } = await getScopedTask(req.params.taskId, req.scope, req.userId);
   if (task.activeTimer?.startedAt) throw httpError('Stop the timer before deleting this task', 409);
   const deleted = await EffortTask.deleteOne({ _id: task._id, __v: task.__v });
   if (!deleted.deletedCount) throw httpError('This task changed elsewhere. Refresh and try again.', 409);
+  if (project.shared) await markMongoDashboardDirty(req.scope);
   res.status(204).end();
 });
 

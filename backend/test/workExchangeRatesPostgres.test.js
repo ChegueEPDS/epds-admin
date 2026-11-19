@@ -44,10 +44,11 @@ test('PostgreSQL work saves and sub-work receipts persist fixed quotes and inval
   const req = { scope: { tenantId: tenant.id, tenantType: 'company' }, body: payload };
   const created = await fields.saveValues(req, payload.status, {}, (customFields, selections) =>
     works.createWork(tenant.id, null, { ...payload, ...selections, customFields }));
-  assert.equal(created.reporting.invoicedAmount, 400);
+  assert.equal(created.reporting.invoicedAmount, undefined);
   assert.equal(created.reporting.exchangeRates.contract.rateDate, '2026-01-02');
-  const sub = await works.createSubWork(tenant.id, created.id, null, { name: 'Receipt', status: 'paid', currency: 'USD', paidAmount: 100, paidAt: '2026-03-02' });
+  const sub = await works.createSubWork(tenant.id, created.id, null, { name: 'Receipt', status: 'invoiced', currency: 'USD', amount: 400, invoiceDate: '2026-02-02', paidAmount: 100, paidAt: '2026-03-02' });
   assert.equal(sub.exchangeRates.payments.rateDate, '2026-03-02');
+  assert.equal(sub.exchangeRates.invoices.rateDate, '2026-02-02');
   const config = await fields.settings(tenant.id);
   const date = new Intl.DateTimeFormat('sv-SE', { timeZone: 'Europe/Budapest' }).format(new Date());
   const fx = { snapshot: withAedRate({ date, rates: { EUR: { quote: '400', unit: 1 }, USD: { quote: '480', unit: 1 } } }) };

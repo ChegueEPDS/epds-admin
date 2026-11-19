@@ -267,23 +267,16 @@
               @for (user of tenantUsers; track user.id) { <mat-option [value]="user.id">{{ user.fullName }}</mat-option> }
               </mat-select></mat-form-field>
             }
-            @case ('nextAction') {
-              <mat-form-field appearance="outline"><mat-label>Next action</mat-label><input matInput name="nextAction" [(ngModel)]="reportForm.nextAction" maxlength="500"></mat-form-field>
-            }
-            @case ('actionDue') {
-              <mat-form-field appearance="outline"><mat-label>Action due date</mat-label><input matInput type="date" name="actionDue" [(ngModel)]="reportForm.actionDue"></mat-form-field>
-            }
+            @case ('nextAction') {}
+            @case ('actionDue') {}
             @case ('paymentStatus') {
-              <mat-form-field appearance="outline"><mat-label>Payment status</mat-label><mat-select name="reportPaymentStatus" [(ngModel)]="reportForm.paymentStatus">
-              <mat-option value="">Unspecified</mat-option>
-              @for (status of reportPaymentStatuses; track status.id) { <mat-option [value]="status.id">{{ status.label }}</mat-option> }
-              </mat-select></mat-form-field>
+              <mat-form-field appearance="outline"><mat-label>Payment status</mat-label><input matInput [value]="reportPaymentLabel(reportForm.paymentStatus)" readonly></mat-form-field>
             }
             @case ('invoiced') {
-              <mat-form-field appearance="outline"><mat-label>Invoiced amount</mat-label><input matInput type="number" min="0" step=".01" name="reportedInvoiced" [(ngModel)]="reportForm.invoicedAmount" [readonly]="reportForm.invoices !== undefined"></mat-form-field>
+              <mat-form-field appearance="outline"><mat-label>Invoiced amount</mat-label><input matInput [value]="formatMoney(reportForm.invoicedAmount ?? 0, workForm.currency)" readonly></mat-form-field>
             }
             @case ('paid') {
-              <mat-form-field appearance="outline"><mat-label>Paid amount</mat-label><input matInput type="number" min="0" step=".01" name="reportedPaid" [(ngModel)]="reportForm.paidAmount" [readonly]="reportForm.payments !== undefined"></mat-form-field>
+              <mat-form-field appearance="outline"><mat-label>Paid amount</mat-label><input matInput [value]="formatMoney(reportForm.paidAmount ?? 0, workForm.currency)" readonly></mat-form-field>
             }
             @default { <ng-container *ngTemplateOutlet="customEditor; context: { $implicit: item.id }"/> }
           }
@@ -292,7 +285,7 @@
     </section>
     @if (reportingEnabled) {
       <app-work-financial-entries [reporting]="reportForm" [currency]="workForm.currency"
-        [contractEnabled]="isFieldVisible('contractDate')" [invoicesEnabled]="isFieldVisible('invoiced')" [paymentsEnabled]="isFieldVisible('paid')"
+        [contractEnabled]="isFieldVisible('contractDate')" [invoicesEnabled]="false" [paymentsEnabled]="false"
         [invoiceDate]="billingDay(workForm.invoiceDate)" [paidAt]="billingDay(workForm.paidAt)" [invoiceNumber]="workForm.invoiceNumber"/>
     }
     <div class="sticky-actions"><button mat-button type="button" (click)="cancelWorkEditor()">Cancel</button><button mat-flat-button color="primary" type="submit" [disabled]="saving">Save work</button></div>
@@ -339,27 +332,18 @@
           }
           <mat-form-field appearance="outline">
             <mat-label>Számlázott összeg</mat-label>
-            <input matInput type="number" min="0" step="0.01" name="financeInvoicedAmount" [(ngModel)]="form.reporting.invoicedAmount" [readonly]="form.reporting.invoices !== undefined">
-            <span matTextSuffix>{{ financeWork.currency }}</span>
+            <input matInput [value]="formatMoney(form.reporting.invoicedAmount ?? 0, financeWork.currency)" readonly>
           </mat-form-field>
           <mat-form-field appearance="outline">
             <mat-label>Fizetett összeg</mat-label>
-            <input matInput type="number" min="0" step="0.01" name="financePaidAmount" [(ngModel)]="form.reporting.paidAmount" [readonly]="form.reporting.payments !== undefined">
-            <span matTextSuffix>{{ financeWork.currency }}</span>
+            <input matInput [value]="formatMoney(form.reporting.paidAmount ?? 0, financeWork.currency)" readonly>
           </mat-form-field>
           <mat-form-field appearance="outline">
             <mat-label>Fizetési állapot</mat-label>
-            <mat-select name="financePaymentStatus" [(ngModel)]="form.reporting.paymentStatus">
-              <mat-option value="">Nincs megadva</mat-option>
-              @for (status of financePaymentStatuses; track status.id) {
-                <mat-option [value]="status.id">{{ status.label }}</mat-option>
-              }
-            </mat-select>
+            <input matInput [value]="reportPaymentLabel(form.reporting.paymentStatus)" readonly>
           </mat-form-field>
         </div>
       </section>
-      <app-work-financial-entries [reporting]="form.reporting" [currency]="financeWork.currency" [contractEnabled]="false"
-        [invoiceDate]="form.invoiceDate" [paidAt]="form.paidAt" [invoiceNumber]="form.invoiceNumber"/>
       <div class="sticky-actions">
         <button mat-button type="button" (click)="backToTable()" [disabled]="saving">Mégse</button>
         <button mat-flat-button color="primary" type="submit" [disabled]="saving || billingForm.invalid">Mentés</button>
@@ -555,7 +539,7 @@
                               <ng-template #noShare>—</ng-template>
                             </td>
                             <td>{{ showFrom('invoice', sub.status) && sub.invoiceNumber ? sub.invoiceNumber : '—' }}</td>
-                            <td class="numeric">{{ showFrom('payment', sub.status) && sub.paidAmount ? formatMoney(sub.paidAmount, operational.currency) : '—' }}
+                            <td class="numeric">{{ showFrom('invoice', sub.status) && sub.paidAmount ? formatMoney(sub.paidAmount, operational.currency) : '—' }}
                               @if (sub.exchangeRates?.payments; as rate) { <small>MNB {{ rate.rateDate | date:'yyyy.MM.dd.' }}{{ rate.estimated ? ' · Baseline' : '' }}<app-work-rate-info [rate]="rate"/></small> }
                             </td>
                           </tr>
@@ -621,9 +605,12 @@
           <app-work-financial-entries [reporting]="reporting" [currency]="work.currency" [editable]="false"
             [contractEnabled]="isFieldVisible('contractDate')" [invoicesEnabled]="isFieldVisible('invoiced')" [paymentsEnabled]="isFieldVisible('paid')"/>
         }
-        <section class="detail-group" *ngIf="reportingEnabled && hasCardDetails('reporting', work)">
+        <section class="detail-group" *ngIf="reportingEnabled && (hasCardDetails('reporting', work) || showNextActions)">
           <div class="record-section-title"><mat-icon class="material-symbols-outlined">dashboard</mat-icon><h3>Dashboard reporting</h3></div>
           <ng-container *ngTemplateOutlet="cardDetails; context: { $implicit: 'reporting', work: work }"/>
+          @if (showNextActions) {
+            <app-work-next-actions [work]="work" [editable]="auth.canEditFeature('workBoard') && auth.canEditFeature('effortTracking')"/>
+          }
         </section>
         <section class="detail-group" *ngIf="showFrom('offer', work.status)">
           <div class="record-section-title"><mat-icon class="material-symbols-outlined">event</mat-icon><h3>Offer and schedule</h3></div>
@@ -683,7 +670,7 @@
               <mat-form-field appearance="outline"><mat-label>Payment deadline</mat-label><input matInput name="subInvoiceDeadline" [(ngModel)]="subWorkForm.invoicePaymentDeadline" [matDatepicker]="subInvoiceDeadlinePicker"><mat-datepicker-toggle matIconSuffix [for]="subInvoiceDeadlinePicker"></mat-datepicker-toggle><mat-datepicker #subInvoiceDeadlinePicker></mat-datepicker></mat-form-field>
             </div>
           </section>
-          <section class="form-group" *ngIf="showFrom('payment', subWorkForm.status)">
+          <section class="form-group" *ngIf="showFrom('invoice', subWorkForm.status)">
             <div class="group-heading"><span>05</span><div><h3>Payment</h3></div></div>
             <div class="form-grid">
               <mat-form-field appearance="outline"><mat-label>Paid amount</mat-label><input matInput type="number" min="0" name="subPaid" [(ngModel)]="subWorkForm.paidAmount"><span matTextSuffix>{{ work.currency }}</span></mat-form-field>

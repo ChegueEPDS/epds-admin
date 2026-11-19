@@ -15,6 +15,7 @@ const EffortTaskSchema = new mongoose.Schema(
     projectId: { type: mongoose.Schema.Types.ObjectId, ref: 'EffortProject', required: true, index: true },
     tenantId: { type: mongoose.Schema.Types.ObjectId, ref: 'Tenant', index: true },
     name: { type: String, required: true, trim: true },
+    dueDate: { type: String, default: null },
     note: { type: String, trim: true, default: '' },
     subWorkItemId: { type: mongoose.Schema.Types.ObjectId, ref: 'SubWorkItem', index: true },
     subWorkItemSnapshot: {

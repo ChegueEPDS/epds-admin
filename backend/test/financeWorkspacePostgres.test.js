@@ -116,14 +116,14 @@ test('Finance access scopes tenants, records and writes to the billing workflow'
     assert.equal((await request(item, { body: { fieldRevision: 0, ...changes } })).status, 400);
   }
   const invoice = await request(item, { body: { fieldRevision: 0, status: 'invoiced', invoiceNumber: 'QA-1',
-    invoiceDate: '2026-11-10', reporting: { invoicedAmount: 12.50 } } });
+    invoiceDate: '2026-11-10' } });
   assert.equal(invoice.status, 200);
   assert.equal((await invoice.json()).work.fieldRevision, 1);
   assert.equal((await request(item, { body: { fieldRevision: 0, invoiceNumber: 'STALE' } })).status, 409);
 
   const concurrent = await Promise.all([
-    request(item, { body: { fieldRevision: 1, status: 'paid', reporting: { paidAmount: 12.50 } } }),
-    request(item, { body: { fieldRevision: 1, status: 'paid', reporting: { paidAmount: 10 } } })
+    request(item, { body: { fieldRevision: 1, status: 'paid' } }),
+    request(item, { body: { fieldRevision: 1, status: 'paid' } })
   ]);
   assert.deepEqual(concurrent.map(({ status }) => status).sort(), [200, 409]);
   const persisted = await works.findWork(allowed.id, billing.id);
@@ -133,17 +133,13 @@ test('Finance access scopes tenants, records and writes to the billing workflow'
 
   const itemized = await works.createWork(allowed.id, null, { name: 'Dated entries', status: 'completed_billable', currency: 'USD', totalAmount: 100 });
   const itemizedRoute = list + '/' + itemized.id;
-  const invoiceEntry = { id: '00000000-0000-4000-8000-000000000001', date: '2026-11-10', amount: 50, reference: 'FX-1', rate: { forged: true } };
-  const saveEntry = await request(itemizedRoute, { body: { fieldRevision: itemized.fieldRevision, reporting: { invoices: [invoiceEntry] } } });
-  assert.equal(saveEntry.status, 200);
-  const withEntry = (await saveEntry.json()).work;
-  assert.equal(withEntry.reporting.invoicedAmount, 50);
-  assert.equal(withEntry.reporting.invoices[0].rate.rateDate, '2026-11-10');
-  assert.equal(withEntry.reporting.invoices[0].rate.forged, undefined);
-  assert.equal((await request(itemizedRoute, { body: { fieldRevision: withEntry.fieldRevision,
-    reporting: { invoicedAmount: 75 } } })).status, 400);
-  assert.equal((await request(itemizedRoute, { body: { fieldRevision: withEntry.fieldRevision,
-    reporting: { exchangeRates: { forged: true } } } })).status, 400);
+  await works.createSubWork(allowed.id, itemized.id, null, { name: 'Invoiced installment', status: 'invoiced',
+    currency: 'USD', amount: 50, invoiceDate: '2026-11-10', paidAmount: 20, paidAt: '2026-11-10' });
+  const withEntry = (await (await request(itemizedRoute)).json()).work;
+  assert.deepEqual(withEntry.reporting, { invoicedAmount: 50, paidAmount: 20, paymentStatus: 'partially_paid' });
+  for (const reporting of [{ invoicedAmount: 75 }, { paymentStatus: 'paid' }, { invoices: [] }]) {
+    assert.equal((await request(itemizedRoute, { body: { fieldRevision: withEntry.fieldRevision, reporting } })).status, 400);
+  }
 
   const lifecycle = await works.createWork(allowed.id, null, { name: 'Date defaults', status: 'in_progress', paymentDeadlineDays: 12 });
   const workflowItem = list + '/' + lifecycle.id;

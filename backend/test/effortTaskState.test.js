@@ -1,7 +1,7 @@
 const assert = require('node:assert/strict');
 const test = require('node:test');
 const {
-  checkStart, presentTask, setNetOverride, setStatus, startTimer, stopByUser
+  applyTaskFields, checkStart, presentTask, setNetOverride, setStatus, startTimer, stopByUser
 } = require('../src/services/effortTaskState');
 
 const userId = 'user';
@@ -54,4 +54,14 @@ test('corrections preserve measured time, record authors and add future work to 
   const result = presentTask(record, at(52), userId);
   assert.equal(result.measuredNetMs, 47000);
   assert.equal(result.netMs, 35000);
+});
+
+test('a task stores and returns a calendar due date, with validation and explicit clearing', async () => {
+  const record = task();
+  await applyTaskFields(record, { dueDate: '2026-11-20' });
+  await applyTaskFields(record, { estimateMs: 60000 });
+  assert.equal(presentTask(record, at(0), userId).dueDate, '2026-11-20');
+  await assert.rejects(applyTaskFields(record, { dueDate: '2026-02-30' }), { statusCode: 400 });
+  await applyTaskFields(record, { dueDate: null });
+  assert.equal(presentTask(record, at(0), userId).dueDate, null);
 });

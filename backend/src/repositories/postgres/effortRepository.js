@@ -16,7 +16,7 @@ function project(row) {
 
 function task(row, sessions = []) {
   return {
-    _id: row.id, projectId: row.project_id, tenantId: row.tenant_id, name: row.name, note: row.note,
+    _id: row.id, projectId: row.project_id, tenantId: row.tenant_id, name: row.name, note: row.note, dueDate: row.due_date_text ?? row.due_date ?? null,
     subWorkItemId: row.sub_work_item_id, subWorkItemSnapshot: row.sub_work_item_snapshot, status: row.status,
     assigneeId: row.assignee_id, assigneeName: row.assignee_name,
     estimateMs: row.estimate_ms === null ? null : Number(row.estimate_ms),
@@ -43,9 +43,9 @@ async function sessionsFor(client, ids) {
   return grouped;
 }
 
-async function listProjects(client, scope, limit) {
+async function listProjects(client, scope, limit, workItemId = null) {
   const { rows } = await client.query(`SELECT * FROM effort_projects WHERE ${projectAccess}
-    ORDER BY status,updated_at DESC LIMIT $4`, [...scope, limit]);
+    AND ($5::varchar IS NULL OR work_item_id=$5) ORDER BY status,updated_at DESC LIMIT $4`, [...scope, limit, workItemId]);
   return rows.map(project);
 }
 
@@ -57,7 +57,7 @@ async function findProject(client, scope, id, lock = false) {
 
 async function listTasks(client, tenantId, projectIds) {
   if (!projectIds.length) return [];
-  const { rows } = await client.query(`SELECT * FROM effort_tasks WHERE tenant_id=$1
+  const { rows } = await client.query(`SELECT *, due_date::text AS due_date_text FROM effort_tasks WHERE tenant_id=$1
     AND project_id=ANY($2::varchar[]) ORDER BY created_at,id`, [tenantId, projectIds]);
   const sessions = await sessionsFor(client, rows.map((row) => row.id));
   return rows.map((row) => task(row, sessions.get(row.id)));
@@ -69,7 +69,7 @@ async function findTaskProject(client, tenantId, taskId) {
 }
 
 async function findTask(client, projectId, taskId) {
-  const { rows } = await client.query('SELECT * FROM effort_tasks WHERE project_id=$1 AND id=$2', [projectId, taskId]);
+  const { rows } = await client.query('SELECT *, due_date::text AS due_date_text FROM effort_tasks WHERE project_id=$1 AND id=$2', [projectId, taskId]);
   if (!rows.length) return null;
   const sessions = await sessionsFor(client, [taskId]);
   return task(rows[0], sessions.get(taskId));
@@ -111,7 +111,7 @@ async function findLinkedProject(client, tenantId, userId, workId, shared = fals
 
 async function saveTask(client, input) {
   const row = await write(client, 'effort_tasks', input._id, {
-    project_id: input.projectId, tenant_id: input.tenantId, name: input.name, note: input.note || '',
+    project_id: input.projectId, tenant_id: input.tenantId, name: input.name, note: input.note || '', due_date: input.dueDate || null,
     sub_work_item_id: input.subWorkItemId || null, sub_work_item_snapshot: JSON.stringify(input.subWorkItemSnapshot || {}),
     status: input.status || 'new', assignee_id: input.assigneeId || null, assignee_name: input.assigneeName || '',
     estimate_ms: input.estimateMs ?? null, net_adjustment_ms: input.netAdjustmentMs || 0,
@@ -128,7 +128,7 @@ async function saveTask(client, input) {
     await client.query(`INSERT INTO effort_sessions(task_id,user_id,position,started_at,stopped_at,duration_ms)
       VALUES($1,$2,$3,$4,$5,$6)`, [row.id, session.userId, position, session.startedAt, session.stoppedAt, session.durationMs]);
   }
-  return task(row, sessions);
+  return task({ ...row, due_date_text: input.dueDate }, sessions);
 }
 
 async function work(client, tenantId, workId) {

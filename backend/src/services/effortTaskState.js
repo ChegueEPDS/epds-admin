@@ -40,6 +40,14 @@ function durationField(value, label) {
 }
 
 async function applyTaskFields(task, body, findAssignee) {
+  if (Object.hasOwn(body, 'dueDate')) {
+    const date = body.dueDate;
+    if (date !== null && (typeof date !== 'string' || !/^[1-9]\d{3}-\d{2}-\d{2}$/.test(date) ||
+        !Number.isFinite(Date.parse(date)) || new Date(date).toISOString().slice(0, 10) !== date)) {
+      throw httpError('Enter a valid task due date');
+    }
+    task.dueDate = date;
+  }
   if (Object.hasOwn(body, 'estimateMs')) {
     task.estimateMs = body.estimateMs === null ? null : durationField(body.estimateMs, 'Estimate');
   }
@@ -127,6 +135,7 @@ function presentTask(task, now, userId) {
     id: String(task._id),
     projectId: String(task.projectId),
     name: task.name,
+    dueDate: task.dueDate || null,
     note: task.note || '',
     subWorkItemId: task.subWorkItemId ? String(task.subWorkItemId) : null,
     subWorkItem: task.subWorkItemSnapshot?.name ? {

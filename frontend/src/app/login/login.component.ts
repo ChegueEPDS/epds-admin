@@ -29,6 +29,7 @@ import { AuthService } from '../services/auth.service';
 export class LoginComponent {
   isLoading = signal(false);
   isShaking = signal(false);
+  readonly passwordFormOpen = signal(false);
   email = '';
   password = '';
 
@@ -56,7 +57,7 @@ export class LoginComponent {
   }
 
   loginWithPassword(): void {
-    if (this.isLoading()) return;
+    if (this.isLoading() || !this.passwordFormOpen()) return;
     this.isLoading.set(true);
     this.auth.loginWithPassword(this.email, this.password).subscribe({
       next: () => this.isLoading.set(false),

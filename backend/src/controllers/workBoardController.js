@@ -1,4 +1,5 @@
 const { lockSubWorkRates } = require('../services/workExchangeRates');
+const { calculatedReporting } = require('../services/workPaymentSummary');
 const mongoose = require('mongoose');
 const { WorkItem, WORK_STATUSES } = require('../models/workItem');
 const SubWorkItem = require('../models/subWorkItem');
@@ -201,7 +202,7 @@ function presentWork(work, subWorks = []) {
   const activeSubWorks = subWorks.filter((item) => (work.archivedAt || !item.archivedAt) && item.status !== 'cancelled');
   const allocatedAmount = activeSubWorks.reduce((sum, item) => sum + Number(item.amount || 0), 0);
   const totalAmount = Number(work.totalAmount || 0);
-  const paidAmount = activeSubWorks.reduce((sum, item) => sum + Number(item.paidAmount || 0), 0);
+  const reporting = calculatedReporting(work.reporting, subWorks);
   return {
     id: String(work._id),
     workNumber: work.workNumber,
@@ -219,7 +220,7 @@ function presentWork(work, subWorks = []) {
     deadline: work.deadline || null,
     description: work.description || '',
     customFields: work.customFields || {},
-    reporting: work.reporting || {},
+    reporting,
     fieldRevision: work.__v || 0,
     currency: work.currency || 'HUF',
     totalAmount,
@@ -228,7 +229,7 @@ function presentWork(work, subWorks = []) {
     allocatedAmount,
     allocatedPercentage: totalAmount > 0 ? (allocatedAmount / totalAmount) * 100 : 0,
     remainingAmount: totalAmount - allocatedAmount,
-    paidAmount,
+    paidAmount: reporting.paidAmount,
     subcontractor: work.subcontractor || '',
     paymentDeadlineDays: Number(work.paymentDeadlineDays || 0),
     offerDate: work.offerDate || null,

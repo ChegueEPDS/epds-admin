@@ -12,6 +12,7 @@ export type EffortTask = {
   projectId: string;
   name: string;
   note: string;
+  dueDate: string | null;
   subWorkItemId: string | null;
   subWorkItem: { id: string | null; subWorkNumber: string; name: string } | null;
   status: EffortTaskStatus;
@@ -69,6 +70,7 @@ export type EffortProjectPayload = {
 export type EffortTaskPayload = {
   name: string;
   note?: string;
+  dueDate?: string | null;
   subWorkItemId?: string | null;
   assigneeId?: string | null;
   estimateMs?: number | null;
@@ -83,8 +85,11 @@ export class EffortService {
 
   constructor(private http: HttpClient) {}
 
-  listProjects(board = false): Observable<EffortProject[]> {
-    return this.http.get<EffortProject[]>(`${this.baseUrl}/projects`, { withCredentials: true, params: board ? { board: '1' } : {} });
+  listProjects(board = false, workItemId?: string): Observable<EffortProject[]> {
+    const params: Record<string, string> = {};
+    if (board) params['board'] = '1';
+    if (workItemId) params['workItemId'] = workItemId;
+    return this.http.get<EffortProject[]>(`${this.baseUrl}/projects`, { withCredentials: true, params });
   }
 
   listAssignees(): Observable<TenantUserOption[]> {

@@ -1,3 +1,4 @@
+import { WorkNextActionsComponent } from './work-next-actions.component';
 import { CommonModule, formatDate, formatNumber } from '@angular/common';
 import { Component, DestroyRef, Input, OnDestroy, OnInit, inject } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
@@ -44,7 +45,7 @@ type SubWorkForm = {
 @Component({
   selector: 'app-work-board',
   standalone: true,
-  imports: [CommonModule, FormsModule, MatButtonModule, MatCheckboxModule, MatDatepickerModule, MatNativeDateModule, MatFormFieldModule, MatIconModule, MatInputModule, MatProgressSpinnerModule, MatSelectModule, MatSnackBarModule, MatSortModule, WorkFieldValuesComponent, WorkLayoutListComponent, WorkFinancialEntriesComponent, WorkRateInfoComponent],
+  imports: [CommonModule, FormsModule, MatButtonModule, MatCheckboxModule, MatDatepickerModule, MatNativeDateModule, MatFormFieldModule, MatIconModule, MatInputModule, MatProgressSpinnerModule, MatSelectModule, MatSnackBarModule, MatSortModule, WorkFieldValuesComponent, WorkLayoutListComponent, WorkFinancialEntriesComponent, WorkRateInfoComponent, WorkNextActionsComponent],
   templateUrl: './work-board.component.html',
   styleUrl: './work-board.component.scss'
 })
@@ -53,16 +54,12 @@ export class WorkBoardComponent implements OnInit, OnDestroy {
   financeTenantName = '';
   financeWorks: FinanceWork[] = [];
   financeWork: FinanceWork | null = null;
-  financeForm: Required<FinanceWorkChanges> | null = null;
+  financeForm: (Required<FinanceWorkChanges> & Pick<FinanceWork, 'reporting'>) | null = null;
   financeError = '';
   readonly financeStatuses: { value: FinanceWorkStatus; label: string }[] = [
     { value: 'completed_billable', label: 'Teljesítve – számlázható' },
     { value: 'invoiced', label: 'Számlázva' },
     { value: 'paid', label: 'Fizetve' }
-  ];
-  readonly financePaymentStatuses = [
-    { id: 'not_invoiced', label: 'Számlázásra vár' }, { id: 'invoiced', label: 'Számlázva' },
-    { id: 'partially_paid', label: 'Részben fizetve' }, { id: 'paid', label: 'Fizetve' }
   ];
   private destroyed = false;
   private readonly dialog = inject(MatDialog);
@@ -280,11 +277,6 @@ export class WorkBoardComponent implements OnInit, OnDestroy {
       const date = form[field] || null;
       if (date !== this.billingDay(work[field])) changes[field] = date;
     }
-    const { exchangeRates, ...reporting } = form.reporting;
-    for (const field of ['invoicedAmount', 'paidAmount', 'paymentStatus'] as const) {
-      if (reporting[field] === work.reporting[field]) delete reporting[field];
-    }
-    if (Object.keys(reporting).length) changes.reporting = reporting;
     if (Object.keys(changes).length === 1) {
       this.backToTable();
       return;
@@ -473,9 +465,11 @@ export class WorkBoardComponent implements OnInit, OnDestroy {
     try {
       const ids = new Set(active.map((field) => field.id));
       const files = Object.fromEntries(Object.entries(this.fieldFiles).filter(([id]) => ids.has(id)));
-      const reporting = { ...this.reportForm };
-      if (!this.projectSizeGrouping) delete reporting.projectSize;
-      if (reporting.nextAction !== undefined) reporting.nextAction = reporting.nextAction.trim();
+      const reporting: WorkReporting = {
+        backupId: this.reportForm.backupId,
+        contractDate: this.reportForm.contractDate,
+        ...(this.projectSizeGrouping ? { projectSize: this.reportForm.projectSize } : {})
+      };
       const { completionDate, invoiceDate, invoicePaymentDeadline, paidAt, ...workData } = this.workForm;
       const formDates = { completionDate, invoiceDate, invoicePaymentDeadline, paidAt };
       const previous = this.editingWork ? this.selectedWork : null;
@@ -667,6 +661,10 @@ export class WorkBoardComponent implements OnInit, OnDestroy {
     return this.catalogs[catalog].find((entry) => entry.id === id)?.label || '—';
   }
   isFieldVisible(id: string): boolean { return !this.hiddenFields.has(id); }
+  get showNextActions(): boolean {
+    return this.auth.canAccessFeature('effortTracking') && (this.isFieldVisible('nextAction') || this.isFieldVisible('actionDue'));
+  }
+
   orderedFields(card: WorkFieldCard, includeServiceType = false): LayoutItem[] {
     return orderLayout(cardLayout(card, this.customFields, this.hiddenFields)
       .filter((item) => item.visible || (includeServiceType && item.id === 'serviceTypeId')), this.fieldOrder?.[card]);
