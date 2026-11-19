@@ -68,7 +68,7 @@ export const routes: Routes = [
   },
   { path: 'settings/work-fields', loadComponent: () => import('./work-board/work-field-settings.component').then((m) => m.WorkFieldSettingsComponent),
     canActivate: [AuthGuard], data: { requiresWorkFieldAdmin: true } },
-  { path: 'admin/users', component: AdminUsersComponent, canActivate: [AuthGuard], data: { requiresSuperAdmin: true } },
+  { path: 'admin/users', component: AdminUsersComponent, canActivate: [AuthGuard], data: { requiresUserManager: true } },
   { path: 'admin/tenants', component: AdminTenantsComponent, canActivate: [AuthGuard], data: { requiresSuperAdmin: true } },
   { path: 'admin/integrations', component: AdminIntegrationsComponent, canActivate: [AuthGuard], data: { requiresSuperAdmin: true } },
   { path: '', pathMatch: 'full', redirectTo: 'home' },

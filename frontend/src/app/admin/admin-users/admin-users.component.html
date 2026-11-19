@@ -35,6 +35,13 @@
       <td mat-cell *matCellDef="let user">{{ user.tenantDisplayName || user.tenantName || '-' }}</td>
     </ng-container>
 
+    <ng-container matColumnDef="activation">
+      <th mat-header-cell *matHeaderCellDef>Account status</th>
+      <td mat-cell *matCellDef="let user">
+        {{ invitationStatus(user) }} · {{ user.loginMethod === 'microsoft' ? 'Microsoft' : 'Password' }}
+      </td>
+    </ng-container>
+
     <ng-container matColumnDef="lastLogin">
       <th mat-header-cell *matHeaderCellDef>Last login</th>
       <td mat-cell *matCellDef="let user">{{ user.lastLoginAt ? (user.lastLoginAt | date:'yyyy-MM-dd HH:mm') : '-' }}</td>
@@ -43,7 +50,12 @@
     <ng-container matColumnDef="actions">
       <th mat-header-cell *matHeaderCellDef></th>
       <td mat-cell *matCellDef="let user" class="actions-cell">
-        <button mat-icon-button type="button" matTooltip="Edit user" (click)="openEditUser(user)" [disabled]="user.role === 'SuperAdmin'">
+        <button *ngIf="user.pendingActivation && canManage(user)" mat-icon-button type="button"
+          matTooltip="Resend invitation" aria-label="Resend invitation"
+          [disabled]="!!sendingInvitation()" (click)="resendInvitation(user)">
+          <mat-icon class="material-symbols-outlined">send</mat-icon>
+        </button>
+        <button mat-icon-button type="button" matTooltip="Edit user" (click)="openEditUser(user)" [disabled]="!canManage(user)">
           <mat-icon class="material-symbols-outlined">edit</mat-icon>
         </button>
       </td>

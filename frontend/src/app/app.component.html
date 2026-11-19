@@ -141,18 +141,18 @@
             Project Tracker settings
           </a>
         </ng-container>
-        <ng-container *ngIf="mobileUser.role === 'SuperAdmin'">
+        <ng-container *ngIf="auth.canManageUsers()">
           <div class="mobile-menu-divider"></div>
           <div class="mobile-menu-label" (click)="$event.stopPropagation()">Administration</div>
           <a mat-menu-item routerLink="/admin/users" routerLinkActive="active-menu-item">
             <mat-icon class="material-symbols-outlined">group</mat-icon>
             Users
           </a>
-          <a mat-menu-item routerLink="/admin/tenants" routerLinkActive="active-menu-item">
+          <a mat-menu-item routerLink="/admin/tenants" routerLinkActive="active-menu-item" *ngIf="mobileUser.role === 'SuperAdmin'">
             <mat-icon class="material-symbols-outlined">business</mat-icon>
             Tenants
           </a>
-          <a mat-menu-item routerLink="/admin/integrations" routerLinkActive="active-menu-item">
+          <a mat-menu-item routerLink="/admin/integrations" routerLinkActive="active-menu-item" *ngIf="mobileUser.role === 'SuperAdmin'">
             <mat-icon class="material-symbols-outlined">api</mat-icon>
             License integrations
           </a>
@@ -185,7 +185,7 @@
     </button>
 
     <ng-container *ngIf="auth.user$ | async as user">
-      <button mat-icon-button class="desktop-action" *ngIf="user.role === 'SuperAdmin' || auth.canManageWorkFields()" [matMenuTriggerFor]="settingsMenu" aria-label="Settings">
+      <button mat-icon-button class="desktop-action" *ngIf="auth.canManageUsers() || auth.canManageWorkFields()" [matMenuTriggerFor]="settingsMenu" aria-label="Settings">
         <mat-icon class="material-symbols-outlined">settings</mat-icon>
       </button>
       <mat-menu #settingsMenu="matMenu">
@@ -193,11 +193,11 @@
           <mat-icon class="material-symbols-outlined">tune</mat-icon>
           Project Tracker settings
         </a>
+        <a mat-menu-item routerLink="/admin/users" *ngIf="auth.canManageUsers()">
+          <mat-icon class="material-symbols-outlined">group</mat-icon>
+          Users
+        </a>
         <ng-container *ngIf="user.role === 'SuperAdmin'">
-          <a mat-menu-item routerLink="/admin/users">
-            <mat-icon class="material-symbols-outlined">group</mat-icon>
-            Users
-          </a>
           <a mat-menu-item routerLink="/admin/tenants">
             <mat-icon class="material-symbols-outlined">business</mat-icon>
             Tenants

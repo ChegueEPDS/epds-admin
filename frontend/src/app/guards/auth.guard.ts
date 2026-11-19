@@ -24,6 +24,9 @@ export class AuthGuard implements CanActivate {
           if (route.data?.['requiresAdminFeatures'] && !this.auth.canAccessAdminFeatures()) {
             return this.router.createUrlTree(['/home']);
           }
+          if (route.data?.['requiresUserManager'] && !this.auth.canManageUsers()) {
+            return this.router.createUrlTree(['/home']);
+          }
           if (route.data?.['requiresSuperAdmin'] && !this.auth.isSuperAdmin()) {
             return this.router.createUrlTree(['/home']);
           }

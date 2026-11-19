@@ -5,6 +5,9 @@ function present(row, includePassword = false) {
   if (!row) return null;
   const user = {
     _id: row.id, id: row.id, userId: row.id, azureId: row.azure_id,
+    loginMethod: row.login_method, microsoftTenantId: row.microsoft_tenant_id,
+    accountTokenHash: row.account_token_hash, accountTokenExpiresAt: row.account_token_expires_at,
+    accountTokenPurpose: row.account_token_purpose,
     firstName: row.first_name, lastName: row.last_name, email: row.email,
     nickname: row.nickname, tenantId: row.tenant_id, role: row.role,
     professions: row.professions || [], emailVerified: Boolean(row.email_verified),
@@ -42,18 +45,13 @@ async function updateLastLogin(id, at = new Date()) {
   return present(result.rows[0]);
 }
 
-async function findByAzureIdOrEmail(azureId, email, options = {}) {
-  const result = await query('SELECT * FROM users WHERE azure_id=$1 OR email=lower($2) LIMIT 1', [azureId, email]);
-  return present(result.rows[0], options.includePassword);
-}
-
 async function save(input, options = {}) {
   const userId = String(input.id || input._id || new mongoose.Types.ObjectId());
   const result = await query(`
     INSERT INTO users
       (id,azure_id,first_name,last_name,email,nickname,tenant_id,role,professions,password,
-       email_verified,last_login_at,created_at,updated_at)
-    VALUES ($1,$2,$3,$4,lower($5),$6,$7,$8,$9::jsonb,$10,$11,$12,coalesce($13,now()),now())
+       email_verified,last_login_at,created_at,updated_at,login_method)
+    VALUES ($1,$2,$3,$4,lower($5),$6,$7,$8,$9::jsonb,$10,$11,$12,coalesce($13,now()),now(),$14)
     ON CONFLICT (id) DO UPDATE SET
       azure_id=EXCLUDED.azure_id,first_name=EXCLUDED.first_name,last_name=EXCLUDED.last_name,
       email=EXCLUDED.email,nickname=EXCLUDED.nickname,tenant_id=EXCLUDED.tenant_id,role=EXCLUDED.role,
@@ -62,8 +60,8 @@ async function save(input, options = {}) {
     RETURNING *`, [userId, input.azureId || null, input.firstName, input.lastName, input.email,
     input.nickname || null, input.tenantId || null, input.role || 'User', JSON.stringify(input.professions || []),
     input.password === undefined ? null : input.password, input.emailVerified !== false,
-    input.lastLoginAt || null, input.createdAt || null]);
+    input.lastLoginAt || null, input.createdAt || null, input.loginMethod || null]);
   return present(result.rows[0], options.includePassword);
 }
 
-module.exports = { findById, findByEmail, findByAzureId, findByAzureIdOrEmail, listAll, listByTenant, updateLastLogin, save, present };
+module.exports = { findById, findByEmail, findByAzureId, listAll, listByTenant, updateLastLogin, save, present };

@@ -8,6 +8,7 @@ import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { MatTableModule } from '@angular/material/table';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { AdminService, AdminTenant, AdminUser, AssignableRole } from '../../services/admin.service';
+import { AuthService } from '../../services/auth.service';
 import { AddUserDialogComponent } from './add-user-dialog.component';
 
 @Component({
@@ -30,7 +31,8 @@ export class AdminUsersComponent implements OnInit {
   users = signal<AdminUser[]>([]);
   tenants = signal<AdminTenant[]>([]);
   loading = signal(false);
-  displayedColumns = ['name', 'email', 'role', 'tenant', 'lastLogin', 'actions'];
+  displayedColumns = ['name', 'email', 'role', 'tenant', 'activation', 'lastLogin', 'actions'];
+  sendingInvitation = signal<string | null>(null);
   roles: { value: AssignableRole; label: string }[] = [
     { value: 'User', label: 'User' },
     { value: 'Admin', label: 'Admin' },
@@ -39,6 +41,7 @@ export class AdminUsersComponent implements OnInit {
 
   constructor(
     private admin: AdminService,
+    private auth: AuthService,
     private dialog: MatDialog,
     private snackBar: MatSnackBar
   ) {}
@@ -49,7 +52,7 @@ export class AdminUsersComponent implements OnInit {
 
   load(): void {
     this.loading.set(true);
-    this.admin.listTenants().subscribe({
+    this.admin.userTenantOptions().subscribe({
       next: (tenants) => {
         this.tenants.set(tenants);
         this.admin.listUsers().subscribe({
@@ -65,11 +68,11 @@ export class AdminUsersComponent implements OnInit {
   }
 
   openEditUser(user: AdminUser): void {
-    if (user.role === 'SuperAdmin') return;
+    if (!this.canManage(user)) return;
     const ref = this.dialog.open(AddUserDialogComponent, {
       width: '560px',
       maxWidth: 'calc(100vw - 32px)',
-      data: { tenants: this.tenants(), user }
+      data: { tenants: this.tenants(), user, isSuperAdmin: this.auth.isSuperAdmin() }
     });
 
     ref.afterClosed().subscribe((updated: AdminUser | undefined) => {
@@ -83,13 +86,40 @@ export class AdminUsersComponent implements OnInit {
     const ref = this.dialog.open(AddUserDialogComponent, {
       width: '560px',
       maxWidth: 'calc(100vw - 32px)',
-      data: { tenants: this.tenants() }
+      data: { tenants: this.tenants(), isSuperAdmin: this.auth.isSuperAdmin() }
     });
 
     ref.afterClosed().subscribe((created: AdminUser | undefined) => {
       if (!created) return;
       this.users.set([...this.users(), created].sort((a, b) => a.email.localeCompare(b.email)));
-      this.snackBar.open('User created.', 'Close', { duration: 3000 });
+      this.snackBar.open(created.invitationSent ? 'Invitation sent.' :
+        'User created. Email delivery failed. Use Resend invitation.', 'Close', { duration: 5000 });
+    });
+  }
+
+  canManage(user: AdminUser): boolean {
+    return user.role !== 'SuperAdmin' && (this.auth.isSuperAdmin() || user.role === 'User');
+  }
+
+  invitationStatus(user: AdminUser): string {
+    if (!user.pendingActivation) return 'Active';
+    if (!user.invitationExpiresAt) return 'Awaiting invitation';
+    return Date.parse(user.invitationExpiresAt) > Date.now() ? 'Awaiting activation' : 'Invitation expired';
+  }
+
+  resendInvitation(user: AdminUser): void {
+    if (this.sendingInvitation()) return;
+    this.sendingInvitation.set(user.id);
+    this.admin.resendInvitation(user.id).subscribe({
+      next: (updated) => {
+        this.users.update((users) => users.map((item) => item.id === updated.id ? updated : item));
+        this.sendingInvitation.set(null);
+        this.snackBar.open('Invitation sent.', 'Close', { duration: 3500 });
+      },
+      error: (error) => {
+        this.sendingInvitation.set(null);
+        this.snackBar.open(error?.error?.error || 'Invitation could not be sent.', 'Close', { duration: 4500 });
+      }
     });
   }
 

@@ -150,15 +150,16 @@ export class AuthService {
     return this.refreshInFlight$;
   }
 
-  async loginWithMicrosoft(): Promise<void> {
-    const response = await this.msalService.loginPopup(loginRequest).toPromise();
+  async loginWithMicrosoft(invitation?: { account: string; invite: string; email: string }): Promise<void> {
+    const request = invitation ? { ...loginRequest, loginHint: invitation.email, prompt: 'select_account' } : loginRequest;
+    const response = await this.msalService.loginPopup(request).toPromise();
     const microsoftToken = response?.idToken || response?.accessToken;
     if (!microsoftToken) throw new Error('Microsoft token was not returned');
 
     const authResponse = await this.http.post<AuthResponse>(
       `${this.baseUrl}/microsoft-login`,
-      { accessToken: microsoftToken },
-      { withCredentials: true }
+      { accessToken: microsoftToken, account: invitation?.account, invite: invitation?.invite },
+      { withCredentials: true, headers: { 'X-No-Redirect-On-401': '1' } }
     ).toPromise();
 
     this.applyUser(authResponse?.user || null);
@@ -170,7 +171,7 @@ export class AuthService {
     return this.http.post<AuthResponse>(
       `${this.baseUrl}/login`,
       { email, password },
-      { withCredentials: true }
+      { withCredentials: true, headers: { 'X-No-Redirect-On-401': '1' } }
     ).pipe(
       tap((res) => this.applyUser(res?.user || null)),
       map((res) => {
@@ -330,6 +331,10 @@ export class AuthService {
     }
     const feature = this.currentUser?.tenantFeatures?.[featureKey];
     return Boolean(feature?.enabled && feature?.delete);
+  }
+
+  canManageUsers(): boolean {
+    return this.isSuperAdmin() || (this.currentUser?.role === 'Admin' && Boolean(this.currentUser.tenantId) && !this.isFinanceTenant());
   }
 
   isSuperAdmin(): boolean {

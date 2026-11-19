@@ -1,8 +1,7 @@
-const User = require('../models/user');
-const Tenant = require('../models/tenant');
 const bcrypt = require('bcryptjs');
-const { databaseEngine } = require('../postgres');
-const { repository } = require('../repositories/repositoryRegistry');
+const accounts = require('../services/accountStore');
+const { tokenAccount, sendAccountLink, clearToken, normalizeEmail, validEmail, validPassword } = require('../services/accountInvitations');
+const { SUPERADMIN_EMAIL } = require('../services/userSeedService');
 const { verifyMicrosoftAccessToken } = require('../services/microsoftTokenVerifier');
 const {
   buildSessionMetadata,
@@ -10,209 +9,130 @@ const {
   createSession,
   getRefreshTokenFromRequest,
   revokeSession,
+  revokeUserSessions,
   rotateRefreshToken,
   setAuthCookies
 } = require('../services/authSessionService');
-
-const usingPostgres = () => databaseEngine() === 'postgresql';
-const authStore = () => repository('auth');
 
 function sendAuthResult(req, res, result) {
   setAuthCookies(res, req, result);
   return res.status(200).json({ user: result.user, session: result.sessionMeta });
 }
 
-function slugifyTenantName(name) {
-  return String(name || '')
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9\-_.]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-    .substring(0, 64) || 'epds-admin';
+async function hasTenant(user) {
+  return user?.role === 'SuperAdmin' || Boolean(await accounts.findTenant(user?.tenantId));
 }
 
-function allowedEmailDomains() {
-  return String(process.env.EPDS_ADMIN_ALLOWED_EMAIL_DOMAINS || '')
-    .split(',')
-    .map((domain) => domain.trim().toLowerCase().replace(/^@/, ''))
-    .filter(Boolean);
-}
+const invalidInvitation = (res) => res.status(403).json({ error: 'This invitation is invalid, expired or belongs to another account.' });
 
-function assertAllowedCompanyEmail(email) {
-  const domains = allowedEmailDomains();
-  if (!domains.length) return;
-  const domain = String(email || '').split('@').pop()?.toLowerCase() || '';
-  if (!domains.includes(domain)) {
-    const err = new Error('This Microsoft account is outside the allowed company group.');
-    err.statusCode = 403;
-    throw err;
-  }
-}
-
-function tenantNameFromEmail(email) {
-  const normalizedEmail = String(email || '').trim().toLowerCase();
-  if (normalizedEmail === 'development@epds.hu') return 'developer';
-  const domain = String(email || '').split('@').pop()?.toLowerCase() || '';
-  const mappedTenant = {
-    'exnb.eu': 'exnb-exva',
-    'exva.hu': 'exnb-exva',
-    'rstahl.hu': 'stahl',
-    'veproil.hu': 'veproil',
-    'epds.hu': 'epds',
-    'ind-ex.ae': 'ind-ex',
-    'ind-ex.eu': 'ind-ex',
-    'robex.hu': 'robex',
-    'robex.ro': 'robex'
-  }[domain];
-  if (mappedTenant) return mappedTenant;
-  const base = domain.split('.')[0] || process.env.EPDS_ADMIN_DEFAULT_TENANT_NAME || 'epds-admin';
-  return slugifyTenantName(base);
-}
-
-function tenantDisplayNameFromEmail(email, name) {
-  const normalizedEmail = String(email || '').trim().toLowerCase();
-  if (normalizedEmail === 'development@epds.hu') return 'Developer';
-  const domain = String(email || '').split('@').pop()?.toLowerCase() || '';
-  return {
-    'exnb.eu': 'ExNB/EXVA',
-    'exva.hu': 'ExNB/EXVA',
-    'rstahl.hu': 'Stahl',
-    'veproil.hu': 'Veproil',
-    'epds.hu': 'EPDS',
-    'ind-ex.ae': 'IndEx',
-    'ind-ex.eu': 'IndEx',
-    'robex.hu': 'Robex',
-    'robex.ro': 'Robex'
-  }[domain] || name;
-}
-
-function namePartsFromMicrosoftToken(decodedToken, email) {
-  const displayName = String(decodedToken.name || '').trim();
-  const emailLocalPart = String(email || '').split('@')[0] || 'user';
-  const nameSegments = displayName.split(/\s+/).filter(Boolean);
-  const firstName = String(decodedToken.given_name || nameSegments[0] || emailLocalPart || 'User').trim();
-  const lastName = String(decodedToken.family_name || nameSegments.slice(1).join(' ') || firstName || 'User').trim();
-  return {
-    firstName: firstName || 'User',
-    lastName: lastName || firstName || 'User'
-  };
-}
-
-async function ensureCompanyTenantForEmail(user, email) {
-  const current = user.tenantId && (usingPostgres()
-    ? await repository('tenant').findById(user.tenantId)
-    : await Tenant.findById(user.tenantId).select('type').lean());
-  if (current?.type === 'finance') return user;
-
-  const name = tenantNameFromEmail(email);
-  const displayName = tenantDisplayNameFromEmail(email, name);
-  if (usingPostgres()) return authStore().ensureCompanyTenant(user, { name, displayName });
-  let tenant = await Tenant.findOne({ name });
-  if (!tenant) {
-    tenant = await Tenant.create({
-      name,
-      displayName,
-      type: 'company',
-      features: {
-        mail: { enabled: false, edit: false, delete: false },
-        domainHealth: { enabled: true, edit: false, delete: false },
-        licenses: { enabled: false, edit: false, delete: false },
-        effortTracking: { enabled: false, edit: false, delete: false },
-        workBoard: { enabled: false, edit: false, delete: false },
-        webhookTester: { enabled: false, edit: false, delete: false }
-      },
-      ownerUserId: user._id,
-      seats: { max: 0, used: 0 },
-      seatsManaged: 'manual'
-    });
-  } else if (tenant.type === 'finance') {
-    throw Object.assign(new Error('A company tenant must be configured for this Microsoft account.'), { statusCode: 403 });
-  } else if (!tenant.displayName) {
-    tenant.displayName = displayName;
-    await tenant.save();
-  }
-  if (!user.tenantId || String(user.tenantId) !== String(tenant._id)) {
-    user.tenantId = tenant._id;
-    await user.save();
-  }
-  return user;
-}
-
-exports.microsoftLogin = async (req, res) => {
+exports.invitationDetails = async (req, res, next) => {
   try {
-    const accessToken = req.body?.accessToken || req.body?.idToken;
-    if (!accessToken) return res.status(400).json({ error: 'Microsoft token is required' });
+    const user = await tokenAccount(req.body?.account, req.body?.token, 'invite');
+    if (!user || user.emailVerified || !await hasTenant(user)) return invalidInvitation(res);
+    res.set('Cache-Control', 'no-store').json({ loginMethod: user.loginMethod, email: user.email });
+  } catch (error) { next(error); }
+};
 
-    const decodedToken = await verifyMicrosoftAccessToken(accessToken);
-    const email = String(decodedToken.upn || decodedToken.email || decodedToken.preferred_username || '').trim().toLowerCase();
-    const azureId = decodedToken.oid || decodedToken.sub;
-    if (!azureId) return res.status(400).json({ error: 'Azure ID is missing in the token' });
-    if (!email) return res.status(400).json({ error: 'Email is missing in the Microsoft token' });
-    assertAllowedCompanyEmail(email);
+exports.microsoftLogin = async (req, res, next) => {
+  const accessToken = req.body?.accessToken || req.body?.idToken;
+  if (typeof accessToken !== 'string' || accessToken.length > 16000) {
+    return res.status(400).json({ error: 'Valid Microsoft token required.' });
+  }
+  let claims;
+  try {
+    claims = await verifyMicrosoftAccessToken(accessToken);
+  } catch {
+    return res.status(401).json({ error: 'Microsoft sign-in could not be verified.' });
+  }
 
-    const tokenName = namePartsFromMicrosoftToken(decodedToken, email);
-    let user = usingPostgres()
-      ? await authStore().findMicrosoftUser(azureId, email)
-      : await User.findOne({ $or: [{ azureId }, { email }] });
-    if (!user) {
-      const input = {
-        azureId,
-        firstName: tokenName.firstName,
-        lastName: tokenName.lastName,
-        email,
-        role: 'User',
-        emailVerified: true
-      };
-      user = usingPostgres() ? await authStore().saveUser(input) : await User.create(input);
+  try {
+    const azureId = claims.oid || claims.sub;
+    if (!azureId) return res.status(403).json({ error: 'Microsoft identity is unavailable.' });
+    let user;
+    if (req.body.invite !== undefined) {
+      const invited = await tokenAccount(req.body.account, req.body.invite, 'invite');
+      const microsoftEmails = [claims.upn, claims.email, claims.preferred_username].map(normalizeEmail);
+      if (!invited || invited.emailVerified || invited.azureId || invited.loginMethod !== 'microsoft' ||
+          !claims.oid || !claims.tid || !microsoftEmails.includes(invited.email) || !await hasTenant(invited)) {
+        return invalidInvitation(res);
+      }
+      user = await accounts.updateAccount({
+        _id: String(invited._id), email: invited.email, tenantId: invited.tenantId, azureId: null,
+        accountTokenHash: invited.accountTokenHash, emailVerified: false, loginMethod: 'microsoft'
+      }, {
+        ...clearToken, azureId, microsoftTenantId: claims.tid, emailVerified: true, lastLoginAt: new Date()
+      }, { liveToken: true });
+      if (!user) return invalidInvitation(res);
     } else {
-      user.azureId = user.azureId || azureId;
-      user.email = user.email || email;
-      user.firstName = user.firstName || tokenName.firstName;
-      user.lastName = user.lastName || tokenName.lastName;
-      user.emailVerified = true;
-      if (usingPostgres()) user = await authStore().saveUser(user);
-      else await user.save();
+      const linked = await accounts.findMicrosoft(azureId);
+      if (!linked || (linked.microsoftTenantId && linked.microsoftTenantId !== claims.tid)) {
+        return res.status(403).json({ error: 'This Microsoft account needs an invitation from your administrator.' });
+      }
+      if (!await hasTenant(linked)) return res.status(403).json({ error: 'Ask your administrator to assign a tenant.' });
+      user = await accounts.updateAccount({
+        _id: String(linked._id), azureId, tenantId: linked.tenantId, microsoftTenantId: linked.microsoftTenantId || null
+      }, { lastLoginAt: new Date() });
+      if (!user) return res.status(409).json({ error: 'Account changed. Please sign in again.' });
     }
-
-    user = await ensureCompanyTenantForEmail(user, email);
-    user.lastLoginAt = new Date();
-    if (usingPostgres()) user = await authStore().saveUser(user);
-    else await user.save();
-
-    const result = await createSession({ user, req });
-    return sendAuthResult(req, res, result);
+    return sendAuthResult(req, res, await createSession({ user, req }));
   } catch (error) {
-    console.error('[auth] microsoft login failed:', error);
-    return res.status(error.statusCode || 500).json({ error: error.statusCode ? error.message : 'Microsoft login failed' });
+    if (['23505', 11000].includes(error.code)) {
+      return res.status(409).json({ error: 'This Microsoft account is already connected.' });
+    }
+    return next(error);
   }
 };
 
-exports.login = async (req, res) => {
+exports.login = async (req, res, next) => {
   try {
-    const email = String(req.body?.email || '').trim().toLowerCase();
-    const password = String(req.body?.password || '');
-    if (!email || !password) return res.status(400).json({ error: 'Email and password are required' });
+    const email = normalizeEmail(req.body?.email);
+    const password = req.body?.password;
+    const denied = () => res.status(401).json({ error: 'Invalid email or password.' });
+    if (!email || typeof password !== 'string' || !password) return denied();
 
-    let user = usingPostgres()
-      ? await authStore().findPasswordUser(email)
-      : await User.findOne({ email });
-    if (!user?.password) return res.status(401).json({ error: 'Invalid email or password' });
-    const ok = await bcrypt.compare(password, user.password);
-    if (!ok) return res.status(401).json({ error: 'Invalid email or password' });
+    const account = await accounts.findEmail(email);
+    if (!account?.password || (account.loginMethod && !account.emailVerified) || account.loginMethod === 'microsoft' ||
+        !await bcrypt.compare(password, account.password)) return denied();
+    if (!await hasTenant(account)) return res.status(403).json({ error: 'Ask your administrator to assign a tenant.' });
+    const user = await accounts.updateAccount({
+      _id: String(account._id), email, password: account.password, tenantId: account.tenantId
+    }, { lastLoginAt: new Date() });
+    if (!user) return denied();
+    return sendAuthResult(req, res, await createSession({ user, req }));
+  } catch (error) { next(error); }
+};
 
-    if (email !== 'support@epds.hu' && !['User', 'Admin', 'Finance'].includes(user.role)) {
-      user.role = 'User';
+exports.requestPasswordReset = async (req, res, next) => {
+  try {
+    const email = normalizeEmail(req.body?.email);
+    const user = validEmail(email) && email !== SUPERADMIN_EMAIL ? await accounts.findEmail(email) : null;
+    if (user?.password && user.loginMethod !== 'microsoft' && await hasTenant(user)) {
+      sendAccountLink(user, 'reset').catch(() => {});
     }
-    user.lastLoginAt = new Date();
-    if (usingPostgres()) user = await authStore().saveUser(user, { includePassword: true });
-    else await user.save();
+    return res.json({ ok: true });
+  } catch (error) { next(error); }
+};
 
-    const result = await createSession({ user, req });
-    return sendAuthResult(req, res, result);
-  } catch (error) {
-    console.error('[auth] password login failed:', error);
-    return res.status(500).json({ error: 'Login failed' });
-  }
+exports.setPassword = async (req, res, next) => {
+  try {
+    const { account, token, purpose, password } = req.body || {};
+    if (!validPassword(password)) return res.status(400).json({ error: 'Use at least 8 characters and at most 72 UTF-8 bytes.' });
+    if (!['invite', 'reset'].includes(purpose)) return invalidInvitation(res);
+    const user = await tokenAccount(account, token, purpose);
+    if (!user || !await hasTenant(user) || (purpose === 'invite'
+      ? user.loginMethod !== 'password' || user.emailVerified
+      : !user.password || user.loginMethod === 'microsoft' || user.email === SUPERADMIN_EMAIL)) {
+      return invalidInvitation(res);
+    }
+
+    const saved = await accounts.updateAccount({
+      _id: account, email: user.email, tenantId: user.tenantId, accountTokenHash: user.accountTokenHash,
+      emailVerified: user.emailVerified, password: user.password || null
+    }, { ...clearToken, password: await bcrypt.hash(password, 12), emailVerified: true }, { liveToken: true });
+    if (!saved) return invalidInvitation(res);
+    if (purpose === 'reset') await revokeUserSessions(account);
+    return res.json({ ok: true });
+  } catch (error) { next(error); }
 };
 
 exports.me = async (req, res) => {

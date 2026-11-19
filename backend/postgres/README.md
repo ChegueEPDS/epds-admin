@@ -58,3 +58,12 @@ If verification after cutover fails, stop writes immediately, set
 revision. PostgreSQL must not be copied back automatically. Preserve its state
 for diagnosis and reconcile any PostgreSQL-only writes explicitly before a
 later retry. The pre-cutover MongoDB dump is the recovery baseline.
+
+## Account invitations
+
+The backend applies `015_account_invitations.sql` when it starts in PostgreSQL mode.
+New accounts require an explicit tenant and are activated by an email invitation.
+Configure Graph mail with `MAIL_SENDER_UPN` and set `EPDS_ADMIN_PUBLIC_URL` to
+the frontend origin. If omitted, links use the first `CORS_ALLOWED_ORIGINS` entry.
+Existing Microsoft users keep their stored identity and tenant. Assign a tenant
+in **Users** for any existing non-SuperAdmin account that has none.

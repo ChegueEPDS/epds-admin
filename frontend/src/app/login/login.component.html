@@ -5,41 +5,83 @@
     </mat-card-header>
 
     <mat-card-content>
-      <button class="microsoft-sign-in" lang="en" type="button" [disabled]="isLoading()" (click)="loginWithMicrosoft()">
-        <span class="microsoft-mark" aria-hidden="true"></span>
-        Sign in with Microsoft
-      </button>
+      <ng-container *ngIf="linkPurpose; else standardLogin">
+        <h2>{{ linkPurpose === 'invite' ? 'Activate your account' : 'Reset your password' }}</h2>
+        <p *ngIf="linkError" role="alert">{{ linkError }}</p>
+        <p *ngIf="!linkMethod && !linkError" role="status">Checking your invitation…</p>
 
-      <div class="divider"><span lang="en">OR</span></div>
+        <button *ngIf="linkMethod === 'microsoft'" class="microsoft-sign-in" lang="en" type="button"
+          [disabled]="isLoading()" (click)="loginWithMicrosoft()">
+          <span class="microsoft-mark" aria-hidden="true"></span>
+          Sign in with Microsoft
+        </button>
 
-      <button mat-stroked-button class="password-toggle" type="button"
-        [attr.aria-expanded]="passwordFormOpen()" aria-controls="password-sign-in"
-        (click)="passwordFormOpen.set(!passwordFormOpen())">
-        Bejelentkezés e-mail-címmel és jelszóval
-        <mat-icon iconPositionEnd aria-hidden="true" class="material-symbols-outlined">expand_more</mat-icon>
-      </button>
+        <form *ngIf="linkMethod === 'password'" class="login-form" #passwordForm="ngForm" (ngSubmit)="setPassword()">
+          <mat-form-field appearance="outline">
+            <mat-label>New password</mat-label>
+            <input matInput type="password" name="newPassword" autocomplete="new-password"
+              [(ngModel)]="newPassword" minlength="8" maxlength="72" required>
+          </mat-form-field>
+          <mat-form-field appearance="outline">
+            <mat-label>Confirm password</mat-label>
+            <input matInput type="password" name="confirmPassword" autocomplete="new-password"
+              [(ngModel)]="confirmPassword" required>
+          </mat-form-field>
+          <button mat-flat-button color="primary" type="submit" [disabled]="isLoading() || !passwordForm.valid">Save password</button>
+        </form>
+        <a mat-button routerLink="/login" [replaceUrl]="true">Back to sign in</a>
+      </ng-container>
+      <ng-template #standardLogin>
+        <p *ngIf="notice" role="status">{{ notice }}</p>
+        <ng-container *ngIf="!resetFormOpen; else resetForm">
+          <button class="microsoft-sign-in" lang="en" type="button" [disabled]="isLoading()" (click)="loginWithMicrosoft()">
+            <span class="microsoft-mark" aria-hidden="true"></span>
+            Sign in with Microsoft
+          </button>
 
-      <div id="password-sign-in" class="password-panel" [class.expanded]="passwordFormOpen()"
-        [attr.inert]="passwordFormOpen() ? null : ''">
-        <div class="password-panel-content">
-          <form class="login-form" (ngSubmit)="loginWithPassword()">
+          <div class="divider"><span lang="en">OR</span></div>
+
+          <button mat-stroked-button class="password-toggle" type="button"
+            [attr.aria-expanded]="passwordFormOpen()" aria-controls="password-sign-in"
+            (click)="passwordFormOpen.set(!passwordFormOpen())">
+            Bejelentkezés e-mail-címmel és jelszóval
+            <mat-icon iconPositionEnd aria-hidden="true" class="material-symbols-outlined">expand_more</mat-icon>
+          </button>
+
+          <div id="password-sign-in" class="password-panel" [class.expanded]="passwordFormOpen()"
+            [attr.inert]="passwordFormOpen() ? null : ''">
+            <div class="password-panel-content">
+              <form class="login-form" (ngSubmit)="loginWithPassword()">
+                <mat-form-field appearance="outline">
+                  <mat-label>E-mail</mat-label>
+                  <input matInput type="email" name="email" autocomplete="email" [(ngModel)]="email" required>
+                </mat-form-field>
+
+                <mat-form-field appearance="outline">
+                  <mat-label>Jelszó</mat-label>
+                  <input matInput type="password" name="password" autocomplete="current-password" [(ngModel)]="password" required>
+                </mat-form-field>
+
+                <button mat-flat-button color="primary" type="submit" [disabled]="isLoading()">
+                  <mat-icon class="material-symbols-outlined">login</mat-icon>
+                  Belépés
+                </button>
+              </form>
+              <button mat-button type="button" (click)="resetFormOpen = true; notice = ''">Forgot password?</button>
+            </div>
+          </div>
+        </ng-container>
+        <ng-template #resetForm>
+          <form class="login-form" #resetRequest="ngForm" (ngSubmit)="requestReset()">
             <mat-form-field appearance="outline">
-              <mat-label>E-mail</mat-label>
-              <input matInput type="email" name="email" autocomplete="email" [(ngModel)]="email" required>
+              <mat-label>Email</mat-label>
+              <input matInput type="email" name="resetEmail" autocomplete="email" [(ngModel)]="email" email required>
             </mat-form-field>
-
-            <mat-form-field appearance="outline">
-              <mat-label>Jelszó</mat-label>
-              <input matInput type="password" name="password" autocomplete="current-password" [(ngModel)]="password" required>
-            </mat-form-field>
-
-            <button mat-flat-button color="primary" type="submit" [disabled]="isLoading()">
-              <mat-icon class="material-symbols-outlined">login</mat-icon>
-              Belépés
-            </button>
+            <button mat-flat-button color="primary" type="submit" [disabled]="isLoading() || !resetRequest.valid">Send reset link</button>
+            <button mat-button type="button" (click)="resetFormOpen = false">Back to sign in</button>
           </form>
-        </div>
-      </div>
+        </ng-template>
+      </ng-template>
     </mat-card-content>
   </mat-card>
 </section>

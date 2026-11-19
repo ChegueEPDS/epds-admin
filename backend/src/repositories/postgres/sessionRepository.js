@@ -77,9 +77,13 @@ async function revoke(id, at = new Date()) {
   return present(result.rows[0]);
 }
 
+async function revokeByUser(userId) {
+  await query('UPDATE sessions SET revoked_at=now(),updated_at=now() WHERE user_id=$1 AND revoked_at IS NULL', [userId]);
+}
+
 async function deleteExpired(now = new Date()) {
   const result = await query('DELETE FROM sessions WHERE expires_at<=$1 OR revoked_at IS NOT NULL', [now]);
   return result.rowCount;
 }
 
-module.exports = { create, findActiveById, findForRefresh, rotate, revoke, deleteExpired, present };
+module.exports = { create, findActiveById, findForRefresh, rotate, revoke, revokeByUser, deleteExpired, present };

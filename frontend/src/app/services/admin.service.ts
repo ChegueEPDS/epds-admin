@@ -32,7 +32,13 @@ export type TenantPayload = {
   financeAccess?: boolean;
 };
 
+export type LoginMethod = 'microsoft' | 'password';
+
 export type AdminUser = {
+  loginMethod: LoginMethod;
+  pendingActivation: boolean;
+  invitationExpiresAt?: string | null;
+  invitationSent?: boolean;
   id: string;
   email: string;
   firstName: string;
@@ -51,7 +57,7 @@ export type AssignableRole = 'User' | 'Admin' | 'Finance';
 
 export type CreateAdminUserPayload = {
   email: string;
-  password: string;
+  loginMethod: LoginMethod;
   firstName: string;
   lastName: string;
   tenantId: string;
@@ -60,7 +66,6 @@ export type CreateAdminUserPayload = {
 
 export type UpdateAdminUserPayload = {
   email: string;
-  password?: string;
   firstName: string;
   lastName: string;
   tenantId: string;
@@ -115,6 +120,17 @@ export class AdminService {
   createUser(payload: CreateAdminUserPayload): Observable<AdminUser> {
     return this.http.post<{ user: AdminUser }>(`${this.baseUrl}/users`, payload, { withCredentials: true })
       .pipe(map((res) => res.user));
+  }
+
+  userTenantOptions(): Observable<AdminTenant[]> {
+    return this.http.get<{ tenants: AdminTenant[] }>(`${this.baseUrl}/users/tenant-options`)
+      .pipe(map((res) => res.tenants));
+  }
+
+  resendInvitation(userId: string): Observable<AdminUser> {
+    return this.http.post<{ user: AdminUser }>(
+      `${this.baseUrl}/users/${encodeURIComponent(userId)}/invitation`, {}
+    ).pipe(map((res) => res.user));
   }
 
   updateUserRole(userId: string, role: AssignableRole): Observable<AdminUser> {

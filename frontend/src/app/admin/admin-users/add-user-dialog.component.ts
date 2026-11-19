@@ -7,11 +7,12 @@ import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatSelectModule } from '@angular/material/select';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
-import { AdminService, AdminTenant, AdminUser, AssignableRole } from '../../services/admin.service';
+import { AdminService, AdminTenant, AdminUser, AssignableRole, LoginMethod } from '../../services/admin.service';
 
 type UserDialogData = {
   tenants: AdminTenant[];
   user?: AdminUser;
+  isSuperAdmin: boolean;
 };
 
 @Component({
@@ -33,7 +34,7 @@ type UserDialogData = {
 export class AddUserDialogComponent {
   saving = signal(false);
   email = '';
-  password = '';
+  loginMethod: LoginMethod = 'microsoft';
   firstName = '';
   lastName = '';
   tenantId = '';
@@ -50,6 +51,8 @@ export class AddUserDialogComponent {
     private dialogRef: MatDialogRef<AddUserDialogComponent, AdminUser>,
     private snackBar: MatSnackBar
   ) {
+    if (!data.isSuperAdmin) this.roles = this.roles.filter((item) => item.value === 'User');
+    if (data.tenants.length === 1) this.tenantId = data.tenants[0].id;
     const user = data.user;
     if (user) {
       this.email = user.email || '';
@@ -68,16 +71,6 @@ export class AddUserDialogComponent {
     return Boolean(this.data.user?.azureId);
   }
 
-  get selectableTenants(): AdminTenant[] {
-    if (!this.isMicrosoftUser) return this.data.tenants;
-    return this.data.tenants.filter((tenant) => tenant.id === this.data.user?.tenantId || tenant.type === 'finance');
-  }
-
-  get canRestoreMicrosoftTenant(): boolean {
-    return this.isMicrosoftUser && this.data.tenants.some((tenant) =>
-      tenant.id === this.data.user?.tenantId && tenant.type === 'finance');
-  }
-
   onTenantChange(): void {
     if (this.data.tenants.some((tenant) => tenant.id === this.tenantId && tenant.type === 'finance')) {
       this.role = 'Finance';
@@ -89,7 +82,7 @@ export class AddUserDialogComponent {
   }
 
   get submitLabel(): string {
-    return this.isEditMode ? 'Save' : 'Create';
+    return this.isEditMode ? 'Save' : 'Send invitation';
   }
 
   tenantLabel(tenant: AdminTenant): string {
@@ -97,12 +90,11 @@ export class AddUserDialogComponent {
   }
 
   save(): void {
-    if (this.saving()) return;
+    if (this.saving() || !this.email || !this.firstName.trim() || !this.lastName.trim() || !this.tenantId) return;
     this.saving.set(true);
 
     const payload = {
       email: this.email,
-      password: this.password,
       firstName: this.firstName,
       lastName: this.lastName,
       tenantId: this.tenantId,
@@ -110,7 +102,7 @@ export class AddUserDialogComponent {
     };
     const request = this.data.user
       ? this.admin.updateUser(this.data.user.id, payload)
-      : this.admin.createUser(payload);
+      : this.admin.createUser({ ...payload, loginMethod: this.loginMethod });
 
     request.subscribe({
       next: (user) => this.dialogRef.close(user),

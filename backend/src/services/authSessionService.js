@@ -351,6 +351,11 @@ async function revokeSession(sessionId) {
   else await Session.findByIdAndUpdate(sessionId, { revokedAt: new Date() });
 }
 
+async function revokeUserSessions(userId) {
+  if (usingPostgres()) await sessionStore().revokeByUser(userId);
+  else await Session.updateMany({ userId, revokedAt: null }, { $set: { revokedAt: new Date() } });
+}
+
 module.exports = {
   authenticateAccessToken,
   buildSessionMetadata,
@@ -359,6 +364,7 @@ module.exports = {
   getAccessTokenFromRequest,
   getRefreshTokenFromRequest,
   revokeSession,
+  revokeUserSessions,
   rotateRefreshToken,
   setAuthCookies,
   validateCsrf

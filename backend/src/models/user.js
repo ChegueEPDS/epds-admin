@@ -3,6 +3,11 @@ const mongoose = require('mongoose');
 const UserSchema = new mongoose.Schema(
   {
     azureId: { type: String, unique: true, sparse: true },
+    loginMethod: { type: String, enum: ['microsoft', 'password'] },
+    microsoftTenantId: String,
+    accountTokenHash: { type: String, index: true },
+    accountTokenExpiresAt: Date,
+    accountTokenPurpose: String,
     firstName: { type: String, required: true },
     lastName: { type: String, required: true },
     email: { type: String, required: true, unique: true, lowercase: true },
@@ -20,6 +25,9 @@ const UserSchema = new mongoose.Schema(
 UserSchema.methods.toJSON = function toJSON() {
   const obj = this.toObject({ virtuals: true });
   delete obj.password;
+  delete obj.accountTokenHash;
+  delete obj.accountTokenExpiresAt;
+  delete obj.accountTokenPurpose;
   return obj;
 };
 
