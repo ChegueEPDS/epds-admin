@@ -1,0 +1,168 @@
+<button class="panda-button" type="button" aria-label="Panda animálása" [style.width.px]="size" [style.height.px]="size" (click)="greet()">
+  <span class="panda-stage" aria-hidden="true" [style.--panda-scale]="size / 340">
+    <span #rig class="panda-3d-rig">
+      <span class="panda-bounce-wrapper">
+      <span class="panda-layer" data-base-z="-30" data-parallax="0.35" style="transform: translateZ(-30px)">
+        <svg viewBox="0 0 400 400">
+          <g #shadowGroup>
+            <ellipse cx="200" cy="364" rx="112" ry="13" fill="var(--panda-dark)" opacity="0.22"></ellipse>
+          </g>
+        </svg>
+      </span>
+      <span class="panda-layer" data-base-z="-15" data-parallax="0.6" style="transform: translateZ(-15px)">
+        <svg viewBox="0 0 400 400">
+          <g class="earLeft" style="transform-origin: 124px 104px;">
+            <circle cx="110" cy="90" r="38" fill="var(--panda-dark)"></circle>
+            <circle cx="112" cy="92" r="19" fill="var(--panda-dark-highlight)"></circle>
+          </g>
+          <g class="earRight" style="transform-origin: 276px 104px;">
+            <circle cx="290" cy="90" r="38" fill="var(--panda-dark)"></circle>
+            <circle cx="288" cy="92" r="19" fill="var(--panda-dark-highlight)"></circle>
+          </g>
+        </svg>
+      </span>
+      <span class="panda-layer" data-base-z="0" data-parallax="0.85" style="transform: translateZ(0px)">
+        <svg viewBox="0 0 400 400">
+          <path d="M 106 218
+                   C 90 250, 96 330, 144 348
+                   C 176 360, 224 360, 256 348
+                   C 304 330, 310 250, 294 218
+                   C 274 196, 126 196, 106 218 Z" fill="var(--panda-dark)"></path>
+          <ellipse cx="200" cy="296" rx="62" ry="52" fill="var(--panda-light)"></ellipse>
+          <path d="M 144 312 C 162 342, 238 342, 256 312 C 244 338, 156 338, 144 312 Z" fill="var(--panda-light-shade)"></path>
+        </svg>
+      </span>
+      <span class="panda-layer" data-base-z="10" data-parallax="1.0" style="transform: translateZ(10px)">
+        <svg viewBox="0 0 400 400">
+          <g transform="translate(115, 326) rotate(-22)">
+            <ellipse cx="0" cy="0" rx="34" ry="43" fill="var(--panda-dark)" stroke="var(--panda-dark)" stroke-width="4"></ellipse>
+            <ellipse cx="0" cy="6" rx="19" ry="23" fill="var(--panda-dark-highlight)"></ellipse>
+            <circle cx="-11" cy="-16" r="4.2" fill="var(--panda-dark-highlight)"></circle>
+            <circle cx="0" cy="-20" r="4.6" fill="var(--panda-dark-highlight)"></circle>
+            <circle cx="11" cy="-16" r="4.2" fill="var(--panda-dark-highlight)"></circle>
+          </g>
+          <g transform="translate(285, 326) rotate(22)">
+            <ellipse cx="0" cy="0" rx="34" ry="43" fill="var(--panda-dark)" stroke="var(--panda-dark)" stroke-width="4"></ellipse>
+            <ellipse cx="0" cy="6" rx="19" ry="23" fill="var(--panda-dark-highlight)"></ellipse>
+            <circle cx="-11" cy="-16" r="4.2" fill="var(--panda-dark-highlight)"></circle>
+            <circle cx="0" cy="-20" r="4.6" fill="var(--panda-dark-highlight)"></circle>
+            <circle cx="11" cy="-16" r="4.2" fill="var(--panda-dark-highlight)"></circle>
+          </g>
+        </svg>
+      </span>
+      <span class="panda-layer" data-base-z="22" data-parallax="1.25" style="transform: translateZ(22px)">
+        <svg viewBox="0 0 400 400">
+          <path d="M 200 58
+                   C 268 58, 314 104, 314 162
+                   C 314 214, 268 236, 200 236
+                   C 132 236, 86 214, 86 162
+                   C 86 104, 132 58, 200 58 Z" fill="var(--panda-light)" stroke="var(--panda-dark)" stroke-width="7"></path>
+          <path d="M 94 176 C 110 222, 290 222, 306 176 C 296 226, 104 226, 94 176 Z" fill="var(--panda-light-shade)"></path>
+          <ellipse cx="200" cy="184" rx="44" ry="30" fill="#ffffff" opacity="0.65"></ellipse>
+          <ellipse cx="146" cy="144" rx="34" ry="42" transform="rotate(24 146 144)" fill="var(--panda-dark)"></ellipse>
+          <ellipse cx="254" cy="144" rx="34" ry="42" transform="rotate(-24 254 144)" fill="var(--panda-dark)"></ellipse>
+        </svg>
+      </span>
+      <span class="panda-layer" data-base-z="32" data-parallax="1.42" style="transform: translateZ(32px)">
+        <svg viewBox="0 0 400 400">
+          <circle cx="152" cy="142" r="20" fill="#ffffff"></circle>
+          <circle cx="248" cy="142" r="20" fill="#ffffff"></circle>
+          <g #pupilLeft>
+            <circle cx="154" cy="142" r="12.5" fill="var(--panda-dark)"></circle>
+            <circle cx="149" cy="137" r="4.5" fill="#ffffff"></circle>
+            <circle cx="159" cy="147" r="2" fill="#ffffff" opacity="0.85"></circle>
+          </g>
+          <g #pupilRight>
+            <circle cx="246" cy="142" r="12.5" fill="var(--panda-dark)"></circle>
+            <circle cx="241" cy="137" r="4.5" fill="#ffffff"></circle>
+            <circle cx="251" cy="147" r="2" fill="#ffffff" opacity="0.85"></circle>
+          </g>
+          <ellipse class="eyelid" cx="152" cy="142" rx="21" ry="21" fill="var(--panda-dark)" style="transform-origin: 152px 142px;"></ellipse>
+          <ellipse class="eyelid" cx="248" cy="142" rx="21" ry="21" fill="var(--panda-dark)" style="transform-origin: 248px 142px;"></ellipse>
+          <path d="M 183 164
+                   C 183 157, 217 157, 217 164
+                   C 217 171, 206 177, 200 177
+                   C 194 177, 183 171, 183 164 Z" fill="var(--panda-dark)"></path>
+          <ellipse cx="196" cy="162" rx="6" ry="2.2" fill="var(--panda-dark-highlight)"></ellipse>
+          <path d="M 176 184 Q 188 197, 200 186 Q 212 197, 224 184" fill="none" stroke="var(--panda-dark)" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round"></path>
+          <line x1="200" y1="173" x2="200" y2="186" stroke="var(--panda-dark)" stroke-width="5" stroke-linecap="round"></line>
+          <path d="M 191 203 Q 200 207, 209 203" fill="none" stroke="var(--panda-light-shade)" stroke-width="3.5" stroke-linecap="round"></path>
+        </svg>
+      </span>
+      <span class="panda-layer" data-base-z="36" data-parallax="1.55" style="transform: translateZ(36px)">
+        <svg viewBox="0 0 400 400">
+          <defs>
+            <linearGradient [attr.id]="svgId + 'helmetGoldGrad'" x1="0%" y1="0%" x2="0%" y2="100%">
+              <stop offset="0%" stop-color="#ffd584"></stop>
+              <stop offset="55%" stop-color="#fcb040"></stop>
+              <stop offset="100%" stop-color="#df8e1c"></stop>
+            </linearGradient>
+          </defs>
+          <path d="M 134 74
+                   C 134 30, 162 12, 200 12
+                   C 238 12, 266 30, 266 74 Z" [attr.fill]="'url(#' + svgId + 'helmetGoldGrad)'" stroke="var(--panda-dark)" stroke-width="6.5" stroke-linejoin="round"></path>
+          <path d="M 189 71
+                   L 192 15
+                   C 192 11, 208 11, 208 15
+                   L 211 71 Z" fill="#ffd98e" stroke="var(--panda-dark)" stroke-width="4.5" stroke-linejoin="round"></path>
+          <path d="M 162 69 C 164 42, 172 28, 181 22" fill="none" stroke="var(--panda-dark)" stroke-width="4" stroke-linecap="round" opacity="0.75"></path>
+          <path d="M 238 69 C 236 42, 228 28, 219 22" fill="none" stroke="var(--panda-dark)" stroke-width="4" stroke-linecap="round" opacity="0.75"></path>
+          <path d="M 149 59 C 151 40, 161 28, 174 23" fill="none" stroke="#ffffff" stroke-width="4.5" stroke-linecap="round" opacity="0.65"></path>
+          <path d="M 122 74
+                   C 146 65, 254 65, 278 74
+                   C 281 80, 274 85, 263 84
+                   C 230 78, 170 78, 137 84
+                   C 126 85, 119 80, 122 74 Z" fill="#e59624" stroke="var(--panda-dark)" stroke-width="6" stroke-linejoin="round"></path>
+        </svg>
+      </span>
+      <span class="panda-layer atex-hex-layer" data-base-z="42" data-parallax="1.76" style="transform: translateZ(42px)">
+        <svg viewBox="0 0 400 400">
+          <defs>
+            <linearGradient [attr.id]="svgId + 'atexGoldGrad'" x1="0%" y1="0%" x2="0%" y2="100%">
+              <stop offset="0%" stop-color="#ffd27d"></stop>
+              <stop offset="45%" stop-color="#fcb040"></stop>
+              <stop offset="100%" stop-color="#e59522"></stop>
+            </linearGradient>
+            <linearGradient [attr.id]="svgId + 'atexSheenGrad'" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" stop-color="#ffffff" stop-opacity="0.45"></stop>
+              <stop offset="50%" stop-color="#ffffff" stop-opacity="0.0"></stop>
+              <stop offset="100%" stop-color="#ffffff" stop-opacity="0.15"></stop>
+            </linearGradient>
+          </defs>
+          <g [attr.id]="svgId + 'atexSignGroup'">
+            <polygon points="164,218 236,218 272,276 236,334 164,334 128,276" [attr.fill]="'url(#' + svgId + 'atexGoldGrad)'" stroke="var(--panda-dark)" stroke-width="8" stroke-linejoin="round"></polygon>
+            <polygon points="168,225 232,225 264,276 232,327 168,327 136,276" [attr.fill]="'url(#' + svgId + 'atexSheenGrad)'" stroke="#ffe4ad" stroke-width="2" stroke-linejoin="round"></polygon>
+            <g fill="none" stroke="var(--panda-dark)" stroke-width="8.5" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M 193 252
+                       C 183 245, 168 250, 168 262
+                       C 168 271, 176 276, 186 276
+                       C 176 276, 167 281, 167 291
+                       C 167 303, 183 308, 194 300"></path>
+              <line x1="206" y1="272" x2="228" y2="301"></line>
+              <line x1="228" y1="272" x2="206" y2="301"></line>
+            </g>
+          </g>
+        </svg>
+      </span>
+      <span class="panda-layer" data-base-z="52" data-parallax="1.76" style="transform: translateZ(52px)">
+        <svg viewBox="0 0 400 400">
+          <g [attr.id]="svgId + 'pawLeftGroup'">
+            <path d="M 106 226
+                     C 92 252, 98 292, 128 298
+                     C 148 302, 161 288, 159 274
+                     C 157 260, 143 252, 134 232 Z" fill="var(--panda-dark)"></path>
+            <ellipse cx="138" cy="276" rx="22" ry="17" transform="rotate(14 138 276)" fill="var(--panda-dark)" stroke="var(--panda-dark-highlight)" stroke-width="2"></ellipse>
+          </g>
+          <g [attr.id]="svgId + 'pawRightGroup'">
+            <path d="M 294 226
+                     C 308 252, 302 292, 272 298
+                     C 252 302, 239 288, 241 274
+                     C 243 260, 257 252, 266 232 Z" fill="var(--panda-dark)"></path>
+            <ellipse cx="262" cy="276" rx="22" ry="17" transform="rotate(-14 262 276)" fill="var(--panda-dark)" stroke="var(--panda-dark-highlight)" stroke-width="2"></ellipse>
+          </g>
+        </svg>
+      </span>
+      </span>
+    </span>
+  </span>
+</button>

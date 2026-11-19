@@ -31,60 +31,6 @@ mat-card-header {
   font-weight: 750;
 }
 
-.panda {
-  display: block;
-  width: clamp(160px, 55vw, 180px);
-  padding: 0;
-  border: 0;
-  border-radius: 20px;
-  background: transparent;
-  cursor: pointer;
-}
-
-.panda-stage {
-  position: relative;
-  display: block;
-  aspect-ratio: 1;
-}
-
-.panda-art,
-.panda-bounce {
-  display: block;
-  width: 100%;
-  height: 100%;
-  transform-style: preserve-3d;
-}
-
-.panda-stage {
-  perspective: 1100px;
-}
-
-.panda-art {
-  --panda-dark: #17201e;
-  --panda-dark-highlight: #253330;
-  --panda-light: #f4f5f1;
-  --panda-light-shade: #e2e6de;
-  --atex-gold: #fcb040;
-}
-
-.panda-layer {
-  position: absolute;
-  inset: 0;
-  transform: translateZ(var(--depth));
-  pointer-events: none;
-}
-
-.panda-layer svg {
-  display: block;
-  width: 100%;
-  height: 100%;
-  overflow: visible;
-}
-
-.eyelid:not([transform]) {
-  visibility: hidden;
-}
-
 mat-card-content {
   display: flex;
   flex-direction: column;
