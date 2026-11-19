@@ -1,20 +1,21 @@
+import { UiTextPipe } from '../i18n/ui-text.pipe';
 import { Component, EventEmitter, Input, Output } from '@angular/core';
 import { MatButtonModule } from '@angular/material/button';
 
 @Component({
   selector: 'app-recovery-codes',
   standalone: true,
-  imports: [MatButtonModule],
+  imports: [UiTextPipe, MatButtonModule],
   template: `
-    <h2>Save your recovery codes</h2>
-    <p>Store these codes somewhere safe, such as your password manager. Each code can be used once to finish signing in if you lose access to your authenticator app.</p>
-    <ul aria-label="Recovery codes">
+    <h2>{{ 'Save your recovery codes' | uiText }}</h2>
+    <p>{{ 'Store these codes somewhere safe, such as your password manager. Each code can be used once to finish signing in if you lose access to your authenticator app.' | uiText }}</p>
+    <ul aria-label="{{ 'Recovery codes' | uiText }}">
       @for (code of codes; track code) { <li><code>{{ code }}</code></li> }
     </ul>
     <div class="actions">
-      <button mat-button type="button" (click)="copy()">Copy codes</button>
-      <button mat-button type="button" (click)="download()">Download codes</button>
-      <button mat-flat-button type="button" (click)="done.emit()">I’ve saved my codes</button>
+      <button mat-button type="button" (click)="copy()">{{ 'Copy codes' | uiText }}</button>
+      <button mat-button type="button" (click)="download()">{{ 'Download codes' | uiText }}</button>
+      <button mat-flat-button type="button" (click)="done.emit()">{{ 'I’ve saved my codes' | uiText }}</button>
     </div>
     <p role="status">{{ notice }}</p>
   `,

@@ -1,3 +1,4 @@
+import { UiTextPipe } from '../../i18n/ui-text.pipe';
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { Component, DestroyRef, inject, OnInit } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
@@ -14,41 +15,41 @@ type EmailTemplate = { id: string; label: string };
 
 @Component({
   selector: 'app-admin-email-templates',
-  imports: [ReactiveFormsModule, MatButtonModule, MatFormFieldModule, MatIconModule, MatInputModule, MatSelectModule],
+  imports: [UiTextPipe, ReactiveFormsModule, MatButtonModule, MatFormFieldModule, MatIconModule, MatInputModule, MatSelectModule],
   template: `
     <section class="email-settings" aria-labelledby="email-settings-title">
       <header>
         <img src="/public/panda.png" alt="" width="48" height="48">
-        <h1 id="email-settings-title">Email templates</h1>
+        <h1 id="email-settings-title">{{ 'Email templates' | uiText }}</h1>
       </header>
-      <p>Send a PandA test email with sample data to an address you specify.</p>
+      <p>{{ 'Send a PandA test email with sample data to an address you specify.' | uiText }}</p>
       @if (loading) {
-        <p role="status">Loading templates…</p>
+        <p role="status">{{ 'Loading templates…' | uiText }}</p>
       } @else if (loadError) {
-        <p role="alert">{{ loadError }}</p>
-        <button mat-stroked-button type="button" (click)="load()">Reload templates</button>
+        <p role="alert">{{ loadError | uiText }}</p>
+        <button mat-stroked-button type="button" (click)="load()">{{ 'Reload templates' | uiText }}</button>
       } @else {
         <form [formGroup]="form" (ngSubmit)="send()">
           <mat-form-field appearance="outline">
-            <mat-label>Email template</mat-label>
+            <mat-label>{{ 'Email template' | uiText }}</mat-label>
             <mat-select formControlName="template" required>
               @for (template of templates; track template.id) {
-                <mat-option [value]="template.id">{{ template.label }}</mat-option>
+                <mat-option [value]="template.id">{{ template.label | uiText }}</mat-option>
               }
             </mat-select>
           </mat-form-field>
           <mat-form-field appearance="outline">
-            <mat-label>Recipient email</mat-label>
+            <mat-label>{{ 'Recipient email' | uiText }}</mat-label>
             <input matInput type="email" inputmode="email" autocomplete="email" formControlName="to" maxlength="254" required>
-            <mat-error>Enter one valid email address.</mat-error>
+            <mat-error>{{ 'Enter one valid email address.' | uiText }}</mat-error>
           </mat-form-field>
           <button mat-flat-button type="submit" [disabled]="form.invalid || sending">
             <mat-icon class="material-symbols-outlined">send</mat-icon>
-            {{ sending ? 'Sending…' : 'Send test email' }}
+            {{ sending ? ('Sending…' | uiText) : ('Send test email' | uiText) }}
           </button>
         </form>
-        @if (success) { <p class="success" role="status">{{ success }}</p> }
-        @if (sendError) { <p class="error" role="alert">{{ sendError }}</p> }
+        @if (success) { <p class="success" role="status">{{ 'Microsoft Graph accepted the test email for {0}.' | uiText: success }}</p> }
+        @if (sendError) { <p class="error" role="alert">{{ sendError | uiText }}</p> }
       }
     </section>
   `,
@@ -114,7 +115,7 @@ export class AdminEmailTemplatesComponent implements OnInit {
       takeUntilDestroyed(this.destroyRef),
       finalize(() => { this.sending = false; })
     ).subscribe({
-      next: () => { this.success = `Microsoft Graph accepted the test email for ${to}.`; },
+      next: () => { this.success = to; },
       error: (error: HttpErrorResponse) => {
         this.sendError = error.error?.error || 'The test email could not be sent.';
       }

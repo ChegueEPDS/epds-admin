@@ -1,3 +1,4 @@
+import { UiLanguageService } from './i18n/ui-language.service';
 import { inject, Injector } from '@angular/core';
 import { HttpInterceptorFn, HttpRequest } from '@angular/common/http';
 import { Router } from '@angular/router';
@@ -35,7 +36,7 @@ export const authInterceptor: HttpInterceptorFn = (req, next) => {
       .find((value) => value.startsWith('csrf_token='))
       ?.slice('csrf_token='.length);
 
-    const setHeaders: Record<string, string> = {};
+    const setHeaders: Record<string, string> = { 'Accept-Language': injector.get(UiLanguageService).language() };
     if (csrf && !['GET', 'HEAD', 'OPTIONS'].includes(req.method.toUpperCase())) {
       setHeaders['X-CSRF-Token'] = decodeURIComponent(csrf);
     }

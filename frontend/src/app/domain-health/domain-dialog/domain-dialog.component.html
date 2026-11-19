@@ -1,68 +1,68 @@
-<h2 mat-dialog-title>{{ data.domain ? 'Edit domain' : 'Add domain' }}</h2>
+<h2 mat-dialog-title>{{ data.domain ? ('Edit domain' | uiText) : ('Add domain' | uiText) }}</h2>
 <form (ngSubmit)="save()">
   <mat-dialog-content class="domain-dialog-content">
     <mat-form-field appearance="outline">
-      <mat-label>Name</mat-label>
+      <mat-label>{{ 'Name' | uiText }}</mat-label>
       <input matInput name="name" [(ngModel)]="model.name" required>
     </mat-form-field>
     <mat-form-field appearance="outline">
-      <mat-label>Base URL</mat-label>
+      <mat-label>{{ 'Base URL' | uiText }}</mat-label>
       <input matInput name="baseUrl" [(ngModel)]="model.baseUrl" placeholder="https://example.com" required>
     </mat-form-field>
     <mat-form-field appearance="outline" *ngIf="canEditOwner">
-      <mat-label>Owner</mat-label>
+      <mat-label>{{ 'Owner' | uiText }}</mat-label>
       <mat-select name="tenantId" [(ngModel)]="model.tenantId" required>
         <mat-option *ngFor="let tenant of data.tenants || []" [value]="tenant.id">{{ tenantLabel(tenant) }}</mat-option>
       </mat-select>
     </mat-form-field>
     <mat-form-field appearance="outline" *ngIf="needsOwnerBadge">
-      <mat-label>Owner badge</mat-label>
+      <mat-label>{{ 'Owner badge' | uiText }}</mat-label>
       <mat-select name="owner" [(ngModel)]="model.owner" required>
         <mat-option *ngFor="let owner of owners" [value]="owner">{{ owner }}</mat-option>
       </mat-select>
     </mat-form-field>
-    <mat-slide-toggle name="enabled" [(ngModel)]="model.enabled">Enabled</mat-slide-toggle>
+    <mat-slide-toggle name="enabled" [(ngModel)]="model.enabled">{{ 'Enabled' | uiText }}</mat-slide-toggle>
 
     <section class="health-policy-section">
-      <h3>Health policy</h3>
+      <h3>{{ 'Health policy' | uiText }}</h3>
       <mat-form-field appearance="outline">
-        <mat-label>Check path</mat-label>
+        <mat-label>{{ 'Check path' | uiText }}</mat-label>
         <input matInput name="checkPath" [(ngModel)]="model.healthConfig.checkPath" placeholder="/health">
       </mat-form-field>
       <div class="policy-grid">
         <mat-form-field appearance="outline">
-          <mat-label>Expected status min</mat-label>
+          <mat-label>{{ 'Expected status min' | uiText }}</mat-label>
           <input matInput type="number" name="expectedStatusMin" [(ngModel)]="model.healthConfig.expectedStatusMin" min="100" max="599">
         </mat-form-field>
         <mat-form-field appearance="outline">
-          <mat-label>Expected status max</mat-label>
+          <mat-label>{{ 'Expected status max' | uiText }}</mat-label>
           <input matInput type="number" name="expectedStatusMax" [(ngModel)]="model.healthConfig.expectedStatusMax" min="100" max="599">
         </mat-form-field>
         <mat-form-field appearance="outline">
-          <mat-label>Timeout ms</mat-label>
+          <mat-label>{{ 'Timeout ms' | uiText }}</mat-label>
           <input matInput type="number" name="timeoutMs" [(ngModel)]="model.healthConfig.timeoutMs" min="1000" max="120000">
         </mat-form-field>
         <mat-form-field appearance="outline">
-          <mat-label>Warning response ms</mat-label>
+          <mat-label>{{ 'Warning response ms' | uiText }}</mat-label>
           <input matInput type="number" name="warningResponseMs" [(ngModel)]="model.healthConfig.warningResponseMs" min="100" max="60000">
         </mat-form-field>
         <mat-form-field appearance="outline">
-          <mat-label>Very slow response ms</mat-label>
+          <mat-label>{{ 'Very slow response ms' | uiText }}</mat-label>
           <input matInput type="number" name="errorResponseMs" [(ngModel)]="model.healthConfig.errorResponseMs" min="100" max="120000">
         </mat-form-field>
         <mat-form-field appearance="outline">
-          <mat-label>TLS warning days</mat-label>
+          <mat-label>{{ 'TLS warning days' | uiText }}</mat-label>
           <input matInput type="number" name="tlsWarningDays" [(ngModel)]="model.healthConfig.tlsWarningDays" min="1" max="365">
         </mat-form-field>
       </div>
-      <mat-slide-toggle name="followRedirects" [(ngModel)]="model.healthConfig.followRedirects">Follow redirects</mat-slide-toggle>
+      <mat-slide-toggle name="followRedirects" [(ngModel)]="model.healthConfig.followRedirects">{{ 'Follow redirects' | uiText }}</mat-slide-toggle>
     </section>
   </mat-dialog-content>
   <mat-dialog-actions align="end">
-    <button mat-button type="button" mat-dialog-close>Cancel</button>
+    <button mat-button type="button" mat-dialog-close>{{ 'Cancel' | uiText }}</button>
     <button mat-flat-button color="primary" type="submit">
       <mat-icon class="material-symbols-outlined">save</mat-icon>
-      Save
+      {{ 'Save' | uiText }}
     </button>
   </mat-dialog-actions>
 </form>

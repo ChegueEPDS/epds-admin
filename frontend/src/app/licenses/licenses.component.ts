@@ -1,5 +1,7 @@
+import { UiLanguageService } from '../i18n/ui-language.service';
+import { UiTextPipe } from '../i18n/ui-text.pipe';
 import { CommonModule } from '@angular/common';
-import { Component, OnInit } from '@angular/core';
+import { inject, Component, OnInit } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { firstValueFrom } from 'rxjs';
 import { MatButtonModule } from '@angular/material/button';
@@ -26,6 +28,7 @@ type StatusFilter = 'all' | LicenseStatus | 'expired' | 'pending';
   selector: 'app-licenses',
   standalone: true,
   imports: [
+    UiTextPipe,
     CommonModule,
     FormsModule,
     MatButtonModule,
@@ -42,6 +45,7 @@ type StatusFilter = 'all' | LicenseStatus | 'expired' | 'pending';
   styleUrl: './licenses.component.scss'
 })
 export class LicensesComponent implements OnInit {
+  private readonly ui = inject(UiLanguageService);
   licenses: LicenseCustomer[] = [];
   clientTenants: LicenseClientTenant[] = [];
   searchTerm = '';
@@ -109,11 +113,11 @@ export class LicensesComponent implements OnInit {
       if (license) {
         const response = await firstValueFrom(this.licenseService.updateLicense(license.id, result.payload));
         this.licenses = this.licenses.map((item) => item.id === license.id ? response.license : item);
-        this.snackBar.open('License updated', 'Close', { duration: 2500 });
+        this.snackBar.open(this.ui.text('License updated'), this.ui.text('Close'), { duration: 2500 });
       } else {
         const response = await firstValueFrom(this.licenseService.createLicense(result.payload));
         this.licenses = [...this.licenses, response.license].sort((a, b) => this.customerDisplayName(a).localeCompare(this.customerDisplayName(b)));
-        this.snackBar.open('License created', 'Close', { duration: 2500 });
+        this.snackBar.open(this.ui.text('License created'), this.ui.text('Close'), { duration: 2500 });
       }
     } catch (err: any) {
       this.showError(err?.error?.error || 'Could not save license');
@@ -125,7 +129,7 @@ export class LicensesComponent implements OnInit {
     try {
       await firstValueFrom(this.licenseService.deleteLicense(license.id));
       this.licenses = this.licenses.filter((item) => item.id !== license.id);
-      this.snackBar.open('License deleted', 'Close', { duration: 2500 });
+      this.snackBar.open(this.ui.text('License deleted'), this.ui.text('Close'), { duration: 2500 });
     } catch {
       this.showError('Could not delete license');
     }
@@ -209,6 +213,6 @@ export class LicensesComponent implements OnInit {
   }
 
   private showError(message: string): void {
-    this.snackBar.open(message, 'Close', { duration: 3500 });
+    this.snackBar.open(this.ui.text(message), this.ui.text('Close'), { duration: 3500 });
   }
 }

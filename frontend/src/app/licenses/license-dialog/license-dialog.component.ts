@@ -1,5 +1,7 @@
+import { UiLanguageService } from '../../i18n/ui-language.service';
+import { UiTextPipe } from '../../i18n/ui-text.pipe';
 import { CommonModule } from '@angular/common';
-import { Component, Inject, OnInit } from '@angular/core';
+import { inject, Component, Inject, OnInit } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
 import { MatCheckboxModule } from '@angular/material/checkbox';
@@ -46,6 +48,7 @@ const APPLICATION_SERVER_TYPES: ApplicationServerType[] = ['Linux', 'Windows'];
   selector: 'app-license-dialog',
   standalone: true,
   imports: [
+    UiTextPipe,
     CommonModule,
     FormsModule,
     MatButtonModule,
@@ -65,6 +68,7 @@ const APPLICATION_SERVER_TYPES: ApplicationServerType[] = ['Linux', 'Windows'];
   styleUrl: './license-dialog.component.scss'
 })
 export class LicenseDialogComponent {
+  private readonly ui = inject(UiLanguageService);
   objectLimitOptions = OBJECT_LIMIT_OPTIONS;
   contactAreas = CONTACT_AREAS;
   addressEnvironments = ADDRESS_ENVIRONMENTS;
@@ -301,7 +305,7 @@ export class LicenseDialogComponent {
     if (!file || !this.data.license?.id || !this.data.canEdit) return;
     const extension = `.${file.name.split('.').pop()?.toLowerCase() || ''}`;
     if (!['.zip', '.txt', '.docx'].includes(extension) || file.size > 3 * 1024 * 1024) {
-      this.snackBar.open('Only ZIP, TXT or DOCX files up to 3 MB are allowed', 'Close', { duration: 3500 });
+      this.snackBar.open(this.ui.text('Only ZIP, TXT or DOCX files up to 3 MB are allowed'), this.ui.text('Close'), { duration: 3500 });
       return;
     }
     this.isUploadingLicenseFile = true;
@@ -310,9 +314,9 @@ export class LicenseDialogComponent {
       if (response?.license) {
         this.syncLicense(response.license);
       }
-      this.snackBar.open('License file uploaded', 'Close', { duration: 2500 });
+      this.snackBar.open(this.ui.text('License file uploaded'), this.ui.text('Close'), { duration: 2500 });
     } catch (err: any) {
-      this.snackBar.open(err?.error?.error || 'Could not upload license file', 'Close', { duration: 3500 });
+      this.snackBar.open(this.ui.text(err?.error?.error || 'Could not upload license file'), this.ui.text('Close'), { duration: 3500 });
     } finally {
       this.isUploadingLicenseFile = false;
     }
@@ -323,12 +327,12 @@ export class LicenseDialogComponent {
     input.value = '';
     if (!file || !this.data.license?.id || !this.data.canEdit) return;
     if (!this.model.mobileApp) {
-      this.snackBar.open('Mobile app must be enabled before uploading APK', 'Close', { duration: 3500 });
+      this.snackBar.open(this.ui.text('Mobile app must be enabled before uploading APK'), this.ui.text('Close'), { duration: 3500 });
       return;
     }
     const extension = `.${file.name.split('.').pop()?.toLowerCase() || ''}`;
     if (extension !== '.apk' || file.size > 100 * 1024 * 1024) {
-      this.snackBar.open('Only APK files up to 100 MB are allowed', 'Close', { duration: 3500 });
+      this.snackBar.open(this.ui.text('Only APK files up to 100 MB are allowed'), this.ui.text('Close'), { duration: 3500 });
       return;
     }
     this.isUploadingMobileAppFile = true;
@@ -341,9 +345,9 @@ export class LicenseDialogComponent {
       if (response?.license) {
         this.syncLicense(response.license);
       }
-      this.snackBar.open('Mobile app uploaded', 'Close', { duration: 2500 });
+      this.snackBar.open(this.ui.text('Mobile app uploaded'), this.ui.text('Close'), { duration: 2500 });
     } catch (err: any) {
-      this.snackBar.open(err?.error?.error || 'Could not upload mobile app', 'Close', { duration: 3500 });
+      this.snackBar.open(this.ui.text(err?.error?.error || 'Could not upload mobile app'), this.ui.text('Close'), { duration: 3500 });
     } finally {
       this.isUploadingMobileAppFile = false;
     }
@@ -361,9 +365,9 @@ export class LicenseDialogComponent {
     try {
       const response = await this.licenseService.orderLicense(this.data.license.id, payload).toPromise();
       if (response?.license) this.syncLicense(response.license);
-      this.snackBar.open('License ordered', 'Close', { duration: 2500 });
+      this.snackBar.open(this.ui.text('License ordered'), this.ui.text('Close'), { duration: 2500 });
     } catch (err: any) {
-      this.snackBar.open(err?.error?.error || 'Could not order license', 'Close', { duration: 3500 });
+      this.snackBar.open(this.ui.text(err?.error?.error || 'Could not order license'), this.ui.text('Close'), { duration: 3500 });
     }
   }
 
@@ -372,9 +376,9 @@ export class LicenseDialogComponent {
     try {
       const response = await this.licenseService.activateLicense(this.data.license.id).toPromise();
       if (response?.license) this.syncLicense(response.license);
-      this.snackBar.open('License activated', 'Close', { duration: 2500 });
+      this.snackBar.open(this.ui.text('License activated'), this.ui.text('Close'), { duration: 2500 });
     } catch (err: any) {
-      this.snackBar.open(err?.error?.error || 'Could not activate license', 'Close', { duration: 3500 });
+      this.snackBar.open(this.ui.text(err?.error?.error || 'Could not activate license'), this.ui.text('Close'), { duration: 3500 });
     }
   }
 
@@ -393,7 +397,7 @@ export class LicenseDialogComponent {
       link.click();
       URL.revokeObjectURL(url);
     } catch (err: any) {
-      this.snackBar.open(err?.error?.error || 'Could not download license file', 'Close', { duration: 3500 });
+      this.snackBar.open(this.ui.text(err?.error?.error || 'Could not download license file'), this.ui.text('Close'), { duration: 3500 });
     }
   }
 
@@ -412,7 +416,7 @@ export class LicenseDialogComponent {
       link.click();
       URL.revokeObjectURL(url);
     } catch (err: any) {
-      this.snackBar.open(err?.error?.error || 'Could not download mobile app', 'Close', { duration: 3500 });
+      this.snackBar.open(this.ui.text(err?.error?.error || 'Could not download mobile app'), this.ui.text('Close'), { duration: 3500 });
     }
   }
 

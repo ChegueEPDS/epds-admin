@@ -1,5 +1,7 @@
+import { UiLanguageService } from '../../i18n/ui-language.service';
+import { UiTextPipe } from '../../i18n/ui-text.pipe';
 import { CommonModule } from '@angular/common';
-import { Component, OnInit, TemplateRef, signal } from '@angular/core';
+import { inject, Component, OnInit, TemplateRef, signal } from '@angular/core';
 import { MatButtonModule } from '@angular/material/button';
 import { MatDialog, MatDialogModule } from '@angular/material/dialog';
 import { MatIconModule } from '@angular/material/icon';
@@ -15,6 +17,7 @@ import { AddUserDialogComponent } from './add-user-dialog.component';
   selector: 'app-admin-users',
   standalone: true,
   imports: [
+    UiTextPipe,
     CommonModule,
     MatButtonModule,
     MatDialogModule,
@@ -28,6 +31,7 @@ import { AddUserDialogComponent } from './add-user-dialog.component';
   styleUrl: './admin-users.component.scss'
 })
 export class AdminUsersComponent implements OnInit {
+  private readonly ui = inject(UiLanguageService);
   users = signal<AdminUser[]>([]);
   tenants = signal<AdminTenant[]>([]);
   loading = signal(false);
@@ -79,7 +83,7 @@ export class AdminUsersComponent implements OnInit {
     ref.afterClosed().subscribe((updated: AdminUser | undefined) => {
       if (!updated) return;
       this.users.set(this.users().map((item) => item.id === updated.id ? updated : item));
-      this.snackBar.open('User saved.', 'Close', { duration: 3000 });
+      this.snackBar.open(this.ui.text('User saved.'), this.ui.text('Close'), { duration: 3000 });
     });
   }
 
@@ -93,8 +97,8 @@ export class AdminUsersComponent implements OnInit {
     ref.afterClosed().subscribe((created: AdminUser | undefined) => {
       if (!created) return;
       this.users.set([...this.users(), created].sort((a, b) => a.email.localeCompare(b.email)));
-      this.snackBar.open(created.invitationSent ? 'Invitation sent.' :
-        'User created. Email delivery failed. Use Resend invitation.', 'Close', { duration: 5000 });
+      this.snackBar.open(this.ui.text(created.invitationSent ? 'Invitation sent.' :
+        'User created. Email delivery failed. Use Resend invitation.'), this.ui.text('Close'), { duration: 5000 });
     });
   }
 
@@ -115,11 +119,11 @@ export class AdminUsersComponent implements OnInit {
         this.admin.sendRecoveryLink(user.id).subscribe({
           next: () => {
             this.sendingRecovery.set(false);
-            this.snackBar.open('Recovery link sent.', 'Close', { duration: 4500 });
+            this.snackBar.open(this.ui.text('Recovery link sent.'), this.ui.text('Close'), { duration: 4500 });
           },
           error: (error) => {
             this.sendingRecovery.set(false);
-            this.snackBar.open(error?.error?.error || 'Recovery link could not be sent.', 'Close', { duration: 5000 });
+            this.snackBar.open(this.ui.text(error?.error?.error || 'Recovery link could not be sent.'), this.ui.text('Close'), { duration: 5000 });
           }
         });
       });
@@ -138,11 +142,11 @@ export class AdminUsersComponent implements OnInit {
       next: (updated) => {
         this.users.update((users) => users.map((item) => item.id === updated.id ? updated : item));
         this.sendingInvitation.set(null);
-        this.snackBar.open('Invitation sent.', 'Close', { duration: 3500 });
+        this.snackBar.open(this.ui.text('Invitation sent.'), this.ui.text('Close'), { duration: 3500 });
       },
       error: (error) => {
         this.sendingInvitation.set(null);
-        this.snackBar.open(error?.error?.error || 'Invitation could not be sent.', 'Close', { duration: 4500 });
+        this.snackBar.open(this.ui.text(error?.error?.error || 'Invitation could not be sent.'), this.ui.text('Close'), { duration: 4500 });
       }
     });
   }
@@ -161,6 +165,6 @@ export class AdminUsersComponent implements OnInit {
 
   private failLoad(): void {
     this.loading.set(false);
-    this.snackBar.open('Admin data could not be loaded.', 'Close', { duration: 4500 });
+    this.snackBar.open(this.ui.text('Admin data could not be loaded.'), this.ui.text('Close'), { duration: 4500 });
   }
 }

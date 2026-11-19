@@ -1,6 +1,8 @@
+import { UiLanguageService } from '../i18n/ui-language.service';
+import { UiTextPipe } from '../i18n/ui-text.pipe';
 import { CommonModule } from '@angular/common';
 import { HttpErrorResponse } from '@angular/common/http';
-import { Component, HostListener, OnDestroy, OnInit, TemplateRef, ViewChild } from '@angular/core';
+import { inject, Component, HostListener, OnDestroy, OnInit, TemplateRef, ViewChild } from '@angular/core';
 import { CdkDragDrop, DragDropModule } from '@angular/cdk/drag-drop';
 import { RouterLink } from '@angular/router';
 import { FormsModule } from '@angular/forms';
@@ -45,6 +47,7 @@ type VisibleRow = Row & { byStatus: Record<EffortTaskStatus, EffortTask[]> };
   selector: 'app-effort-tracking',
   standalone: true,
   imports: [
+    UiTextPipe,
     CommonModule, RouterLink, FormsModule, DragDropModule, MatButtonModule, MatDialogModule, MatIconModule,
     MatMenuModule, MatProgressSpinnerModule, MatSnackBarModule, MatTooltipModule, RichTextEditorComponent, WorkFieldValuesComponent
   ],
@@ -52,6 +55,7 @@ type VisibleRow = Row & { byStatus: Record<EffortTaskStatus, EffortTask[]> };
   styleUrl: './effort-tracking.component.scss'
 })
 export class EffortTrackingComponent implements OnInit, OnDestroy {
+  private readonly ui = inject(UiLanguageService);
   @ViewChild('taskEditor', { static: true }) private taskEditor!: TemplateRef<unknown>;
   @ViewChild('projectEditor', { static: true }) private projectEditor!: TemplateRef<unknown>;
 
@@ -559,7 +563,7 @@ export class EffortTrackingComponent implements OnInit, OnDestroy {
   private message(error: unknown, fallback: string): string {
     return error instanceof HttpErrorResponse ? error.error?.error || fallback : fallback;
   }
-  private notice(message: string): void { this.snackBar.open(message, 'OK', { duration: 4200 }); }
+  private notice(message: string): void { this.snackBar.open(this.ui.text(message), this.ui.text('OK'), { duration: 4200 }); }
   private updateTitle(): void {
     document.title = this.activeTask ? `● ${this.formatDuration(this.taskNet(this.activeTask))} | ${this.activeTask.name}` : this.originalTitle;
   }

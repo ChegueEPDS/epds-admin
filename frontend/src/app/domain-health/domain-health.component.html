@@ -1,8 +1,8 @@
 <section class="page">
   <div class="page-title">
     <div>
-      <h1>Domain Health</h1>
-      <p>Monitors registered domains every 15 minutes with configurable HTTP, redirect and TLS checks.</p>
+      <h1>{{ 'Domain Health' | uiText }}</h1>
+      <p>{{ 'Monitors registered domains every 15 minutes with configurable HTTP, redirect and TLS checks.' | uiText }}</p>
     </div>
   </div>
 
@@ -10,30 +10,30 @@
     <button type="button" class="summary-tile status-ok" [class.active]="statusFilter === 'healthy'" (click)="statusFilter = 'healthy'">
       <mat-icon class="material-symbols-outlined">check_circle</mat-icon>
       <span>{{ summary('ok') }}</span>
-      <strong>Healthy</strong>
+      <strong>{{ 'Healthy' | uiText }}</strong>
     </button>
     <button type="button" class="summary-tile status-warning" [class.active]="statusFilter === 'warning'" (click)="statusFilter = 'warning'">
       <mat-icon class="material-symbols-outlined">warning</mat-icon>
       <span>{{ summary('warning') }}</span>
-      <strong>Warnings</strong>
+      <strong>{{ 'Warnings' | uiText }}</strong>
     </button>
     <button type="button" class="summary-tile status-error" [class.active]="statusFilter === 'issues'" (click)="statusFilter = 'issues'">
       <mat-icon class="material-symbols-outlined">error</mat-icon>
       <span>{{ summary('error') }}</span>
-      <strong>Down</strong>
+      <strong>{{ 'Down' | uiText }}</strong>
     </button>
     <button type="button" class="summary-tile status-unknown" [class.active]="statusFilter === 'all'" (click)="statusFilter = 'all'">
       <mat-icon class="material-symbols-outlined">dns</mat-icon>
       <span>{{ visibleDomains.length }}</span>
-      <strong>All domains</strong>
+      <strong>{{ 'All domains' | uiText }}</strong>
     </button>
   </div>
 
   <div class="toolbar-row">
     <mat-form-field appearance="outline">
-      <mat-label>Search</mat-label>
+      <mat-label>{{ 'Search' | uiText }}</mat-label>
       <mat-icon matPrefix class="material-symbols-outlined">search</mat-icon>
-      <input matInput [(ngModel)]="searchTerm" placeholder="Name or URL">
+      <input matInput [(ngModel)]="searchTerm" placeholder="{{ 'Name or URL' | uiText }}">
     </mat-form-field>
     <div class="toolbar-actions">
       <mat-slide-toggle
@@ -41,16 +41,16 @@
         [ngModel]="showDisabledDomains"
         (ngModelChange)="setShowDisabledDomains($event)"
       >
-        Show disabled
+        {{ 'Show disabled' | uiText }}
       </mat-slide-toggle>
       <button mat-button type="button" (click)="loadDomains()" [disabled]="isLoading">
         <mat-progress-spinner *ngIf="isLoading" diameter="18" mode="indeterminate"></mat-progress-spinner>
         <mat-icon *ngIf="!isLoading" class="material-symbols-outlined">refresh</mat-icon>
-        Refresh
+        {{ 'Refresh' | uiText }}
       </button>
       <button mat-flat-button color="primary" type="button" *ngIf="auth.canEditFeature('domainHealth')" (click)="openDomainDialog()">
         <mat-icon class="material-symbols-outlined">add</mat-icon>
-        Add domain
+        {{ 'Add domain' | uiText }}
       </button>
     </div>
   </div>
@@ -71,14 +71,14 @@
           </colgroup>
           <thead>
             <tr>
-              <th>Status</th>
-              <th>Domain</th>
-              <th *ngIf="auth.isSuperAdmin()">Owner</th>
-              <th>Perf.</th>
-              <th>TLS</th>
-              <th>Checked</th>
-              <th>Issue</th>
-              <th class="actions-col">Actions</th>
+              <th>{{ 'Status' | uiText }}</th>
+              <th>{{ 'Domain' | uiText }}</th>
+              <th *ngIf="auth.isSuperAdmin()">{{ 'Owner' | uiText }}</th>
+              <th>{{ 'Perf.' | uiText }}</th>
+              <th>{{ 'TLS' | uiText }}</th>
+              <th>{{ 'Checked' | uiText }}</th>
+              <th>{{ 'Issue' | uiText }}</th>
+              <th class="actions-col">{{ 'Actions' | uiText }}</th>
             </tr>
           </thead>
           <tbody>
@@ -114,24 +114,24 @@
               </td>
               <td data-label="TLS">
                 <span>{{ tlsText(domain) }}</span>
-                <span class="metric-subtext">redirects {{ redirectText(domain) }}</span>
+                <span class="metric-subtext">{{ 'redirects {0}' | uiText: (redirectText(domain)) }}</span>
               </td>
               <td data-label="Checked">{{ domain.lastCheckedAt ? (domain.lastCheckedAt | date:'M/d/yy, HH:mm') : '-' }}</td>
               <td data-label="Issue">
                 <span>{{ issueText(domain) }}</span>
-                <span class="metric-subtext">24h uptime {{ uptimeText(domain) }}</span>
+                <span class="metric-subtext">{{ '24h uptime {0}' | uiText: (uptimeText(domain)) }}</span>
               </td>
               <td class="actions-col" data-label="Actions">
-                <a mat-icon-button [href]="domain.baseUrl" target="_blank" rel="noopener" matTooltip="Open website" (click)="$event.stopPropagation()">
+                <a mat-icon-button [href]="domain.baseUrl" target="_blank" rel="noopener" matTooltip="{{ 'Open website' | uiText }}" (click)="$event.stopPropagation()">
                   <mat-icon class="material-symbols-outlined">open_in_new</mat-icon>
                 </a>
-                <button mat-icon-button type="button" *ngIf="auth.canEditFeature('domainHealth')" matTooltip="Run check now" (click)="checkNow(domain, $event)" [disabled]="isChecking">
+                <button mat-icon-button type="button" *ngIf="auth.canEditFeature('domainHealth')" matTooltip="{{ 'Run check now' | uiText }}" (click)="checkNow(domain, $event)" [disabled]="isChecking">
                   <mat-icon class="material-symbols-outlined">play_arrow</mat-icon>
                 </button>
-                <button mat-icon-button type="button" *ngIf="auth.canEditFeature('domainHealth')" matTooltip="Edit domain" (click)="$event.stopPropagation(); openDomainDialog(domain)">
+                <button mat-icon-button type="button" *ngIf="auth.canEditFeature('domainHealth')" matTooltip="{{ 'Edit domain' | uiText }}" (click)="$event.stopPropagation(); openDomainDialog(domain)">
                   <mat-icon class="material-symbols-outlined">edit</mat-icon>
                 </button>
-                <button mat-icon-button type="button" *ngIf="auth.canDeleteFeature('domainHealth')" matTooltip="Delete domain" (click)="deleteDomain(domain, $event)">
+                <button mat-icon-button type="button" *ngIf="auth.canDeleteFeature('domainHealth')" matTooltip="{{ 'Delete domain' | uiText }}" (click)="deleteDomain(domain, $event)">
                   <mat-icon class="material-symbols-outlined">delete</mat-icon>
                 </button>
               </td>
@@ -139,7 +139,7 @@
             <tr *ngIf="!filteredDomains.length">
               <td [attr.colspan]="auth.isSuperAdmin() ? 8 : 7" class="empty-state">
                 <mat-icon class="material-symbols-outlined">domain_disabled</mat-icon>
-                No domains match the current filter.
+                {{ 'No domains match the current filter.' | uiText }}
               </td>
             </tr>
           </tbody>
@@ -150,7 +150,7 @@
     <aside class="detail-panel" *ngIf="selectedDomain; else noSelection">
       <div class="detail-loading" *ngIf="isLoadingChecks && !overview && !checks.length; else detailContent">
         <mat-progress-spinner diameter="34" mode="indeterminate"></mat-progress-spinner>
-        <span>Loading domain details...</span>
+        <span>{{ 'Loading domain details...' | uiText }}</span>
       </div>
 
       <ng-template #detailContent>
@@ -167,125 +167,125 @@
 
       <div class="metric-grid">
         <div>
-          <span>Last response</span>
+          <span>{{ 'Last response' | uiText }}</span>
           <strong>{{ responseText(selectedDomain) }}</strong>
         </div>
         <div>
-          <span>24h uptime</span>
+          <span>{{ '24h uptime' | uiText }}</span>
           <strong>{{ uptimePercent() }}</strong>
         </div>
         <div>
-          <span>24h median</span>
+          <span>{{ '24h median' | uiText }}</span>
           <strong>{{ msText(selectedDomain.performance?.medianResponseMs) }}</strong>
         </div>
         <div>
-          <span>24h P95</span>
+          <span>{{ '24h P95' | uiText }}</span>
           <strong>{{ msText(selectedDomain.performance?.p95ResponseMs) }}</strong>
         </div>
         <div>
-          <span>TLS</span>
+          <span>{{ 'TLS' | uiText }}</span>
           <strong>{{ tlsText(selectedDomain) }}</strong>
         </div>
         <div>
-          <span>Redirects</span>
+          <span>{{ 'Redirects' | uiText }}</span>
           <strong>{{ redirectText(selectedDomain) }}</strong>
         </div>
         <div>
-          <span>Expected HTTP</span>
+          <span>{{ 'Expected HTTP' | uiText }}</span>
           <strong>{{ statusRangeText(selectedDomain) }}</strong>
         </div>
         <div>
-          <span>Check path</span>
+          <span>{{ 'Check path' | uiText }}</span>
           <strong>{{ checkTargetText(selectedDomain) }}</strong>
         </div>
       </div>
 
       <button mat-stroked-button type="button" class="deep-scan-button" (click)="openDeepScan(selectedDomain)">
         <mat-icon class="material-symbols-outlined">speed</mat-icon>
-        PageSpeed
+        {{ 'PageSpeed' | uiText }}
       </button>
 
       <button mat-button type="button" class="details-toggle" (click)="showDetails = !showDetails">
         <mat-icon class="material-symbols-outlined">{{ showDetails ? 'expand_less' : 'expand_more' }}</mat-icon>
-        {{ showDetails ? 'Show less' : 'Show details...' }}
+        {{ showDetails ? ('Show less' | uiText) : ('Show details...' | uiText) }}
       </button>
 
       <div class="details-collapse" [class.open]="showDetails">
         <div class="diagnostic-grid">
           <div>
-            <span>Final URL</span>
+            <span>{{ 'Final URL' | uiText }}</span>
             <strong>{{ finalUrlText(selectedDomain) }}</strong>
           </div>
           <div>
-            <span>Content</span>
+            <span>{{ 'Content' | uiText }}</span>
             <strong>{{ contentText(selectedDomain) }}</strong>
           </div>
           <div>
-            <span>TLS valid to</span>
+            <span>{{ 'TLS valid to' | uiText }}</span>
             <strong>{{ selectedDomain.lastTlsValidTo ? (selectedDomain.lastTlsValidTo | date:'mediumDate') : '-' }}</strong>
           </div>
           <div>
-            <span>Last diagnosis</span>
+            <span>{{ 'Last diagnosis' | uiText }}</span>
             <strong>{{ issueText(selectedDomain) }}</strong>
           </div>
           <div>
-            <span>Last successful check</span>
+            <span>{{ 'Last successful check' | uiText }}</span>
             <strong>{{ overview?.lastSuccessfulCheck?.checkedAt ? (overview?.lastSuccessfulCheck?.checkedAt | date:'M/d/yy, HH:mm') : '-' }}</strong>
           </div>
           <div>
-            <span>Last failed check</span>
+            <span>{{ 'Last failed check' | uiText }}</span>
             <strong>{{ overview?.lastFailedCheck?.checkedAt ? (overview?.lastFailedCheck?.checkedAt | date:'M/d/yy, HH:mm') : '-' }}</strong>
           </div>
           <div>
-            <span>Last recovery</span>
+            <span>{{ 'Last recovery' | uiText }}</span>
             <strong>{{ overview?.lastRecoveryAt ? (overview?.lastRecoveryAt | date:'M/d/yy, HH:mm') : '-' }}</strong>
           </div>
           <div>
-            <span>Customer view</span>
-            <strong><a [href]="publicStatusRoute(selectedDomain)" target="_blank" rel="noopener">Open status report</a></strong>
+            <span>{{ 'Customer view' | uiText }}</span>
+            <strong><a [href]="publicStatusRoute(selectedDomain)" target="_blank" rel="noopener">{{ 'Open status report' | uiText }}</a></strong>
           </div>
         </div>
       </div>
 
       <div class="aggregate-grid" *ngIf="overview">
         <div>
-          <span>24h avg</span>
+          <span>{{ '24h avg' | uiText }}</span>
           <strong>{{ avgResponseText('24h') }}</strong>
-          <small>{{ incidentCountText('24h') }} incidents</small>
+          <small>{{ '{0} incidents' | uiText: (incidentCountText('24h')) }}</small>
         </div>
         <div>
-          <span>7d uptime</span>
+          <span>{{ '7d uptime' | uiText }}</span>
           <strong>{{ windowSummary('7d')?.uptimePercent ?? '-' }}{{ windowSummary('7d')?.uptimePercent !== null ? '%' : '' }}</strong>
           <small>P95 {{ msText(windowSummary('7d')?.p95ResponseMs ?? null) }}</small>
         </div>
         <div>
-          <span>30d uptime</span>
+          <span>{{ '30d uptime' | uiText }}</span>
           <strong>{{ windowSummary('30d')?.uptimePercent ?? '-' }}{{ windowSummary('30d')?.uptimePercent !== null ? '%' : '' }}</strong>
-          <small>{{ incidentCountText('30d') }} incidents</small>
+          <small>{{ '{0} incidents' | uiText: (incidentCountText('30d')) }}</small>
         </div>
         <div [class]="tlsStatusClass()">
-          <span>TLS threshold</span>
-          <strong>{{ selectedDomain.healthConfig.tlsWarningDays }}d</strong>
+          <span>{{ 'TLS threshold' | uiText }}</span>
+          <strong>{{ '{0}d' | uiText: (selectedDomain.healthConfig.tlsWarningDays) }}</strong>
           <small>{{ overview.tls.status | titlecase }}</small>
         </div>
       </div>
 
       <div class="monthly-report-panel" *ngIf="selectedDomain.tenantId">
-        <h3>Monthly customer report</h3>
-        <p>Closed calendar months · Europe/Budapest · All services belonging to this customer</p>
+        <h3>{{ 'Monthly customer report' | uiText }}</h3>
+        <p>{{ 'Closed calendar months · Europe/Budapest · All services belonging to this customer' | uiText }}</p>
         <div class="monthly-report-controls" *ngIf="monthlyReports.length">
-          <mat-form-field appearance="outline"><mat-label>Report month</mat-label><mat-select [(ngModel)]="selectedReportMonth"><mat-option *ngFor="let report of monthlyReports" [value]="report.month">{{ report.month }}{{ report.archived ? ' · Archived' : '' }}</mat-option></mat-select></mat-form-field>
-          <button mat-stroked-button type="button" [disabled]="isDownloadingMonthly || !selectedReportMonth" (click)="downloadMonthlyReport()"><mat-icon *ngIf="!isDownloadingMonthly" class="material-symbols-outlined">picture_as_pdf</mat-icon><mat-progress-spinner *ngIf="isDownloadingMonthly" diameter="18" mode="indeterminate"></mat-progress-spinner>{{ isDownloadingMonthly ? 'Preparing report…' : 'Download PDF' }}</button>
+          <mat-form-field appearance="outline"><mat-label>{{ 'Report month' | uiText }}</mat-label><mat-select [(ngModel)]="selectedReportMonth"><mat-option *ngFor="let report of monthlyReports" [value]="report.month">{{ report.month }}{{ report.archived ? ' · Archived' : '' }}</mat-option></mat-select></mat-form-field>
+          <button mat-stroked-button type="button" [disabled]="isDownloadingMonthly || !selectedReportMonth" (click)="downloadMonthlyReport()"><mat-icon *ngIf="!isDownloadingMonthly" class="material-symbols-outlined">picture_as_pdf</mat-icon><mat-progress-spinner *ngIf="isDownloadingMonthly" diameter="18" mode="indeterminate"></mat-progress-spinner>{{ isDownloadingMonthly ? ('Preparing report…' | uiText) : ('Download PDF' | uiText) }}</button>
         </div>
-        <div *ngIf="monthlyReportsError" role="alert">{{ monthlyReportsError }} <button mat-button type="button" (click)="loadMonthlyReports(selectedDomain.tenantId)">Retry</button></div>
+        <div *ngIf="monthlyReportsError" role="alert">{{ monthlyReportsError }} <button mat-button type="button" (click)="loadMonthlyReports(selectedDomain.tenantId)">{{ 'Retry' | uiText }}</button></div>
       </div>
       <div class="measurement-note" *ngIf="selectedDomain.monitoringState as measurement">
-        <span *ngIf="measurement.decision === 'unknown'">Latest measurements could not confirm a status change. Last confirmed status is shown.</span>
-        <span *ngIf="measurement.locations?.length">Measurement locations: {{ measurement.locations?.length }} · Required agreement: {{ measurement.quorum }}</span>
+        <span *ngIf="measurement.decision === 'unknown'">{{ 'Latest measurements could not confirm a status change. Last confirmed status is shown.' | uiText }}</span>
+        <span *ngIf="measurement.locations?.length">{{ 'Measurement locations: {0} · Required agreement: {1}' | uiText: (measurement.locations?.length): (measurement.quorum) }}</span>
       </div>
       <div class="history-panel" *ngIf="overview">
         <div class="section-head">
-          <h3>Availability · Last 24 hours</h3>
+          <h3>{{ 'Availability · Last 24 hours' | uiText }}</h3>
         </div>
         <div class="history-strip">
           <span
@@ -300,32 +300,32 @@
       <ng-container *ngTemplateOutlet="timeline; context: { expanded: false, chartId: 'inline-chart' }"></ng-container>
       <ng-template #chartDialog>
         <div class="chart-dialog-header">
-          <h2 mat-dialog-title>{{ selectedDomain.name }} · Response time</h2>
-          <button mat-icon-button mat-dialog-close type="button" aria-label="Close enlarged chart"><mat-icon class="material-symbols-outlined">close</mat-icon></button>
+          <h2 mat-dialog-title>{{ '{0} · Response time' | uiText: (selectedDomain.name) }}</h2>
+          <button mat-icon-button mat-dialog-close type="button" aria-label="{{ 'Close enlarged chart' | uiText }}"><mat-icon class="material-symbols-outlined">close</mat-icon></button>
         </div>
         <mat-dialog-content class="chart-dialog-content">
           <ng-container *ngTemplateOutlet="timeline; context: { expanded: true, chartId: 'dialog-chart' }"></ng-container>
         </mat-dialog-content>
       </ng-template>
       <ng-template #timeline let-expanded="expanded" let-chartId="chartId">
-      <div class="timeline-heading"><h3>Response time · {{ selectedRange }}</h3><span *ngIf="checksUpdatedAt">Last refreshed {{ checksUpdatedAt | date:'HH:mm:ss' }}</span></div>
+      <div class="timeline-heading"><h3>{{ 'Response time · {0}' | uiText: (selectedRange) }}</h3><span *ngIf="checksUpdatedAt">{{ 'Last refreshed {0}' | uiText: (checksUpdatedAt | date:'HH:mm:ss') }}</span></div>
       <div class="range-row">
-        <button mat-button type="button" [class.active-range]="selectedRange === '24h'" (click)="selectedRange = '24h'; loadChecks()">24h</button>
-        <button mat-button type="button" [class.active-range]="selectedRange === '7d'" (click)="selectedRange = '7d'; loadChecks()">7d</button>
-        <button mat-button type="button" [class.active-range]="selectedRange === '30d'" (click)="selectedRange = '30d'; loadChecks()">30d</button>
-        <button *ngIf="!expanded" class="expand-chart-button" mat-icon-button type="button" aria-label="Enlarge chart" matTooltip="Enlarge chart" (click)="openChartDialog(chartDialog)"><mat-icon class="material-symbols-outlined">open_in_full</mat-icon></button>
+        <button mat-button type="button" [class.active-range]="selectedRange === '24h'" (click)="selectedRange = '24h'; loadChecks()">{{ '24h' | uiText }}</button>
+        <button mat-button type="button" [class.active-range]="selectedRange === '7d'" (click)="selectedRange = '7d'; loadChecks()">{{ '7d' | uiText }}</button>
+        <button mat-button type="button" [class.active-range]="selectedRange === '30d'" (click)="selectedRange = '30d'; loadChecks()">{{ '30d' | uiText }}</button>
+        <button *ngIf="!expanded" class="expand-chart-button" mat-icon-button type="button" aria-label="{{ 'Enlarge chart' | uiText }}" matTooltip="{{ 'Enlarge chart' | uiText }}" (click)="openChartDialog(chartDialog)"><mat-icon class="material-symbols-outlined">open_in_full</mat-icon></button>
       </div>
 
-      <div *ngIf="checksError && !isLoadingChecks" class="timeline-error" role="alert"><span>{{ checksError }}</span><button mat-button type="button" (click)="loadChecks()">Retry</button></div>
+      <div *ngIf="checksError && !isLoadingChecks" class="timeline-error" role="alert"><span>{{ checksError }}</span><button mat-button type="button" (click)="loadChecks()">{{ 'Retry' | uiText }}</button></div>
       <div class="timeline-summary" *ngIf="!isLoadingChecks && !checksError && windowSummary(selectedRange) as summary">
-        <div><span>Uptime</span><strong>{{ summary.uptimePercent === null ? '—' : summary.uptimePercent + '%' }}</strong></div>
-        <div><span>Average</span><strong>{{ msText(summary.avgResponseMs) }}</strong></div>
-        <div><span matTooltip="95% of successful checks were faster than this value.">P95</span><strong>{{ msText(summary.p95ResponseMs) }}</strong></div>
-        <div><span>Incidents</span><strong>{{ summary.incidentCount }}</strong></div>
+        <div><span>{{ 'Uptime' | uiText }}</span><strong>{{ summary.uptimePercent === null ? '—' : summary.uptimePercent + '%' }}</strong></div>
+        <div><span>{{ 'Average' | uiText }}</span><strong>{{ msText(summary.avgResponseMs) }}</strong></div>
+        <div><span matTooltip="{{ '95% of successful checks were faster than this value.' | uiText }}">{{ 'P95' | uiText }}</span><strong>{{ msText(summary.p95ResponseMs) }}</strong></div>
+        <div><span>{{ 'Incidents' | uiText }}</span><strong>{{ summary.incidentCount }}</strong></div>
       </div>
-      <p class="chart-explanation" *ngIf="selectedRange !== '24h' && !isLoadingChecks && !checksError">Hourly averages with maximum response markers. Hours containing failures remain marked as Down.</p>
+      <p class="chart-explanation" *ngIf="selectedRange !== '24h' && !isLoadingChecks && !checksError">{{ 'Hourly averages with maximum response markers. Hours containing failures remain marked as Down.' | uiText }}</p>
       <div class="timeline-chart" *ngIf="!isLoadingChecks && !checksError && checks.length; else emptyTimeline">
-        <svg viewBox="0 0 720 500" role="img" aria-label="Domain response time timeline" (mouseleave)="setActiveChartPoint(null)">
+        <svg viewBox="0 0 720 500" role="img" aria-label="{{ 'Domain response time timeline' | uiText }}" (mouseleave)="setActiveChartPoint(null)">
           <defs>
             <linearGradient
               [attr.id]="chartId + '-gradient'"
@@ -375,38 +375,38 @@
         </svg>
         <div *ngIf="activeChartPoint as point" class="chart-point-details" aria-live="polite"><strong>{{ point.statusText }} · {{ point.valueText }}</strong><span>{{ point.timeText }}</span><span>{{ point.detailText }}</span><span *ngIf="selectedRange !== '24h'">{{ checkDetailText(point.check) }}</span></div>
         <div class="chart-legend" aria-hidden="true">
-          <span><i class="legend-ok"></i>OK</span>
-          <span><i class="legend-warning"></i>Warning</span>
-          <span><i class="legend-danger"></i>Down</span>
+          <span><i class="legend-ok"></i>{{ 'OK' | uiText }}</span>
+          <span><i class="legend-warning"></i>{{ 'Warning' | uiText }}</span>
+          <span><i class="legend-danger"></i>{{ 'Down' | uiText }}</span>
         </div>
       </div>
       <ng-template #emptyTimeline>
         <div *ngIf="isLoadingChecks || !checksError" class="empty-timeline" [class.chart-loading]="isLoadingChecks" role="status" [attr.aria-busy]="isLoadingChecks">
           <mat-progress-spinner *ngIf="isLoadingChecks" diameter="24" mode="indeterminate"></mat-progress-spinner>
           <mat-icon *ngIf="!isLoadingChecks" class="material-symbols-outlined">timeline</mat-icon>
-          <span>{{ isLoadingChecks ? 'Loading timeline...' : 'No checks in this range yet.' }}</span>
+          <span>{{ isLoadingChecks ? ('Loading timeline...' | uiText) : ('No checks in this range yet.' | uiText) }}</span>
         </div>
       </ng-template>
       </ng-template>
 
       <div class="event-list">
         <div class="section-head">
-          <h3>Incidents</h3>
+          <h3>{{ 'Incidents' | uiText }}</h3>
         </div>
         <div class="incident-row" *ngFor="let incident of overview?.incidents?.slice(0, 6)">
           <mat-icon class="material-symbols-outlined" [class.status-warning]="incident.severity === 'warning'" [class.status-error]="incident.severity === 'error'">
             {{ incident.severity === 'error' ? 'error' : 'warning' }}
           </mat-icon>
           <div>
-            <small class="root-cause-label">Root cause</small>
+            <small class="root-cause-label">{{ 'Root cause' | uiText }}</small>
             <strong>{{ incident.reasonText }}</strong>
-            <span>{{ incident.startedAt | date:'M/d/yy, HH:mm' }} - {{ incident.endedAt ? (incident.endedAt | date:'M/d/yy, HH:mm') : 'Open' }} · {{ incidentDurationText(incident) }}</span>
+            <span>{{ incident.startedAt | date:'M/d/yy, HH:mm' }} - {{ incident.endedAt ? (incident.endedAt | date:'M/d/yy, HH:mm') : ('Open' | uiText) }} · {{ incidentDurationText(incident) }}</span>
           </div>
         </div>
-        <div class="empty-incidents" *ngIf="overview && !overview.incidents.length">No incidents in the retained 30d history.</div>
+        <div class="empty-incidents" *ngIf="overview && !overview.incidents.length">{{ 'No incidents in the retained 30d history.' | uiText }}</div>
 
         <div class="section-head checks-head">
-        <h3>Recent checks</h3>
+        <h3>{{ 'Recent checks' | uiText }}</h3>
         </div>
         <div class="event-row" *ngFor="let check of checks.slice().reverse().slice(0, 10); trackBy: trackByCheck" [class.failed]="checkStatus(check) === 'error'" [class.warning]="checkStatus(check) === 'warning'">
           <mat-icon class="material-symbols-outlined">{{ checkIcon(check) }}</mat-icon>
@@ -423,7 +423,7 @@
     <ng-template #noSelection>
       <aside class="detail-panel empty-detail">
         <mat-icon class="material-symbols-outlined">monitor_heart</mat-icon>
-        <span>Select a domain to inspect the response-time timeline.</span>
+        <span>{{ 'Select a domain to inspect the response-time timeline.' | uiText }}</span>
       </aside>
     </ng-template>
   </div>

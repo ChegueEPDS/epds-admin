@@ -1,3 +1,4 @@
+const { monitoringText } = require('./monitoringTexts');
 const path = require('path');
 const PDFDocument = require('pdfkit');
 
@@ -26,7 +27,8 @@ const COLORS = {
 
 function formatDate(value, options = {}) {
   if (!value) return '-';
-  return new Intl.DateTimeFormat('en-US', {
+  return new Intl.DateTimeFormat(options.language === 'hu' ? 'hu-HU' : 'en-US', {
+    timeZone: options.language === 'hu' ? 'Europe/Budapest' : undefined,
     dateStyle: 'medium',
     timeStyle: options.withTime === false ? undefined : 'short',
     hour12: false
@@ -49,8 +51,8 @@ function scoreText(value) {
   return typeof value === 'number' ? String(value) : '-';
 }
 
-function uptimeText(value) {
-  return typeof value === 'number' ? `${value}%` : '-';
+function uptimeText(value, language) {
+  return typeof value === 'number' ? `${new Intl.NumberFormat(language === 'hu' ? 'hu-HU' : 'en-US').format(value)}%` : '-';
 }
 
 function shortText(value, max = 46) {
@@ -58,14 +60,15 @@ function shortText(value, max = 46) {
   return text.length > max ? `${text.slice(0, max - 1)}...` : text;
 }
 
-function tlsText(daysRemaining) {
+function tlsText(daysRemaining, language) {
   if (typeof daysRemaining !== 'number') return '-';
   if (daysRemaining <= 0) return 'Expired';
-  return `${daysRemaining}d`;
+  return language === 'hu' ? `${daysRemaining} nap` : `${daysRemaining}d`;
 }
 
-function incidentDurationText(durationMs) {
+function incidentDurationText(durationMs, language) {
   const minutes = Math.round((durationMs || 0) / 60000);
+  if (language === 'hu') return minutes < 60 ? `${minutes} perc` : `${Math.floor(minutes / 60)} óra ${minutes % 60} perc`;
   if (minutes < 60) return `${minutes} min`;
   const hours = Math.floor(minutes / 60);
   const rest = minutes % 60;
@@ -104,9 +107,9 @@ function drawPageChrome(doc) {
   doc.restore();
 }
 
-function drawFooter(doc) {
-  doc.fillColor(COLORS.muted).font('Helvetica').fontSize(8).text(
-    FOOTER_TEXT,
+function drawFooter(doc, language) {
+  doc.fillColor(COLORS.muted).font('Regular').fontSize(8).text(
+    monitoringText(language, FOOTER_TEXT),
     0,
     doc.page.height - PAGE_MARGIN - 10,
     { width: doc.page.width, align: 'center', lineBreak: false }
@@ -117,20 +120,20 @@ function drawBrandLogo(doc, x, y, width = 50) {
   try {
     doc.image(LOGO_IMAGE_PATH, x, y, { width });
   } catch (_error) {
-    doc.fillColor(COLORS.ink).font('Helvetica-Bold').fontSize(12).text('EPDS', x, y + 4);
+    doc.fillColor(COLORS.ink).font('Bold').fontSize(12).text('EPDS', x, y + 4);
   }
 }
 
-function addPage(doc) {
+function addPage(doc, language) {
   doc.addPage();
   drawPageChrome(doc);
-  drawFooter(doc);
+  drawFooter(doc, language);
 }
 
-function ensureSpace(doc, y, neededHeight) {
+function ensureSpace(doc, y, neededHeight, language) {
   const maxY = doc.page.height - PAGE_MARGIN - FOOTER_HEIGHT;
   if (y + neededHeight <= maxY) return y;
-  addPage(doc);
+  addPage(doc, language);
   return PAGE_MARGIN;
 }
 
@@ -145,8 +148,8 @@ function drawMetricCard(doc, x, y, w, h, label, value, accentColor = COLORS.ink,
   const valueSize = options.valueSize || 19;
   const valueY = options.valueY || 32;
   drawRoundedPanel(doc, x, y, w, h, COLORS.card, COLORS.border);
-  doc.fillColor(COLORS.muted).font('Helvetica').fontSize(labelSize).text(label, x + 12, y + 12, { width: w - 24 });
-  doc.fillColor(accentColor).font('Helvetica-Bold').fontSize(valueSize).text(value, x + 12, y + valueY, {
+  doc.fillColor(COLORS.muted).font('Regular').fontSize(labelSize).text(label, x + 12, y + 12, { width: w - 24 });
+  doc.fillColor(accentColor).font('Bold').fontSize(valueSize).text(value, x + 12, y + valueY, {
     width: w - 24,
     height: h - valueY - 8
   });
@@ -158,7 +161,7 @@ function drawStatusPill(doc, x, y, text, status) {
   doc.save();
   doc.roundedRect(x, y, width, 22, 11).fillAndStroke(bg, fg);
   doc.restore();
-  doc.fillColor(fg).font('Helvetica-Bold').fontSize(9).text(text, x, y + 6, { width, align: 'center' });
+  doc.fillColor(fg).font('Bold').fontSize(9).text(text, x, y + 6, { width, align: 'center' });
 }
 
 function drawHistoryStrip(doc, x, y, width, history) {
@@ -212,7 +215,7 @@ function drawResponseChart(doc, x, y, width, height, history = []) {
     })
     .filter(Boolean);
 
-  doc.fillColor(COLORS.ink).font('Helvetica-Bold').fontSize(11).text('24h response trend', x + 14, y + 10);
+  doc.fillColor(COLORS.ink).font('Bold').fontSize(11).text('24h response trend', x + 14, y + 10);
 
   const ticks = [0, Math.round(maxMs / 2), maxMs];
   ticks.forEach((tick) => {
@@ -220,7 +223,7 @@ function drawResponseChart(doc, x, y, width, height, history = []) {
     doc.save();
     doc.moveTo(left, yPos).lineTo(right, yPos).strokeColor('#e7ebf2').lineWidth(1).stroke();
     doc.restore();
-    doc.fillColor(COLORS.muted).font('Helvetica').fontSize(8).text(
+    doc.fillColor(COLORS.muted).font('Regular').fontSize(8).text(
       tick === 0 ? '0' : tick >= 1000 ? `${Math.round(tick / 1000)}s` : `${tick} ms`,
       x + 6,
       yPos - 4,
@@ -247,7 +250,7 @@ function drawResponseChart(doc, x, y, width, height, history = []) {
   });
 }
 
-function drawIncidentRow(doc, x, y, width, incident) {
+function drawIncidentRow(doc, x, y, width, incident, language) {
   const rowHeight = 28;
   doc.save();
   doc.moveTo(x, y).lineTo(x + width, y).stroke(COLORS.border);
@@ -259,7 +262,7 @@ function drawIncidentRow(doc, x, y, width, incident) {
   doc.save();
   doc.roundedRect(x, y + 5, badgeWidth, 18, 9).fillAndStroke(bg, fg);
   doc.restore();
-  doc.fillColor(fg).font('Helvetica-Bold').fontSize(8).text(badgeText, x, y + 10,
+  doc.fillColor(fg).font('Bold').fontSize(8).text(monitoringText(language, badgeText), x, y + 10,
   {
     width: badgeWidth,
     align: 'center'
@@ -267,12 +270,12 @@ function drawIncidentRow(doc, x, y, width, incident) {
 
   const textX = x + badgeWidth + 10;
   const textWidth = width - (badgeWidth + 10);
-  doc.fillColor(COLORS.ink).font('Helvetica-Bold').fontSize(9).text(incident.reasonText, textX, y + 4, {
+  doc.fillColor(COLORS.ink).font('Bold').fontSize(9).text(monitoringText(language, incident.reasonText), textX, y + 4, {
     width: textWidth,
     lineGap: 0
   });
-  doc.fillColor(COLORS.muted).font('Helvetica').fontSize(8).text(
-    `${formatDate(incident.startedAt)} - ${incident.endedAt ? formatDate(incident.endedAt) : 'Open'} · ${incidentDurationText(incident.durationMs)}`,
+  doc.fillColor(COLORS.muted).font('Regular').fontSize(8).text(
+    `${formatDate(incident.startedAt, { language })} - ${incident.endedAt ? formatDate(incident.endedAt, { language }) : monitoringText(language, 'Open')} · ${incidentDurationText(incident.durationMs, language)}`,
     textX,
     y + 16,
     { width: textWidth, lineGap: 0 }
@@ -282,19 +285,19 @@ function drawIncidentRow(doc, x, y, width, incident) {
 
 function drawGuideItem(doc, x, y, width, title, text) {
   drawRoundedPanel(doc, x, y, width, 34, COLORS.card, COLORS.border);
-  doc.fillColor(COLORS.ink).font('Helvetica-Bold').fontSize(8.5).text(title, x + 9, y + 7, {
+  doc.fillColor(COLORS.ink).font('Bold').fontSize(8.5).text(title, x + 9, y + 7, {
     width: width - 24,
     lineBreak: false
   });
-  doc.fillColor(COLORS.muted).font('Helvetica').fontSize(7.2).text(text, x + 9, y + 18, {
+  doc.fillColor(COLORS.muted).font('Regular').fontSize(7.2).text(text, x + 9, y + 18, {
     width: width - 18,
-    height: 12,
+    height: 16,
     lineGap: 0
   });
 }
 
 function drawGuideSection(doc, x, y, width, title, items) {
-  doc.fillColor(COLORS.ink).font('Helvetica-Bold').fontSize(11).text(title, x, y);
+  doc.fillColor(COLORS.ink).font('Bold').fontSize(11).text(title, x, y);
   let nextY = y + 17;
   items.forEach(([itemTitle, text]) => {
     drawGuideItem(doc, x, nextY, width, itemTitle, text);
@@ -303,18 +306,19 @@ function drawGuideSection(doc, x, y, width, title, items) {
   return nextY + 10;
 }
 
-function drawExplanationPage(doc, report) {
-  addPage(doc);
+function drawExplanationPage(doc, report, language) {
+  const t = (source) => monitoringText(language, source);
+  addPage(doc, language);
   const pageWidth = doc.page.width - PAGE_MARGIN * 2;
   let y = PAGE_MARGIN;
 
   drawBrandLogo(doc, PAGE_MARGIN + pageWidth - 86, y, 86);
-  doc.fillColor(COLORS.brand).font('Helvetica-Bold').fontSize(12).text('REPORT GUIDE', PAGE_MARGIN, y + 4);
-  doc.fillColor(COLORS.ink).font('Helvetica-Bold').fontSize(28).text('How to read this report', PAGE_MARGIN, y + 22, {
+  doc.fillColor(COLORS.brand).font('Bold').fontSize(12).text(t('REPORT GUIDE'), PAGE_MARGIN, y + 4);
+  doc.fillColor(COLORS.ink).font('Bold').fontSize(28).text(t('How to read this report'), PAGE_MARGIN, y + 22, {
     width: pageWidth - 120
   });
-  doc.fillColor(COLORS.muted).font('Helvetica').fontSize(10).text(
-    `This guide explains the status and performance metrics used in the ${report.owner === 'All' ? 'domain' : report.owner} availability report.`,
+  doc.fillColor(COLORS.muted).font('Regular').fontSize(10).text(
+    language === 'hu' ? 'Az útmutató a jelentés állapot- és teljesítménymutatóit ismerteti.' : `This guide explains the status and performance metrics used in the ${report.owner === 'All' ? 'domain' : report.owner} availability report.`,
     PAGE_MARGIN,
     y + 62,
     { width: pageWidth - 120 }
@@ -327,36 +331,36 @@ function drawExplanationPage(doc, report) {
   const rightX = leftX + colW + gap;
 
   let leftY = y;
-  leftY = drawGuideSection(doc, leftX, leftY, colW, 'Overall status', [
-    ['Domains', 'Number of active monitored domains included in this report.'],
-    ['Healthy', 'Domains that are currently available with no active warning.'],
-    ['Warnings', 'Available domains with a recent issue, slow response, or certificate warning.'],
-    ['Down', 'Domains that are currently failing checks and may not be reachable.']
+  leftY = drawGuideSection(doc, leftX, leftY, colW, t('Overall status'), [
+    [t('Domains'), t('Number of active monitored domains included in this report.')],
+    [t('Healthy'), t('Domains that are currently available with no active warning.')],
+    [t('Warnings'), t('Available domains with a recent issue, slow response, or certificate warning.')],
+    [t('Down'), t('Domains that are currently failing checks and may not be reachable.')]
   ]);
-  drawGuideSection(doc, leftX, leftY, colW, 'Availability and response time', [
-    ['30d uptime', 'Percentage of successful checks during the last 30 days. Higher is better.'],
-    ['30d avg', 'Average response time during successful checks. Lower is better.'],
-    ['30d P95', '95% of successful checks were faster than this value. Shows slow outliers.'],
-    ['30d incidents', 'Number of warning or outage periods detected in the last 30 days.'],
-    ['24 hour status history', 'Green means healthy, orange warning, red down, grey no data.']
+  drawGuideSection(doc, leftX, leftY, colW, t('Availability and response time'), [
+    [t('30d uptime'), t('Percentage of successful checks during the last 30 days. Higher is better.')],
+    [t('30d avg'), t('Average response time during successful checks. Lower is better.')],
+    [t('30d P95'), t('95% of successful checks were faster than this value. Shows slow outliers.')],
+    [t('30d incidents'), t('Number of warning or outage periods detected in the last 30 days.')],
+    [t('24 hour status history'), t('Green means healthy, orange warning, red down, grey no data.')]
   ]);
 
   let rightY = y;
-  rightY = drawGuideSection(doc, rightX, rightY, colW, 'Security and PageSpeed', [
-    ['TLS', 'Days remaining until the HTTPS certificate expires.'],
-    ['Valid to', 'The date when the current HTTPS certificate expires.'],
-    ['Mobile performance', 'Latest Google PageSpeed performance score for mobile. 90+ is good.'],
-    ['Desktop performance', 'Latest Google PageSpeed performance score for desktop. 90+ is good.'],
-    ['7d trend', 'Change in the latest mobile score compared with the previous 7 day result.'],
-    ['LCP', 'Largest Contentful Paint: how quickly the main visible content loads.'],
-    ['Main issue', 'Most relevant PageSpeed improvement opportunity detected for the website.']
+  rightY = drawGuideSection(doc, rightX, rightY, colW, t('Security and PageSpeed'), [
+    [t('TLS'), t('Days remaining until the HTTPS certificate expires.')],
+    [t('Valid to'), t('The date when the current HTTPS certificate expires.')],
+    [t('Mobile performance'), t('Latest Google PageSpeed performance score for mobile. 90+ is good.')],
+    [t('Desktop performance'), t('Latest Google PageSpeed performance score for desktop. 90+ is good.')],
+    [t('7d trend'), t('Change in the latest mobile score compared with the previous 7 day result.')],
+    [t('LCP'), t('Largest Contentful Paint: how quickly the main visible content loads.')],
+    [t('Main issue'), t('Most relevant PageSpeed improvement opportunity detected for the website.')]
   ]);
-  drawGuideSection(doc, rightX, rightY, colW, 'Incidents', [
-    ['Last incident', 'Most recent detected problem or warning for this domain.'],
-    ['Last successful check', 'Most recent check where the website responded successfully.'],
-    ['Last failed check', 'Most recent check where the website was down or returned a critical error.'],
-    ['Last recovery', 'Most recent time the website recovered after an outage.'],
-    ['Recent incidents', 'Most recent incident periods, with root cause, time range, and duration.']
+  drawGuideSection(doc, rightX, rightY, colW, t('Incidents'), [
+    [t('Last incident'), t('Most recent detected problem or warning for this domain.')],
+    [t('Last successful check'), t('Most recent check where the website responded successfully.')],
+    [t('Last failed check'), t('Most recent check where the website was down or returned a critical error.')],
+    [t('Last recovery'), t('Most recent time the website recovered after an outage.')],
+    [t('Recent incidents'), t('Most recent incident periods, with root cause, time range, and duration.')]
   ]);
 }
 
@@ -370,15 +374,18 @@ function collectBuffer(doc) {
   });
 }
 
-async function generatePublicStatusPdf(report) {
+async function generatePublicStatusPdf(report, language = 'en') {
+  const t = (source) => monitoringText(language, source);
   const doc = new PDFDocument({
     size: 'A4',
     margins: { top: PAGE_MARGIN, bottom: PAGE_MARGIN, left: PAGE_MARGIN, right: PAGE_MARGIN },
     bufferPages: true
   });
 
+  doc.registerFont('Regular', path.join(__dirname, '../assets/fonts/DejaVuSans.ttf'));
+  doc.registerFont('Bold', path.join(__dirname, '../assets/fonts/DejaVuSans-Bold.ttf'));
   drawPageChrome(doc);
-  drawFooter(doc);
+  drawFooter(doc, language);
   const pageWidth = doc.page.width - PAGE_MARGIN * 2;
   let y = PAGE_MARGIN;
 
@@ -387,23 +394,24 @@ async function generatePublicStatusPdf(report) {
   const heroY = y;
   const titleWidth = pageWidth - logoWidth - 32;
 
-  doc.fillColor(COLORS.brand).font('Helvetica-Bold').fontSize(12).text('SERVICE STATUS', PAGE_MARGIN, heroY);
-  doc.fillColor(COLORS.ink).font('Helvetica-Bold').fontSize(36).text(
-    report.owner === 'All' ? 'All Monitored Domains' : report.owner,
-    PAGE_MARGIN,
-    heroY + 18,
-    { width: titleWidth }
-  );
+  doc.fillColor(COLORS.brand).font('Bold').fontSize(12).text(t('SERVICE STATUS'), PAGE_MARGIN, heroY);
+  const ownerTitle = report.owner === 'All' ? t('All Monitored Domains') : report.owner;
+  const preferredSize = language === 'hu' ? 28 : 36;
+  doc.fillColor(COLORS.ink).font('Bold').fontSize(preferredSize);
+  const titleSize = Math.max(16, Math.min(preferredSize, preferredSize * titleWidth / doc.widthOfString(ownerTitle)));
+  doc.fontSize(titleSize).text(ownerTitle, PAGE_MARGIN, heroY + 18, {
+    width: titleWidth, height: 42, ellipsis: true
+  });
 
   drawBrandLogo(doc, logoX, heroY, logoWidth);
-  doc.fillColor(COLORS.muted).font('Helvetica').fontSize(8).text(
-    `Generated ${formatDate(report.generatedAt)}`,
+  doc.fillColor(COLORS.muted).font('Regular').fontSize(8).text(
+    `${language === 'hu' ? 'Készült:' : 'Generated'} ${formatDate(report.generatedAt, { language })}`,
     logoX,
     heroY + 38,
     { width: logoWidth, align: 'right' }
   );
-  doc.fillColor(COLORS.muted).font('Helvetica').fontSize(11).text(
-    '30 days availability and performance staus report.',
+  doc.fillColor(COLORS.muted).font('Regular').fontSize(11).text(
+    t('30-day availability and performance report.'),
     PAGE_MARGIN,
     heroY + 60,
     { width: pageWidth - 180 }
@@ -412,10 +420,10 @@ async function generatePublicStatusPdf(report) {
 
   const summaryGap = 12;
   const summaryWidth = (pageWidth - summaryGap * 3) / 4;
-  drawMetricCard(doc, PAGE_MARGIN, y, summaryWidth, 52, 'Domains', String(report.summary.domainCount), COLORS.ink, { valueSize: 16, valueY: 24 });
-  drawMetricCard(doc, PAGE_MARGIN + (summaryWidth + summaryGap), y, summaryWidth, 52, 'Healthy', String(report.summary.okCount), COLORS.ok, { valueSize: 16, valueY: 24 });
-  drawMetricCard(doc, PAGE_MARGIN + 2 * (summaryWidth + summaryGap), y, summaryWidth, 52, 'Warnings', String(report.summary.warningCount), COLORS.warning, { valueSize: 16, valueY: 24 });
-  drawMetricCard(doc, PAGE_MARGIN + 3 * (summaryWidth + summaryGap), y, summaryWidth, 52, 'Down', String(report.summary.errorCount), COLORS.error, { valueSize: 16, valueY: 24 });
+  drawMetricCard(doc, PAGE_MARGIN, y, summaryWidth, 52, t('Domains'), String(report.summary.domainCount), COLORS.ink, { valueSize: 16, valueY: 24 });
+  drawMetricCard(doc, PAGE_MARGIN + (summaryWidth + summaryGap), y, summaryWidth, 52, t('Healthy'), String(report.summary.okCount), COLORS.ok, { valueSize: 16, valueY: 24 });
+  drawMetricCard(doc, PAGE_MARGIN + 2 * (summaryWidth + summaryGap), y, summaryWidth, 52, t('Warnings'), String(report.summary.warningCount), COLORS.warning, { valueSize: 16, valueY: 24 });
+  drawMetricCard(doc, PAGE_MARGIN + 3 * (summaryWidth + summaryGap), y, summaryWidth, 52, t('Down'), String(report.summary.errorCount), COLORS.error, { valueSize: 16, valueY: 24 });
   y += 64;
 
   for (const [index, item] of report.domains.entries()) {
@@ -427,17 +435,17 @@ async function generatePublicStatusPdf(report) {
       : 448;
 
     if (index === 0) {
-      y = ensureSpace(doc, y, cardH);
+      y = ensureSpace(doc, y, cardH, language);
     } else {
-      addPage(doc);
+      addPage(doc, language);
       y = PAGE_MARGIN;
     }
 
     drawRoundedPanel(doc, cardX, y, cardW, cardH, COLORS.panel, COLORS.border);
 
-    doc.fillColor(COLORS.ink).font('Helvetica-Bold').fontSize(18).text(item.domain.name, cardX + 18, y + 14, { width: cardW - 140 });
-    doc.fillColor('#1d4ed8').font('Helvetica').fontSize(10).text(item.domain.baseUrl, cardX + 18, y + 36, { width: cardW - 160 });
-    drawStatusPill(doc, cardX + cardW - 106, y + 16, statusLabel(item.domain.displayStatus), item.domain.displayStatus);
+    doc.fillColor(COLORS.ink).font('Bold').fontSize(18).text(item.domain.name, cardX + 18, y + 14, { width: cardW - 140 });
+    doc.fillColor('#1d4ed8').font('Regular').fontSize(10).text(item.domain.baseUrl, cardX + 18, y + 36, { width: cardW - 160 });
+    drawStatusPill(doc, cardX + cardW - 106, y + 16, t(statusLabel(item.domain.displayStatus)), item.domain.displayStatus);
 
     const metricsY = y + 58;
     const metricGap = 8;
@@ -445,12 +453,12 @@ async function generatePublicStatusPdf(report) {
     const metricW = (cardW - 36 - metricGap * (metricCols - 1)) / metricCols;
     const metricH = 44;
     const metrics = [
-      ['30d uptime', uptimeText(item.overview.windows[2]?.uptimePercent), COLORS.ink],
-      ['30d avg', msText(item.overview.windows[2]?.avgResponseMs), COLORS.ink],
-      ['30d P95', msText(item.overview.windows[2]?.p95ResponseMs), COLORS.ink],
-      ['30d incidents', String(item.overview.windows[2]?.incidentCount ?? 0), COLORS.ink],
-      ['TLS', tlsText(item.overview.tls.daysRemaining), item.overview.tls.status === 'error' ? COLORS.error : item.overview.tls.status === 'warning' ? COLORS.warning : COLORS.ink],
-      ['Valid to', formatDate(item.overview.tls.validTo, { withTime: false }), COLORS.ink]
+      [t('30d uptime'), uptimeText(item.overview.windows[2]?.uptimePercent, language), COLORS.ink],
+      [t('30d avg'), msText(item.overview.windows[2]?.avgResponseMs), COLORS.ink],
+      [t('30d P95'), msText(item.overview.windows[2]?.p95ResponseMs), COLORS.ink],
+      [t('30d incidents'), String(item.overview.windows[2]?.incidentCount ?? 0), COLORS.ink],
+      [t('TLS'), tlsText(item.overview.tls.daysRemaining, language), item.overview.tls.status === 'error' ? COLORS.error : item.overview.tls.status === 'warning' ? COLORS.warning : COLORS.ink],
+      [t('Valid to'), formatDate(item.overview.tls.validTo, { withTime: false, language }), COLORS.ink]
     ];
     metrics.forEach(([label, value, color], index) => {
       const col = index % metricCols;
@@ -462,9 +470,9 @@ async function generatePublicStatusPdf(report) {
       });
     });
 
-    doc.fillColor(COLORS.ink).font('Helvetica-Bold').fontSize(11).text('24 hour status history', cardX + 18, y + 166);
-    doc.fillColor(COLORS.muted).font('Helvetica').fontSize(11).text(
-      item.overview.currentIncident ? 'Incident open' : 'No current incident',
+    doc.fillColor(COLORS.ink).font('Bold').fontSize(11).text(t('24 hour status history'), cardX + 18, y + 166);
+    doc.fillColor(COLORS.muted).font('Regular').fontSize(11).text(
+      item.overview.currentIncident ? t('Incident open') : t('No current incident'),
       cardX + cardW - 170,
       y + 166,
       { width: 150, align: 'right' }
@@ -477,10 +485,10 @@ async function generatePublicStatusPdf(report) {
     const perfCols = 4;
     const perfW = (cardW - 36 - perfGap * (perfCols - 1)) / perfCols;
     const performanceMetrics = [
-      ['Mobile perf.', scoreText(pageSpeed.latestMobilePerformance), COLORS.ink],
-      ['Desktop perf.', scoreText(pageSpeed.latestDesktopPerformance), COLORS.ink],
-      ['7d trend', pageSpeed.trend7d || '-', COLORS.ink],
-      ['LCP', lcpLabel(pageSpeed.lcpStatus), lcpColor(pageSpeed.lcpStatus)]
+      [t('Mobile perf.'), scoreText(pageSpeed.latestMobilePerformance), COLORS.ink],
+      [t('Desktop perf.'), scoreText(pageSpeed.latestDesktopPerformance), COLORS.ink],
+      [t('7d trend'), pageSpeed.trend7d || '-', COLORS.ink],
+      [t('LCP'), t(lcpLabel(pageSpeed.lcpStatus)), lcpColor(pageSpeed.lcpStatus)]
     ];
     performanceMetrics.forEach(([label, value, color], perfIndex) => {
       drawMetricCard(doc, cardX + 18 + perfIndex * (perfW + perfGap), perfY, perfW, 42, label, value, color, {
@@ -489,13 +497,13 @@ async function generatePublicStatusPdf(report) {
         valueY: 21
       });
     });
-    drawMetricCard(doc, cardX + 18, perfY + 48, cardW - 36, 38, 'Main issue', shortText(pageSpeed.mainIssue || 'No PageSpeed result yet', 90), COLORS.ink, {
+    drawMetricCard(doc, cardX + 18, perfY + 48, cardW - 36, 38, t('Main issue'), shortText(pageSpeed.mainIssue || t('No PageSpeed result yet'), 90), COLORS.ink, {
       labelSize: 8,
       valueSize: 10,
       valueY: 20
     });
 
-    doc.fillColor(COLORS.ink).font('Helvetica-Bold').fontSize(11).text('Incidents', cardX + 18, y + 306);
+    doc.fillColor(COLORS.ink).font('Bold').fontSize(11).text(t('Incidents'), cardX + 18, y + 306);
 
     const detailY = y + 326;
     const detailCols = 2;
@@ -503,10 +511,10 @@ async function generatePublicStatusPdf(report) {
     const detailW = (cardW - 36 - detailGap * (detailCols - 1)) / detailCols;
     const detailH = 48;
     const detailMetrics = [
-      ['Last incident', item.overview.incidents[0]?.reasonText || 'No recent incident'],
-      ['Last successful check', item.overview.lastSuccessfulCheck?.checkedAt ? formatDate(item.overview.lastSuccessfulCheck.checkedAt) : '-'],
-      ['Last failed check', item.overview.lastFailedCheck?.checkedAt ? formatDate(item.overview.lastFailedCheck.checkedAt) : '-'],
-      ['Last recovery', item.overview.lastRecoveryAt ? formatDate(item.overview.lastRecoveryAt) : '-']
+      [t('Last incident'), t(item.overview.incidents[0]?.reasonText || 'No recent incident')],
+      [t('Last successful check'), item.overview.lastSuccessfulCheck?.checkedAt ? formatDate(item.overview.lastSuccessfulCheck.checkedAt, { language }) : '-'],
+      [t('Last failed check'), item.overview.lastFailedCheck?.checkedAt ? formatDate(item.overview.lastFailedCheck.checkedAt, { language }) : '-'],
+      [t('Last recovery'), item.overview.lastRecoveryAt ? formatDate(item.overview.lastRecoveryAt, { language }) : '-']
     ];
     detailMetrics.forEach(([label, value], index) => {
       const col = index % detailCols;
@@ -520,17 +528,17 @@ async function generatePublicStatusPdf(report) {
 
     let incidentY = y + 442;
     if (incidentsToShow.length) {
-      doc.fillColor(COLORS.ink).font('Helvetica-Bold').fontSize(11).text('Recent incidents', cardX + 18, incidentY);
+      doc.fillColor(COLORS.ink).font('Bold').fontSize(11).text(t('Recent incidents'), cardX + 18, incidentY);
       incidentY += 16;
       incidentsToShow.forEach((incident) => {
-        incidentY += drawIncidentRow(doc, cardX + 18, incidentY, cardW - 36, incident);
+        incidentY += drawIncidentRow(doc, cardX + 18, incidentY, cardW - 36, incident, language);
       });
     }
 
     y += cardH + 16;
   }
 
-  drawExplanationPage(doc, report);
+  drawExplanationPage(doc, report, language);
 
   return collectBuffer(doc);
 }

@@ -17,7 +17,7 @@ p {
   color: var(--brand-muted);
 }
 
-button mat-icon {
+.page-header button mat-icon {
   margin-right: 6px;
 }
 
@@ -37,8 +37,15 @@ button mat-icon {
 }
 
 .actions-cell {
-  width: 64px;
+  width: 1%;
   text-align: right;
+}
+
+.row-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  vertical-align: middle;
 }
 
 .empty-state {

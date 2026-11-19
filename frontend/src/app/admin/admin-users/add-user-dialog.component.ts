@@ -1,5 +1,7 @@
+import { UiLanguage, UiLanguageService } from '../../i18n/ui-language.service';
+import { UiTextPipe } from '../../i18n/ui-text.pipe';
 import { CommonModule } from '@angular/common';
-import { Component, Inject, signal } from '@angular/core';
+import { inject, Component, Inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { MAT_DIALOG_DATA, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
 import { MatButtonModule } from '@angular/material/button';
@@ -19,6 +21,7 @@ type UserDialogData = {
   selector: 'app-add-user-dialog',
   standalone: true,
   imports: [
+    UiTextPipe,
     CommonModule,
     FormsModule,
     MatButtonModule,
@@ -32,7 +35,9 @@ type UserDialogData = {
   styleUrl: './add-user-dialog.component.scss'
 })
 export class AddUserDialogComponent {
+  private readonly ui = inject(UiLanguageService);
   saving = signal(false);
+  invitationLanguage: UiLanguage = this.ui.language();
   email = '';
   loginMethod: LoginMethod = 'microsoft';
   firstName = '';
@@ -112,13 +117,13 @@ export class AddUserDialogComponent {
     };
     const request = this.data.user
       ? this.admin.updateUser(this.data.user.id, payload)
-      : this.admin.createUser({ ...payload, loginMethod: this.loginMethod });
+      : this.admin.createUser({ ...payload, loginMethod: this.loginMethod, language: this.invitationLanguage });
 
     request.subscribe({
       next: (user) => this.dialogRef.close(user),
       error: (error) => {
         this.saving.set(false);
-        this.snackBar.open(error?.error?.error || 'User could not be saved.', 'Close', { duration: 4500 });
+        this.snackBar.open(this.ui.text(error?.error?.error || 'User could not be saved.'), this.ui.text('Close'), { duration: 4500 });
       }
     });
   }

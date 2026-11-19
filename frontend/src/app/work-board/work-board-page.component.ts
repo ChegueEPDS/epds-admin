@@ -1,3 +1,4 @@
+import { UiTextPipe } from '../i18n/ui-text.pipe';
 import { Component, inject } from '@angular/core';
 import { MatIconModule } from '@angular/material/icon';
 import { MatTabsModule } from '@angular/material/tabs';
@@ -5,18 +6,18 @@ import { RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { AuthService } from '../services/auth.service';
 
 @Component({
-  imports: [MatIconModule, MatTabsModule, RouterLink, RouterLinkActive, RouterOutlet],
+  imports: [UiTextPipe, MatIconModule, MatTabsModule, RouterLink, RouterLinkActive, RouterOutlet],
   template: `
     @if (auth.isWorkFieldTenant()) {
-      <nav mat-tab-nav-bar [tabPanel]="panel" [mat-stretch-tabs]="true" aria-label="Project Tracker views">
+      <nav mat-tab-nav-bar [tabPanel]="panel" [mat-stretch-tabs]="true" aria-label="{{ 'Project Tracker views' | uiText }}">
         <a mat-tab-link routerLink="/project-tracker/dashboard" routerLinkActive #dashboard="routerLinkActive"
           [active]="dashboard.isActive">
-          <mat-icon class="material-symbols-outlined" aria-hidden="true">dashboard</mat-icon>Dashboard
+          <mat-icon class="material-symbols-outlined" aria-hidden="true">dashboard</mat-icon>{{ 'Dashboard' | uiText }}
         </a>
         <a mat-tab-link routerLink="/project-tracker" routerLinkActive #table="routerLinkActive"
           [routerLinkActiveOptions]="{ paths: 'exact', queryParams: 'ignored', matrixParams: 'ignored', fragment: 'ignored' }"
           [active]="table.isActive">
-          <mat-icon class="material-symbols-outlined" aria-hidden="true">table_rows</mat-icon>Table
+          <mat-icon class="material-symbols-outlined" aria-hidden="true">table_rows</mat-icon>{{ 'Table' | uiText }}
         </a>
       </nav>
     }

@@ -1,3 +1,4 @@
+import { UiTextPipe } from '../i18n/ui-text.pipe';
 import { HttpEventType } from '@angular/common/http';
 import { Component, DestroyRef, inject } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
@@ -20,23 +21,23 @@ const labels: Record<WorkImportJob['state'], string> = {
 };
 
 @Component({
-  imports: [MatButtonModule, MatDialogModule, MatIconModule, MatProgressBarModule],
+  imports: [UiTextPipe, MatButtonModule, MatDialogModule, MatIconModule, MatProgressBarModule],
   template: `
-    <h2 mat-dialog-title id="work-transfer-title">Import / Export {{ target }}</h2>
+    <h2 mat-dialog-title id="work-transfer-title">{{ 'Import / Export {0}' | uiText: (target) }}</h2>
     <mat-dialog-content class="content">
-      <section class="drop-zone" [class.dragging]="dragDepth > 0 && !busy" aria-label="Import files"
+      <section class="drop-zone" [class.dragging]="dragDepth > 0 && !busy" aria-label="{{ 'Import files' | uiText }}"
         (dragenter)="onDragEnter($event)" (dragover)="onDragOver($event)" (dragleave)="onDragLeave($event)" (drop)="onDrop($event)">
         <mat-icon class="material-symbols-outlined upload-icon" aria-hidden="true">upload_file</mat-icon>
-        <h3>Drop files here</h3>
+        <h3>{{ 'Drop files here' | uiText }}</h3>
         <input #filePicker type="file" [accept]="isClients ? '.xlsx' : '.xlsx,.zip'" [multiple]="!isClients" hidden [disabled]="busy" (change)="selectFiles(filePicker)">
         <button mat-stroked-button type="button" class="browse" (click)="filePicker.click()"
           [disabled]="busy" aria-describedby="work-transfer-file-types">
-          Browse files
+          {{ 'Browse files' | uiText }}
         </button>
-        <p id="work-transfer-file-types" class="muted">Excel workbook (.xlsx)@if (!isClients) { <span> · Optional attachments (.zip)</span> }</p>
+        <p id="work-transfer-file-types" class="muted">{{ 'Excel workbook (.xlsx)' | uiText }}@if (!isClients) { <span> {{ '· Optional attachments (.zip)' | uiText }}</span> }</p>
       </section>
       @if (workbook || archive) {
-        <ul class="selected-files" aria-label="Selected files">
+        <ul class="selected-files" aria-label="{{ 'Selected files' | uiText }}">
           @for (entry of fileKinds; track entry.kind) {
             @if (this[entry.kind]; as file) {
               <li>
@@ -56,42 +57,42 @@ const labels: Record<WorkImportJob['state'], string> = {
       }
       <div class="actions">
         <button mat-button type="button" (click)="export('template')" [disabled]="!!downloadPending">
-          <mat-icon class="material-symbols-outlined">download</mat-icon>Download template
+          <mat-icon class="material-symbols-outlined">download</mat-icon>{{ 'Download template' | uiText }}
         </button>
         <button mat-button type="button" (click)="export('export')" [disabled]="!!downloadPending">
-          <mat-icon class="material-symbols-outlined">download</mat-icon>Export {{ target }}
+          <mat-icon class="material-symbols-outlined">download</mat-icon>{{ 'Export {0}' | uiText: (target) }}
         </button>
       </div>
       <p class="muted import-hint">
-        Keep the ID in column A to update the exported {{ singular }}. Leave it blank to create a new {{ singular }}.
+        {{ 'Keep the ID in column A to update the exported {0}. Leave it blank to create a new {1}.' | uiText: (singular): (singular) }}
       </p>
       @if (busy) {
         <div class="status" role="status">
           <span>{{ statusText }}</span>
-          @if (job?.state === 'validating' && job?.total) { <span>{{ job?.processed }} / {{ job?.total }} rows</span> }
+          @if (job?.state === 'validating' && job?.total) { <span>{{ '{0} / {1} rows' | uiText: (job?.processed): (job?.total) }}</span> }
         </div>
-        <mat-progress-bar aria-label="Import progress" [mode]="percent === undefined ? 'indeterminate' : 'determinate'" [value]="percent ?? 0"/>
+        <mat-progress-bar aria-label="{{ 'Import progress' | uiText }}" [mode]="percent === undefined ? 'indeterminate' : 'determinate'" [value]="percent ?? 0"/>
       }
       @if (job?.state === 'rejected') {
         <div class="result error" role="alert">
-          <strong>Import rejected. No {{ target }} were saved.</strong>
-          <span>{{ job?.errors }} validation messages. Correct the highlighted cells and upload again.</span>
+          <strong>{{ 'Import rejected. No {0} were saved.' | uiText: (target) }}</strong>
+          <span>{{ '{0} validation messages. Correct the highlighted cells and upload again.' | uiText: (job?.errors) }}</span>
           <button mat-stroked-button type="button" (click)="downloadErrors()" [disabled]="!!downloadPending || !job?.canDownload">
-            <mat-icon class="material-symbols-outlined">download</mat-icon>Download error workbook
+            <mat-icon class="material-symbols-outlined">download</mat-icon>{{ 'Download error workbook' | uiText }}
           </button>
         </div>
       }
       @if (job?.state === 'succeeded') {
-        <p role="status" class="result">{{ job?.created }} created · {{ job?.updated }} updated · {{ job?.unchanged }} unchanged</p>
+        <p role="status" class="result">{{ '{0} created · {1} updated · {2} unchanged' | uiText: (job?.created): (job?.updated): (job?.unchanged) }}</p>
       }
-      @if (error) { <p class="error" role="alert">{{ error }}</p> }
+      @if (error) { <p class="error" role="alert">{{ error | uiText }}</p> }
     </mat-dialog-content>
     <mat-dialog-actions align="end">
-      <button mat-button type="button" [mat-dialog-close]="saved" [disabled]="busy">Close</button>
+      <button mat-button type="button" [mat-dialog-close]="saved" [disabled]="busy">{{ 'Close' | uiText }}</button>
       @if (job && !busy && job.state !== 'succeeded' && job.state !== 'rejected' && job.state !== 'failed') {
-        <button mat-flat-button color="primary" type="button" (click)="resume()">Check progress</button>
+        <button mat-flat-button color="primary" type="button" (click)="resume()">{{ 'Check progress' | uiText }}</button>
       } @else {
-        <button mat-flat-button color="primary" type="button" (click)="start()" [disabled]="!workbook || busy">Import workbook</button>
+        <button mat-flat-button color="primary" type="button" (click)="start()" [disabled]="!workbook || busy">{{ 'Import workbook' | uiText }}</button>
       }
     </mat-dialog-actions>
   `,

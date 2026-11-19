@@ -1,3 +1,4 @@
+const { requestLanguage } = require('../services/uiLanguage');
 const express = require('express');
 const multer = require('multer');
 const controller = require('../controllers/workBoardControllerFacade');
@@ -77,7 +78,7 @@ const clientTransferUpload = multer({ storage: multer.memoryStorage(), limits: {
 function registerWorkbookTransfer(path, kind, prefix, exporter) {
   for (const mode of ['template', 'export']) {
     router.get(path + '/' + mode, ...transferAccess, transferRoute(async (req, res) => {
-      sendWorkbook(res, prefix + '-' + mode + '.xlsx', await exporter(req.scope.tenantId, mode === 'template'));
+      sendWorkbook(res, prefix + '-' + mode + '.xlsx', await exporter(req.scope.tenantId, mode === 'template', requestLanguage(req)));
     }));
   }
   const allowAttachments = kind === 'works';
@@ -96,7 +97,7 @@ function registerWorkbookTransfer(path, kind, prefix, exporter) {
       return res.status(400).json({ error: errorMessage });
     }
     res.status(202).json(workTransfer.startImport({
-      scope: req.scope, actorId: req.userId, excel: workbook.buffer, archive: archive?.buffer, kind
+      scope: req.scope, actorId: req.userId, excel: workbook.buffer, archive: archive?.buffer, kind, language: requestLanguage(req)
     }));
   }));
   const jobFor = (req) => workTransfer.importJob(req.params.id, req.scope.tenantId, req.userId, kind);

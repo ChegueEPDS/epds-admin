@@ -1,5 +1,7 @@
+import { UiLanguageService } from '../../i18n/ui-language.service';
+import { UiTextPipe } from '../../i18n/ui-text.pipe';
 import { CommonModule } from '@angular/common';
-import { Component, OnInit, signal } from '@angular/core';
+import { inject, Component, OnInit, signal } from '@angular/core';
 import { MatButtonModule } from '@angular/material/button';
 import { MatDialog, MatDialogModule } from '@angular/material/dialog';
 import { MatIconModule } from '@angular/material/icon';
@@ -15,6 +17,7 @@ import { TenantDialogComponent } from './tenant-dialog.component';
   selector: 'app-admin-tenants',
   standalone: true,
   imports: [
+    UiTextPipe,
     CommonModule,
     MatButtonModule,
     MatDialogModule,
@@ -28,6 +31,7 @@ import { TenantDialogComponent } from './tenant-dialog.component';
   styleUrl: './admin-tenants.component.scss'
 })
 export class AdminTenantsComponent implements OnInit {
+  private readonly ui = inject(UiLanguageService);
   tenants = signal<AdminTenant[]>([]);
   loading = signal(false);
   displayedColumns = ['name', 'type', 'features', 'createdAt', 'actions'];
@@ -54,7 +58,7 @@ export class AdminTenantsComponent implements OnInit {
       },
       error: () => {
         this.loading.set(false);
-        this.snackBar.open('Tenants could not be loaded.', 'Close', { duration: 4500 });
+        this.snackBar.open(this.ui.text('Tenants could not be loaded.'), this.ui.text('Close'), { duration: 4500 });
       }
     });
   }
@@ -68,7 +72,7 @@ export class AdminTenantsComponent implements OnInit {
     ref.afterClosed().subscribe((created: AdminTenant | undefined) => {
       if (!created) return;
       this.tenants.set([...this.tenants(), created].sort((a, b) => this.tenantLabel(a).localeCompare(this.tenantLabel(b))));
-      this.snackBar.open('Tenant created.', 'Close', { duration: 3000 });
+      this.snackBar.open(this.ui.text('Tenant created.'), this.ui.text('Close'), { duration: 3000 });
     });
   }
 
@@ -83,7 +87,7 @@ export class AdminTenantsComponent implements OnInit {
       this.tenants.set(this.tenants()
         .map((item) => item.id === updated.id ? updated : item)
         .sort((a, b) => this.tenantLabel(a).localeCompare(this.tenantLabel(b))));
-      this.snackBar.open('Tenant saved.', 'Close', { duration: 3000 });
+      this.snackBar.open(this.ui.text('Tenant saved.'), this.ui.text('Close'), { duration: 3000 });
     });
   }
 

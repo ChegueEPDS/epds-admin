@@ -44,11 +44,11 @@ async function tenantWorks(tenantId, activeOnly = false) {
   return (await WorkItem.find(filter).sort({ year: -1, sequenceNumber: -1 }).lean()).map(mongoWork);
 }
 
-async function exportWorks(tenantId, template) {
+async function exportWorks(tenantId, template, language) {
   const context = await contextFor(tenantId);
   const works = template ? [] : await tenantWorks(tenantId, true);
   const columns = columnsFor(context);
-  return createWorkbook(columns, works, (work) => formatWork(work, columns, context.config));
+  return createWorkbook(columns, works, (work) => formatWork(work, columns, context.config), { language });
 }
 
 function verifyLatest(rows, works, context, version, currency) {
@@ -192,13 +192,13 @@ async function importWorks({ scope, actorId, excel, archive, job }) {
 }
 
 async function rejected(job, workbook, sheet, issues) {
-  job.report = await errorWorkbook(workbook, sheet, issues);
+  job.report = await errorWorkbook(workbook, sheet, issues, job.language);
   Object.assign(job.result, { state: 'rejected', errors: issues.length, canDownload: true });
 }
 
 const jobs = new Map();
 const jobRetention = 20 * 60 * 1000;
-function startImport({ scope, actorId, excel, archive, kind = 'works' }) {
+function startImport({ scope, actorId, excel, archive, kind = 'works', language = 'en' }) {
   const active = [...jobs.values()].filter((job) => !job.finishedAt);
   if (active.some((job) => job.tenantId === scope.tenantId) || active.length >= 2) {
     throw Object.assign(new Error('An import is already running. Try again shortly.'), { statusCode: 409 });
@@ -208,7 +208,7 @@ function startImport({ scope, actorId, excel, archive, kind = 'works' }) {
     if (oldest) jobs.delete(oldest[0]);
   }
   const id = randomUUID();
-  const job = { tenantId: scope.tenantId, actorId, kind, result: { id, state: 'reading', processed: 0, total: 0 } };
+  const job = { tenantId: scope.tenantId, actorId, kind, language, result: { id, state: 'reading', processed: 0, total: 0 } };
   jobs.set(id, job);
   setImmediate(() => {
     const importer = kind === 'clients' ? importClients : importWorks;

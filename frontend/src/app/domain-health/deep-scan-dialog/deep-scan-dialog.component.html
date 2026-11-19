@@ -1,4 +1,4 @@
-<h2 mat-dialog-title>PageSpeed</h2>
+<h2 mat-dialog-title>{{ 'PageSpeed' | uiText }}</h2>
 <mat-dialog-content class="deep-scan-dialog">
   <div class="deep-scan-head">
     <div>
@@ -7,18 +7,18 @@
     </div>
     <button mat-stroked-button type="button" (click)="run()" [disabled]="isLoading || isRunning">
       <mat-icon class="material-symbols-outlined">speed</mat-icon>
-      {{ isRunning ? 'Running...' : 'Run PageSpeed' }}
+      {{ isRunning ? ('Running...' | uiText) : ('Run PageSpeed' | uiText) }}
     </button>
   </div>
 
   <div *ngIf="isLoading" class="deep-scan-loading">
     <mat-icon class="material-symbols-outlined">speed</mat-icon>
-    <span>Loading latest PageSpeed result...</span>
+    <span>{{ 'Loading latest PageSpeed result...' | uiText }}</span>
   </div>
 
   <div *ngIf="isRunning" class="deep-scan-loading compact-loading">
     <mat-progress-spinner diameter="24" mode="indeterminate"></mat-progress-spinner>
-    <span>Running mobile and desktop PageSpeed scan...</span>
+    <span>{{ 'Running mobile and desktop PageSpeed scan...' | uiText }}</span>
   </div>
 
   <div *ngIf="!isLoading && error" class="deep-scan-error">
@@ -28,13 +28,13 @@
 
   <div *ngIf="!isLoading && !result && !error" class="empty-state">
     <mat-icon class="material-symbols-outlined">monitoring</mat-icon>
-    <span>No PageSpeed result yet.</span>
+    <span>{{ 'No PageSpeed result yet.' | uiText }}</span>
   </div>
 
   <div *ngIf="!isLoading && result" class="latest-meta">
-    <span>Latest result</span>
+    <span>{{ 'Latest result' | uiText }}</span>
     <strong>{{ result.checkedAt | date:'MMM d, y, HH:mm' }}</strong>
-    <small>{{ result.source === 'scheduled' ? 'Automatic daily scan' : 'Manual scan' }}</small>
+    <small>{{ result.source === 'scheduled' ? ('Automatic daily scan' | uiText) : ('Manual scan' | uiText) }}</small>
   </div>
 
   <div *ngIf="!isLoading && result" class="deep-scan-results">
@@ -42,7 +42,7 @@
       <div class="scan-card-head">
         <h3>{{ scan.strategy | titlecase }}</h3>
         <span *ngIf="scan.ok">{{ scan.fetchedAt | date:'M/d/yy, HH:mm' }}</span>
-        <span *ngIf="!scan.ok" class="scan-failed">Failed</span>
+        <span *ngIf="!scan.ok" class="scan-failed">{{ 'Failed' | uiText }}</span>
       </div>
 
       <div *ngIf="!scan.ok" class="scan-error">{{ scan.error || 'Scan failed.' }}</div>
@@ -50,49 +50,49 @@
       <ng-container *ngIf="scan.ok">
         <div class="score-grid">
           <div [class]="scoreClass(scan.scores?.performance)">
-            <span>Performance</span>
+            <span>{{ 'Performance' | uiText }}</span>
             <strong>{{ scoreText(scan.scores?.performance) }}</strong>
           </div>
           <div [class]="scoreClass(scan.scores?.accessibility)">
-            <span>Accessibility</span>
+            <span>{{ 'Accessibility' | uiText }}</span>
             <strong>{{ scoreText(scan.scores?.accessibility) }}</strong>
           </div>
           <div [class]="scoreClass(scan.scores?.bestPractices)">
-            <span>Best practices</span>
+            <span>{{ 'Best practices' | uiText }}</span>
             <strong>{{ scoreText(scan.scores?.bestPractices) }}</strong>
           </div>
           <div [class]="scoreClass(scan.scores?.seo)">
-            <span>SEO</span>
+            <span>{{ 'SEO' | uiText }}</span>
             <strong>{{ scoreText(scan.scores?.seo) }}</strong>
           </div>
         </div>
 
         <div class="metric-list">
           <div>
-            <span>FCP</span>
+            <span>{{ 'FCP' | uiText }}</span>
             <strong>{{ scan.metrics?.firstContentfulPaint?.displayValue || '-' }}</strong>
           </div>
           <div>
-            <span>LCP</span>
+            <span>{{ 'LCP' | uiText }}</span>
             <strong>{{ scan.metrics?.largestContentfulPaint?.displayValue || '-' }}</strong>
           </div>
           <div>
-            <span>CLS</span>
+            <span>{{ 'CLS' | uiText }}</span>
             <strong>{{ scan.metrics?.cumulativeLayoutShift?.displayValue || '-' }}</strong>
           </div>
           <div>
-            <span>TBT</span>
+            <span>{{ 'TBT' | uiText }}</span>
             <strong>{{ scan.metrics?.totalBlockingTime?.displayValue || '-' }}</strong>
           </div>
           <div>
-            <span>Speed index</span>
+            <span>{{ 'Speed index' | uiText }}</span>
             <strong>{{ scan.metrics?.speedIndex?.displayValue || '-' }}</strong>
           </div>
         </div>
 
         <div class="opportunity-list">
-          <h4>Top opportunities</h4>
-          <div *ngIf="!scan.opportunities?.length" class="muted-row">No major opportunities returned.</div>
+          <h4>{{ 'Top opportunities' | uiText }}</h4>
+          <div *ngIf="!scan.opportunities?.length" class="muted-row">{{ 'No major opportunities returned.' | uiText }}</div>
           <div *ngFor="let item of scan.opportunities" class="opportunity-row">
             <span>{{ item.title }}</span>
             <strong>{{ item.displayValue || savingsText(item.savingsMs) }}</strong>
@@ -104,41 +104,41 @@
 
   <section *ngIf="!isLoading && overview?.history?.length" class="history-stats">
     <div class="section-title">
-      <h3>Historical stats</h3>
-      <span>Last 30 days</span>
+      <h3>{{ 'Historical stats' | uiText }}</h3>
+      <span>{{ 'Last 30 days' | uiText }}</span>
     </div>
 
     <div class="history-summary">
       <div>
-        <span>Scans</span>
+        <span>{{ 'Scans' | uiText }}</span>
         <strong>{{ overview?.summary?.count ?? 0 }}</strong>
       </div>
       <div>
-        <span>Mobile avg</span>
+        <span>{{ 'Mobile avg' | uiText }}</span>
         <strong>{{ scoreText(overview?.summary?.mobilePerformanceAvg) }}</strong>
       </div>
       <div>
-        <span>Desktop avg</span>
+        <span>{{ 'Desktop avg' | uiText }}</span>
         <strong>{{ scoreText(overview?.summary?.desktopPerformanceAvg) }}</strong>
       </div>
       <div>
-        <span>Mobile LCP avg</span>
+        <span>{{ 'Mobile LCP avg' | uiText }}</span>
         <strong>{{ metricMsText(overview?.summary?.mobileLcpAvg) }}</strong>
       </div>
       <div>
-        <span>Desktop LCP avg</span>
+        <span>{{ 'Desktop LCP avg' | uiText }}</span>
         <strong>{{ metricMsText(overview?.summary?.desktopLcpAvg) }}</strong>
       </div>
     </div>
 
     <div class="history-table">
       <div class="history-row history-header">
-        <span>Date</span>
-        <span>Mobile</span>
-        <span>Desktop</span>
-        <span>Mobile LCP</span>
-        <span>Desktop LCP</span>
-        <span>CLS</span>
+        <span>{{ 'Date' | uiText }}</span>
+        <span>{{ 'Mobile' | uiText }}</span>
+        <span>{{ 'Desktop' | uiText }}</span>
+        <span>{{ 'Mobile LCP' | uiText }}</span>
+        <span>{{ 'Desktop LCP' | uiText }}</span>
+        <span>{{ 'CLS' | uiText }}</span>
       </div>
       <div class="history-row" *ngFor="let item of recentHistory()">
         <span>{{ item.checkedAt | date:'M/d/yy, HH:mm' }}</span>
@@ -152,5 +152,5 @@
   </section>
 </mat-dialog-content>
 <mat-dialog-actions align="end">
-  <button mat-button mat-dialog-close>Close</button>
+  <button mat-button mat-dialog-close>{{ 'Close' | uiText }}</button>
 </mat-dialog-actions>

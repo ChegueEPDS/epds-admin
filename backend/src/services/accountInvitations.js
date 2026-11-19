@@ -10,7 +10,7 @@ const validEmail = (email) => email.length <= 254 && /^[^\s@<>]+@[^\s@<>]+\.[^\s
 const validPassword = (value) => typeof value === 'string' && value.length >= 8 && Buffer.byteLength(value) <= 72;
 const validToken = (value) => typeof value === 'string' && /^[a-f0-9]{64}$/.test(value);
 
-async function sendAccountLink(user, purpose) {
+async function sendAccountLink(user, purpose, language = 'en') {
   const origin = process.env.EPDS_ADMIN_PUBLIC_URL || process.env.CORS_ALLOWED_ORIGINS?.split(',')[0]?.trim();
   const url = new URL('/login', new URL(origin).origin);
   if (url.protocol !== 'https:' && !(url.protocol === 'http:' && ['localhost', '127.0.0.1'].includes(url.hostname))) {
@@ -39,7 +39,7 @@ async function sendAccountLink(user, purpose) {
   try {
     await mail.sendMail({
       to: user.email,
-      ...accountMail(type, url.href, shortLived ? '30 minutes' : '72 hours', microsoft)
+      ...accountMail(type, url.href, shortLived ? '30 minutes' : '72 hours', microsoft, language)
     });
   } catch {
     // Clear only this attempt. Another request may already have issued a replacement.

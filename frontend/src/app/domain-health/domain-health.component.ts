@@ -1,5 +1,7 @@
+import { UiLanguageService } from '../i18n/ui-language.service';
+import { UiTextPipe } from '../i18n/ui-text.pipe';
 import { CommonModule } from '@angular/common';
-import { Component, OnDestroy, OnInit, TemplateRef } from '@angular/core';
+import { inject, Component, OnDestroy, OnInit, TemplateRef } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { firstValueFrom } from 'rxjs';
 import { MatButtonModule } from '@angular/material/button';
@@ -47,6 +49,7 @@ type ChartPoint = {
   selector: 'app-domain-health',
   standalone: true,
   imports: [
+    UiTextPipe,
     CommonModule,
     FormsModule,
     MatButtonModule,
@@ -64,6 +67,7 @@ type ChartPoint = {
   styleUrl: './domain-health.component.scss'
 })
 export class DomainHealthComponent implements OnInit, OnDestroy {
+  private readonly ui = inject(UiLanguageService);
   domains: DomainMonitor[] = [];
   monitor: DomainMonitorRuntime | null = null;
   selectedDomain: DomainMonitor | null = null;
@@ -134,7 +138,7 @@ export class DomainHealthComponent implements OnInit, OnDestroy {
       }
     } catch (error: any) {
       if (!options.silent) {
-        this.snackBar.open(error?.error?.error || 'Failed to load domains.', 'Close', { duration: 4500 });
+        this.snackBar.open(this.ui.text(error?.error?.error || 'Failed to load domains.'), this.ui.text('Close'), { duration: 4500 });
       }
     } finally {
       if (!options.silent) this.isLoading = false;
@@ -217,15 +221,15 @@ export class DomainHealthComponent implements OnInit, OnDestroy {
         await firstValueFrom(this.service.createDomain(payload));
       }
       await this.loadDomains();
-      this.snackBar.open('Domain saved.', 'Close', { duration: 2500 });
+      this.snackBar.open(this.ui.text('Domain saved.'), this.ui.text('Close'), { duration: 2500 });
     } catch (error: any) {
-      this.snackBar.open(error?.error?.error || 'Failed to save domain.', 'Close', { duration: 4500 });
+      this.snackBar.open(this.ui.text(error?.error?.error || 'Failed to save domain.'), this.ui.text('Close'), { duration: 4500 });
     }
   }
 
   async deleteDomain(domain: DomainMonitor, event: Event): Promise<void> {
     event.stopPropagation();
-    if (!window.confirm(`Delete ${domain.name}?`)) return;
+    if (!window.confirm(this.ui.text('Delete {0}?', domain.name))) return;
 
     try {
       await firstValueFrom(this.service.deleteDomain(domain.id));
@@ -235,9 +239,9 @@ export class DomainHealthComponent implements OnInit, OnDestroy {
         this.overview = null;
       }
       await this.loadDomains();
-      this.snackBar.open('Domain deleted.', 'Close', { duration: 2500 });
+      this.snackBar.open(this.ui.text('Domain deleted.'), this.ui.text('Close'), { duration: 2500 });
     } catch (error: any) {
-      this.snackBar.open(error?.error?.error || 'Failed to delete domain.', 'Close', { duration: 4500 });
+      this.snackBar.open(this.ui.text(error?.error?.error || 'Failed to delete domain.'), this.ui.text('Close'), { duration: 4500 });
     }
   }
 
@@ -286,7 +290,7 @@ export class DomainHealthComponent implements OnInit, OnDestroy {
       if (error.error instanceof Blob) {
         try { message = JSON.parse(await error.error.text()).error || message; } catch { /* Keep readable fallback. */ }
       }
-      this.snackBar.open(message, 'Close', { duration: 6000 });
+      this.snackBar.open(this.ui.text(message), this.ui.text('Close'), { duration: 6000 });
     } finally { this.isDownloadingMonthly = false; }
   }
 
@@ -338,9 +342,9 @@ export class DomainHealthComponent implements OnInit, OnDestroy {
         this.selectedDomain = response.domain;
         await this.loadChecks();
       }
-      this.snackBar.open('Domain checked.', 'Close', { duration: 2500 });
+      this.snackBar.open(this.ui.text('Domain checked.'), this.ui.text('Close'), { duration: 2500 });
     } catch (error: any) {
-      this.snackBar.open(error?.error?.error || 'Domain check failed.', 'Close', { duration: 4500 });
+      this.snackBar.open(this.ui.text(error?.error?.error || 'Domain check failed.'), this.ui.text('Close'), { duration: 4500 });
     } finally {
       this.isChecking = false;
     }

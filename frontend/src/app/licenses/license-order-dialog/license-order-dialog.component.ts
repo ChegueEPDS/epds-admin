@@ -1,3 +1,4 @@
+import { UiTextPipe } from '../../i18n/ui-text.pipe';
 import { CommonModule } from '@angular/common';
 import { Component, Inject } from '@angular/core';
 import { FormsModule } from '@angular/forms';
@@ -17,6 +18,7 @@ const OBJECT_LIMIT_OPTIONS: ObjectLimitOption[] = ['1000', '6000', '11000', '160
   selector: 'app-license-order-dialog',
   standalone: true,
   imports: [
+    UiTextPipe,
     CommonModule,
     FormsModule,
     MatButtonModule,

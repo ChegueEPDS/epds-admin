@@ -1,5 +1,7 @@
+import { UiLanguageService } from '../i18n/ui-language.service';
+import { UiTextPipe } from '../i18n/ui-text.pipe';
 import { CommonModule } from '@angular/common';
-import { Component, OnInit, TemplateRef } from '@angular/core';
+import { inject, Component, OnInit, TemplateRef } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { firstValueFrom } from 'rxjs';
 import { MatButtonModule } from '@angular/material/button';
@@ -49,6 +51,7 @@ const MAILBOX_PAGE_SIZE = 40;
   selector: 'app-mailbox',
   standalone: true,
   imports: [
+    UiTextPipe,
     CommonModule,
     FormsModule,
     MatButtonModule,
@@ -68,6 +71,7 @@ const MAILBOX_PAGE_SIZE = 40;
   styleUrl: './mailbox.component.scss'
 })
 export class MailboxComponent implements OnInit {
+  private readonly ui = inject(UiLanguageService);
   mailbox: string | null = null;
   folder: MailFolder = 'inbox';
   items: MailItem[] = [];
@@ -126,7 +130,7 @@ export class MailboxComponent implements OnInit {
     } catch (e: any) {
       if (request !== this.listRequest) return;
       this.items = [];
-      this.snackBar.open(e?.error?.detail || e?.error?.error || 'Failed to load mailbox.', 'Close', { duration: 4500 });
+      this.snackBar.open(this.ui.text(e?.error?.detail || e?.error?.error || 'Failed to load mailbox.'), this.ui.text('Close'), { duration: 4500 });
     } finally {
       if (request === this.listRequest) this.isLoading = false;
     }
@@ -173,7 +177,7 @@ export class MailboxComponent implements OnInit {
       this.hasMore = page.hasMore;
     } catch (e: any) {
       if (request !== this.listRequest) return;
-      this.snackBar.open(e?.error?.detail || e?.error?.error || 'Failed to load more messages.', 'Close', { duration: 4500 });
+      this.snackBar.open(this.ui.text(e?.error?.detail || e?.error?.error || 'Failed to load more messages.'), this.ui.text('Close'), { duration: 4500 });
     } finally {
       if (request === this.listRequest) this.isLoadingMore = false;
     }
@@ -198,7 +202,7 @@ export class MailboxComponent implements OnInit {
       this.selected = (resp?.item as MailItem) || item;
     } catch (e: any) {
       if (request !== this.detailRequest) return;
-      this.snackBar.open(e?.error?.detail || e?.error?.error || 'Failed to load message.', 'Close', { duration: 4500 });
+      this.snackBar.open(this.ui.text(e?.error?.detail || e?.error?.error || 'Failed to load message.'), this.ui.text('Close'), { duration: 4500 });
     } finally {
       if (request === this.detailRequest) this.isDetailLoading = false;
     }
@@ -228,7 +232,7 @@ export class MailboxComponent implements OnInit {
     const html = this.compose.html.trim();
     if (!to.length || (!original && (!subject || !html))) {
       const error = original ? 'A recipient is required.' : 'To, subject and body are required.';
-      this.snackBar.open(error, 'Close', { duration: 3500 });
+      this.snackBar.open(this.ui.text(error), this.ui.text('Close'), { duration: 3500 });
       return;
     }
 
@@ -244,10 +248,10 @@ export class MailboxComponent implements OnInit {
         this.compose = { to: '', cc: '', bcc: '', subject: '', html: '' };
       }
       dialog.close();
-      this.snackBar.open(original ? 'Mail forwarded.' : 'Mail sent.', 'Close', { duration: 3000 });
+      this.snackBar.open(this.ui.text(original ? 'Mail forwarded.' : 'Mail sent.'), this.ui.text('Close'), { duration: 3000 });
       if (this.folder === 'sentitems') void this.reload('sentitems');
     } catch (e: any) {
-      this.snackBar.open(e?.error?.detail || e?.error?.error || (original ? 'Forward failed.' : 'Send failed.'), 'Close', { duration: 4500 });
+      this.snackBar.open(this.ui.text(e?.error?.detail || e?.error?.error || (original ? 'Forward failed.' : 'Send failed.')), this.ui.text('Close'), { duration: 4500 });
     } finally {
       this.isSending = false;
       dialog.disableClose = false;

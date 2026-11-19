@@ -1,3 +1,4 @@
+import { UiTextPipe } from '../i18n/ui-text.pipe';
 import { Component, input, output } from '@angular/core';
 import { CdkDrag, CdkDragDrop, CdkDragHandle, CdkDropList, moveItemInArray } from '@angular/cdk/drag-drop';
 import { MatButtonModule } from '@angular/material/button';
@@ -7,7 +8,7 @@ import { LayoutItem } from './work-fields';
 
 @Component({
   selector: 'app-work-layout-list',
-  imports: [CdkDrag, CdkDragHandle, CdkDropList, MatButtonModule, MatCheckboxModule, MatIconModule],
+  imports: [UiTextPipe, CdkDrag, CdkDragHandle, CdkDropList, MatButtonModule, MatCheckboxModule, MatIconModule],
   template: `
     <ol cdkDropList [cdkDropListDisabled]="disabled()" (cdkDropListDropped)="drop($event)">
       @for (item of items(); track item.id; let i = $index) {
@@ -19,7 +20,7 @@ import { LayoutItem } from './work-fields';
                 <button class="field-edit" type="button" [disabled]="disabled()" (click)="editField.emit(item.id)">{{ item.label }}</button>
               } @else { <span>{{ item.label }}</span> }
               @if (item.fieldType) { <small>{{ item.fieldType }}</small> }
-              @if (item.required) { <small>Required</small> }
+              @if (item.required) { <small>{{ 'Required' | uiText }}</small> }
             </span>
             <button mat-icon-button type="button" [disabled]="disabled() || item.required"
               [attr.aria-label]="(item.visible ? 'Hide ' : 'Show ') + item.label"
@@ -31,11 +32,11 @@ import { LayoutItem } from './work-fields';
               <button mat-icon-button type="button" [disabled]="disabled() || !item.visible"
                 [attr.aria-pressed]="item.visible && item.tableVisible"
                 [attr.aria-label]="item.label + ' in default work table'"
-                title="Show in the default work table" (click)="tableVisibilityChange.emit({ id: item.id, visible: !item.tableVisible })">
+                title="{{ 'Show in the default work table' | uiText }}" (click)="tableVisibilityChange.emit({ id: item.id, visible: !item.tableVisible })">
                 <mat-icon class="material-symbols-outlined">{{ item.visible && item.tableVisible ? 'check_box' : 'check_box_outline_blank' }}</mat-icon>
               </button>
             } @else {
-              <span class="no-column" title="No work table column">—</span>
+              <span class="no-column" title="{{ 'No work table column' | uiText }}">—</span>
             }
           } @else if (item.visible !== undefined) {
             <mat-checkbox [checked]="item.visible" [disabled]="disabled() || (item.visible && visibleCount === 1)"

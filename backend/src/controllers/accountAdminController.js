@@ -1,3 +1,4 @@
+const { requestLanguage } = require('../services/uiLanguage');
 const { tagChange } = require('../services/securityAudit');
 const { canRecover, recoveryAvailable } = require('../services/accountRecovery');
 const accounts = require('../services/accountStore');
@@ -60,9 +61,9 @@ function finishError(error, res, next) {
   return next(error);
 }
 
-async function sendInvite(user) {
+async function sendInvite(user, language) {
   try {
-    return await sendAccountLink(user, 'invite');
+    return await sendAccountLink(user, 'invite', language);
   } catch {
     return false;
   }
@@ -92,7 +93,7 @@ exports.createUser = async (req, res, next) => {
     if (!assignment) return;
     const { tenant, additionalTenantIds } = assignment;
     const user = await accounts.create({ email, firstName, lastName, tenantId, additionalTenantIds, role, loginMethod, emailVerified: false });
-    const invitationSent = await sendInvite(user);
+    const invitationSent = await sendInvite(user, requestLanguage(req));
     return res.status(201).json({ user: { ...present(await accounts.findById(String(user._id)), tenant), invitationSent } });
   } catch (error) { return finishError(error, res, next); }
 };
@@ -104,7 +105,7 @@ exports.resend = async (req, res, next) => {
     if (user.role === 'SuperAdmin' || !user.loginMethod || user.emailVerified || !await accounts.findTenant(user.tenantId)) {
       return res.status(409).json({ error: 'This account has no pending invitation.' });
     }
-    if (!await sendInvite(user)) return res.status(503).json({ error: 'Invitation could not be sent. Please retry.' });
+    if (!await sendInvite(user, requestLanguage(req))) return res.status(503).json({ error: 'Invitation could not be sent. Please retry.' });
     const updated = await accounts.findById(req.params.id);
     res.json({ user: present(updated, await accounts.findTenant(updated.tenantId)) });
   } catch (error) { next(error); }
@@ -167,7 +168,7 @@ exports.recoverAccount = async (req, res, next) => {
     if (!await recoveryAvailable()) {
       return res.status(503).json({ error: 'Account recovery requires a transaction-capable database.' });
     }
-    const sent = await sendAccountLink(user, 'recovery').catch(() => false);
+    const sent = await sendAccountLink(user, 'recovery', requestLanguage(req)).catch(() => false);
     if (!sent) return res.status(503).json({ error: 'Recovery link could not be sent. Check mail delivery and try again.' });
     req.securityAudit = { action: 'account.recovery_sent', tenantId: String(user.tenantId) };
     return res.json({ ok: true });

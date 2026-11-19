@@ -1,3 +1,4 @@
+const { monitoringText } = require('./monitoringTexts');
 const mailService = require('./mailService');
 const { escapeHtml } = require('./mailTemplates');
 const { buildDomainList } = require('./domainMonitorService');
@@ -88,16 +89,16 @@ function performanceLabel(domain) {
   return 'No data';
 }
 
-function issueText(domain) {
+function issueText(domain, language) {
   if (domain.displayStatus === 'error') return domain.lastError || 'Current issue';
-  if (domain.displayStatus === 'warning') return domain.lastWarning || `${domain.recentWarningCount || 0} warning in 24h`;
+  if (domain.displayStatus === 'warning') return domain.lastWarning || (language === 'hu' ? `${domain.recentWarningCount || 0} figyelmeztetés 24 órán belül` : `${domain.recentWarningCount || 0} warnings in 24h`);
   if (domain.displayStatus === 'ok') return 'No recent issues';
   return 'No check yet';
 }
 
-function formatDate(value) {
+function formatDate(value, locale) {
   if (!value) return '-';
-  return new Intl.DateTimeFormat('hu-HU', {
+  return new Intl.DateTimeFormat(locale, {
     timeZone: REPORT_TIME_ZONE,
     dateStyle: 'short',
     timeStyle: 'short'
@@ -108,16 +109,16 @@ function msText(value) {
   return typeof value === 'number' ? `${Math.round(value)} ms` : '-';
 }
 
-function uptimeText(domain) {
+function uptimeText(domain, locale) {
   const uptime = domain.availability?.uptimePercent;
-  return typeof uptime === 'number' ? `${uptime}%` : '-';
+  return typeof uptime === 'number' ? `${new Intl.NumberFormat(locale).format(uptime)}%` : '-';
 }
 
-function tlsText(domain) {
+function tlsText(domain, language) {
   const days = domain.lastTlsDaysRemaining;
   if (typeof days !== 'number') return '-';
-  if (days <= 0) return 'Expired';
-  return `${days} nap`;
+  if (days <= 0) return monitoringText(language, 'Expired');
+  return language === 'hu' ? `${days} nap` : `${days} days`;
 }
 
 function redirectText(domain) {
@@ -131,8 +132,11 @@ function rowColor(domain) {
   return '#ffffff';
 }
 
-function buildReportHtml(domains) {
-  const generatedAt = new Intl.DateTimeFormat('hu-HU', {
+function buildReportHtml(domains, language = 'hu') {
+  const hu = language === 'hu';
+  const locale = hu ? 'hu-HU' : 'en-GB';
+  const t = (source) => monitoringText(language, source);
+  const generatedAt = new Intl.DateTimeFormat(locale, {
     timeZone: REPORT_TIME_ZONE,
     dateStyle: 'full',
     timeStyle: 'short'
@@ -140,34 +144,38 @@ function buildReportHtml(domains) {
 
   const cards = domains.map((domain) => {
     const metrics = [
-      ['Válaszidő', msText(domain.lastResponseMs)], ['24 órás rendelkezésre állás', uptimeText(domain)],
-      ['TLS', tlsText(domain)], ['Átirányítások', redirectText(domain)],
-      ['Teljesítmény', performanceLabel(domain)], ['Utolsó mérés', formatDate(domain.lastCheckedAt)]
+      [hu ? 'Válaszidő' : 'Response time', msText(domain.lastResponseMs)], [hu ? '24 órás rendelkezésre állás' : '24h uptime', uptimeText(domain, locale)],
+      ['TLS', tlsText(domain, language)], [hu ? 'Átirányítások' : 'Redirects', redirectText(domain)],
+      [hu ? 'Teljesítmény' : 'Performance', t(performanceLabel(domain))], [hu ? 'Utolsó mérés' : 'Last check', formatDate(domain.lastCheckedAt, locale)]
     ];
     const rows = metrics.map(([label, value]) => `
       <tr><th scope="row" align="left" style="padding:4px 8px 4px 0;color:#575048;font-weight:normal">${label}</th>
       <td align="right" style="padding:4px 0;font-weight:bold">${escapeHtml(value)}</td></tr>`).join('');
     return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 16px;border:1px solid #e5dfd5">
       <tr><td bgcolor="${rowColor(domain)}" style="padding:12px 14px;border-bottom:1px solid #e5dfd5">
-        <strong>${escapeHtml(domain.name)}</strong> &nbsp;·&nbsp; ${escapeHtml(statusLabel(domain))}<br>
+        <strong>${escapeHtml(domain.name)}</strong> &nbsp;·&nbsp; ${escapeHtml(t(statusLabel(domain)))}<br>
         <span style="font-size:13px;color:#575048">${escapeHtml(domain.baseUrl)} &nbsp;·&nbsp; ${escapeHtml(domain.owner || '-')}</span>
       </td></tr>
       <tr><td style="padding:10px 14px;font-size:13px">
-        <table width="100%" cellpadding="0" cellspacing="0" aria-label="Domain metrikák">${rows}</table>
-        <p style="margin:10px 0 0;color:#575048">${escapeHtml(issueText(domain))}</p>
+        <table width="100%" cellpadding="0" cellspacing="0" aria-label="${hu ? 'Domainmutatók' : 'Domain metrics'}">${rows}</table>
+        <p style="margin:10px 0 0;color:#575048">${escapeHtml(t(issueText(domain, language)))}</p>
       </td></tr>
     </table>`;
   }).join('');
 
-  return `<p style="margin:0 0 18px;color:#575048">Generálva: ${escapeHtml(generatedAt)}</p>
-    ${cards || '<p>Nincs aktív domain.</p>'}`;
+  return `<p style="margin:0 0 18px;color:#575048">${hu ? 'Készült:' : 'Generated:'} ${escapeHtml(generatedAt)}</p>
+    ${cards || (hu ? '<p>Nincs aktív domain.</p>' : '<p>No active domains.</p>')}`;
 }
 
-function dailyReportMail(domains) {
+function dailyReportMail(domains, language = 'hu') {
+  const hu = language === 'hu';
+  const locale = hu ? 'hu-HU' : 'en-GB';
+  const title = hu ? 'Napi domainjelentés' : 'Daily domain report';
   return {
-    subject: `Domain Health napi riport – ${new Intl.DateTimeFormat('hu-HU', { timeZone: REPORT_TIME_ZONE }).format(new Date())}`,
-    html: buildReportHtml(domains),
-    branding: { title: 'Domain Health napi riport', category: 'Monitoring', preheader: 'A figyelt szolgáltatások aktuális állapota.', lang: 'hu' }
+    subject: `${title} – ${new Intl.DateTimeFormat(locale, { timeZone: REPORT_TIME_ZONE }).format(new Date())}`,
+    html: buildReportHtml(domains, language),
+    branding: { title, category: hu ? 'Domainfigyelés' : 'Domain Health',
+      preheader: hu ? 'A figyelt szolgáltatások aktuális állapota.' : 'Current status of monitored services.', lang: language }
   };
 }
 
@@ -181,7 +189,7 @@ async function sendDomainDailyReport() {
       if (!to.length) throw new Error('DOMAIN_DAILY_REPORT_TO is empty');
       const domains = (await buildDomainList({ role: 'SuperAdmin' }))
         .filter((domain) => domain.enabled !== false);
-      await mailService.sendMail({ to, ...dailyReportMail(domains) });
+      await mailService.sendMail({ to, ...dailyReportMail(domains, process.env.DOMAIN_DAILY_REPORT_LANGUAGE === 'en' ? 'en' : 'hu') });
       console.log(`[domain-report] daily report sent to ${to.join(', ')}`);
     }, { holdOnSuccess: true });
   } catch (err) {

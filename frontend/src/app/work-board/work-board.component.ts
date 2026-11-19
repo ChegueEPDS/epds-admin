@@ -1,3 +1,5 @@
+import { UiLanguageService } from '../i18n/ui-language.service';
+import { UiTextPipe } from '../i18n/ui-text.pipe';
 import { WorkNextActionsComponent } from './work-next-actions.component';
 import { CommonModule, formatDate, formatNumber } from '@angular/common';
 import { Component, DestroyRef, Input, OnDestroy, OnInit, inject } from '@angular/core';
@@ -45,11 +47,12 @@ type SubWorkForm = {
 @Component({
   selector: 'app-work-board',
   standalone: true,
-  imports: [CommonModule, FormsModule, MatButtonModule, MatCheckboxModule, MatDatepickerModule, MatNativeDateModule, MatFormFieldModule, MatIconModule, MatInputModule, MatProgressSpinnerModule, MatSelectModule, MatSnackBarModule, MatSortModule, WorkFieldValuesComponent, WorkLayoutListComponent, WorkMoneyComponent, WorkRateInfoComponent, WorkNextActionsComponent],
+  imports: [UiTextPipe, CommonModule, FormsModule, MatButtonModule, MatCheckboxModule, MatDatepickerModule, MatNativeDateModule, MatFormFieldModule, MatIconModule, MatInputModule, MatProgressSpinnerModule, MatSelectModule, MatSnackBarModule, MatSortModule, WorkFieldValuesComponent, WorkLayoutListComponent, WorkMoneyComponent, WorkRateInfoComponent, WorkNextActionsComponent],
   templateUrl: './work-board.component.html',
   styleUrl: './work-board.component.scss'
 })
 export class WorkBoardComponent implements OnInit, OnDestroy {
+  private readonly ui = inject(UiLanguageService);
   currentRates?: WorkRateSnapshot;
 
   customAmount(work: WorkItem, id: string): WorkFieldAmount | undefined {
@@ -821,7 +824,7 @@ export class WorkBoardComponent implements OnInit, OnDestroy {
     const required = { offer: 1, execution: 2, completion: 3, invoice: 4, payment: 5 }[stage];
     return this.statusRank[status] >= required;
   }
-  formatMoney(value: number, currency = 'HUF'): string { return new Intl.NumberFormat('hu-HU', { style: 'currency', currency, maximumFractionDigits: currency === 'HUF' ? 0 : 2 }).format(value || 0); }
+  formatMoney(value: number, currency = 'HUF'): string { return new Intl.NumberFormat(this.ui.locale(), { style: 'currency', currency, maximumFractionDigits: currency === 'HUF' ? 0 : 2 }).format(value || 0); }
   isOverdue(value: string | null): boolean { return Boolean(value && new Date(value).getTime() < new Date().setHours(0, 0, 0, 0)); }
   private today(): string {
     return billingCalendar.format(new Date());
@@ -855,8 +858,8 @@ export class WorkBoardComponent implements OnInit, OnDestroy {
     return day ? this.localDate(day) : null;
   }
   private dateValue(value: string | null): Date | null { return value ? new Date(value) : null; }
-  private notice(message: string): void { this.snackBar.open(message, 'OK', { duration: 3000 }); }
-  private error(error: any, fallback: string): void { this.snackBar.open(error?.error?.error || fallback, 'OK', { duration: 4500 }); }
+  private notice(message: string): void { this.snackBar.open(this.ui.text(message), this.ui.text('OK'), { duration: 3000 }); }
+  private error(error: any, fallback: string): void { this.snackBar.open(this.ui.text(error?.error?.error || fallback), this.ui.text('OK'), { duration: 4500 }); }
   private emptyWorkForm(): WorkForm { return { name: '', clientId: '', entityId: '', serviceTypeId: '', responsibleUserId: '', status: 'inquiry', deadline: null, description: '', currency: this.defaultCurrency, totalAmount: 0, costAmount: 0, subcontractor: '', paymentDeadlineDays: 30, offerDate: null, completionDate: null, invoiceDate: null, invoicePaymentDeadline: null, invoiceNumber: '', contractSigned: false, performanceCertificate: false, paidAt: null }; }
   private emptySubWorkForm(): SubWorkForm { return { name: '', responsibleUserId: '', status: 'inquiry', deadline: null, description: '', plannedHours: 0, amount: 0, percentage: 0, performanceCertificateRequired: false, performanceCertificateSigned: false, invoiceNumber: '', invoiceDate: null, invoicePaymentDeadline: null, paidAmount: 0, paidAt: null }; }
   private emptyClientForm(): ClientPayload { return { taxNumber: '', name: '', country: 'HU', postalCode: '', city: '', address: '', email: '', phone: '' }; }

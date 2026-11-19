@@ -1,3 +1,4 @@
+import { UiTextPipe } from '../../i18n/ui-text.pipe';
 import { CommonModule } from '@angular/common';
 import { Component, Inject, OnInit } from '@angular/core';
 import { firstValueFrom } from 'rxjs';
@@ -11,6 +12,7 @@ import { DomainDeepScanResult, DomainHealthService, DomainMonitor, DomainPageSpe
   selector: 'app-domain-deep-scan-dialog',
   standalone: true,
   imports: [
+    UiTextPipe,
     CommonModule,
     MatButtonModule,
     MatDialogModule,

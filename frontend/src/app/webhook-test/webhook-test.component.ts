@@ -1,3 +1,4 @@
+import { UiTextPipe } from '../i18n/ui-text.pipe';
 import { CommonModule } from '@angular/common';
 import { HttpClient } from '@angular/common/http';
 import { Component, DestroyRef, OnInit, inject, signal } from '@angular/core';
@@ -29,6 +30,7 @@ type SignatureState = 'valid' | 'invalid' | 'missing' | 'unchecked';
   selector: 'app-webhook-test',
   standalone: true,
   imports: [
+    UiTextPipe,
     CommonModule,
     FormsModule,
     MatButtonModule,

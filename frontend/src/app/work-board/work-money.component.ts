@@ -1,4 +1,5 @@
-import { Component, Input, OnChanges } from '@angular/core';
+import { UiLanguageService } from '../i18n/ui-language.service';
+import { Component, Input, OnChanges, effect, inject } from '@angular/core';
 import { MatIconModule } from '@angular/material/icon';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { WorkExchangeRate } from './work-fields';
@@ -28,6 +29,7 @@ type MoneyPart = { amount: number; rate?: WorkExchangeRate };
   `]
 })
 export class WorkMoneyComponent implements OnChanges {
+  private readonly ui = inject(UiLanguageService);
   @Input({ required: true }) amount = 0;
   @Input({ required: true }) currency = '';
   @Input({ required: true }) target = '';
@@ -39,7 +41,18 @@ export class WorkMoneyComponent implements OnChanges {
   converted = '';
   tooltip = '';
 
+  constructor() {
+    effect(() => {
+      this.ui.language();
+      this.updateDisplay();
+    });
+  }
+
   ngOnChanges(): void {
+    this.updateDisplay();
+  }
+
+  private updateDisplay(): void {
     this.original = this.money(this.amount, this.currency);
     this.converted = '';
     this.tooltip = '';
@@ -52,13 +65,13 @@ export class WorkMoneyComponent implements OnChanges {
       const source = this.quote(this.currency, snapshot);
       const target = this.quote(this.target, snapshot);
       if (!snapshot || !source || !target) {
-        this.tooltip = 'Exchange rate unavailable';
+        this.tooltip = this.ui.text('Exchange rate unavailable');
         return;
       }
       const rate = source / target;
       total += part.amount * rate;
-      const displayed = new Intl.NumberFormat('hu-HU', { maximumSignificantDigits: 8 }).format(rate);
-      const basis = part.rate?.estimated ? ' · Baseline' : part.rate ? '' : ' · Latest available';
+      const displayed = new Intl.NumberFormat(this.ui.locale(), { maximumSignificantDigits: 8 }).format(rate);
+      const basis = part.rate?.estimated ? this.ui.text(' · Baseline') : part.rate ? '' : this.ui.text(' · Latest available');
       details.add(`MNB ${snapshot.date} · 1 ${this.currency} = ${displayed} ${this.target}${basis}`);
     }
     this.converted = this.money(total, this.target);
@@ -72,6 +85,6 @@ export class WorkMoneyComponent implements OnChanges {
   }
 
   private money(amount: number, currency: string): string {
-    return new Intl.NumberFormat('hu-HU', { style: 'currency', currency, maximumFractionDigits: currency === 'HUF' ? 0 : 2 }).format(amount);
+    return new Intl.NumberFormat(this.ui.locale(), { style: 'currency', currency, maximumFractionDigits: currency === 'HUF' ? 0 : 2 }).format(amount);
   }
 }

@@ -75,7 +75,7 @@ async function readWorkbook(buffer, sheetName = 'Works') {
   }
 }
 
-async function createWorkbook(columns, works, value, { sheetName = 'Works', instructions } = {}) {
+async function createWorkbook(columns, works, value, { sheetName = 'Works', instructions, language = 'en' } = {}) {
   const workbook = new ExcelJS.Workbook();
   const sheet = workbook.addWorksheet(sheetName, { views: [{ state: 'frozen', ySplit: 1 }] });
   sheet.columns = [...columns.map(({ key, label, numFmt }) => ({
@@ -84,15 +84,22 @@ async function createWorkbook(columns, works, value, { sheetName = 'Works', inst
     { key: 'revision', header: revisionKey, hidden: true }];
   const lists = workbook.addWorksheet('Lists');
   lists.state = 'veryHidden';
-  const guide = workbook.addWorksheet('Instructions');
+  const guide = workbook.addWorksheet(language === 'hu' ? 'Útmutató' : 'Instructions');
   guide.getColumn(1).width = 110;
-  for (const line of instructions ?? [
+  const workInstructionsHu = [
+    'Meglévő munkánál tartsd meg az azonosítót és a rejtett exportverziót. Új munkánál mindkettőt hagyd üresen.',
+    'Add meg a teljes évszámot és egy pozitív egész sorszámot. A dátumformátum YYYY-MM-DD.',
+    'A kihagyott oszlopok értékei megmaradnak. A jelen lévő opcionális oszlopok üres cellái törlik az értéket vagy visszaállítják az alapértelmezést.',
+    'Több értéket JSON-listaként vagy pontosvesszővel elválasztva adhatsz meg a tenant listájából.',
+    'A mellékletekhez add meg a ZIP-en belüli útvonalat kis- és nagybetűhelyesen. A meglévő fájl megmarad, ha a fájlnév változatlan.'
+  ];
+  for (const line of instructions ?? (language === 'hu' ? workInstructionsHu : [
     'Keep the ID and hidden export version for existing works. Leave both empty for a new work.',
     'Enter the full year and a positive whole-number sequence. Dates use YYYY-MM-DD.',
     'Omitted columns keep existing values. Blank cells in included optional columns clear their values or apply the default.',
     'For multiple choices, use a JSON list of values from the tenant catalog or separate the values with semicolons.',
     'For attachments, enter the ZIP path (case-sensitive). Existing files are retained when their exported filename is unchanged.'
-  ]) guide.addRow([line]);
+  ])) guide.addRow([line]);
   for (const entry of works) sheet.addRow(value(entry));
   let listColumn = 0;
   for (const column of columns) {
@@ -115,7 +122,28 @@ async function createWorkbook(columns, works, value, { sheetName = 'Works', inst
   return workbook.xlsx.writeBuffer();
 }
 
-async function errorWorkbook(workbook, sheet, issues) {
+const importNotesHu = {
+  "Unknown or duplicate column. Use the current template.": "Ismeretlen vagy ismétlődő oszlop. Használd az aktuális sablont.",
+  "Unknown or duplicate column. Use the current Clients template.": "Ismeretlen vagy ismétlődő oszlop. Használd az aktuális ügyfélsablont.",
+  "Keep the ID, Year and Sequence number columns in A, B and C.": "Az ID, a Year és a Sequence number oszlop maradjon az A, B és C oszlopban.",
+  "Keep the ID column in A.": "Az ID oszlop maradjon az A oszlopban.",
+  "This work number occurs more than once in the file.": "Ez a munkaszám többször szerepel a fájlban.",
+  "This ID occurs more than once in the file.": "Ez az azonosító többször szerepel a fájlban.",
+  "There are no work rows to import.": "Nincs importálható munkasor.",
+  "There are no client rows to import.": "Nincs importálható ügyfélsor.",
+  "This tax number occurs more than once in the file.": "Ez az adószám többször szerepel a fájlban.",
+  "This tax number belongs to another client.": "Ez az adószám másik ügyfélhez tartozik.",
+  "This client changed or is no longer editable. Download a fresh export.": "Az ügyfél adatai megváltoztak, vagy már nem szerkeszthetők. Tölts le friss exportot.",
+  "A client was added concurrently. Upload the workbook again.": "Eközben egy ügyfél hozzá lett adva. Töltsd fel újra a munkafüzetet.",
+  "This ID does not identify a client linked to this tenant.": "Az azonosító nem ehhez a tenanthoz tartozó ügyfelet jelöl.",
+  "This client changed or its export version is missing. Download a fresh export.": "Az ügyfél adatai megváltoztak, vagy az exportverzió hiányzik. Tölts le friss exportot.",
+  "Keep the exported ID or use an empty template row.": "Tartsd meg az exportált azonosítót, vagy használj egy üres sablonsort.",
+  "Enter a literal value without a formula.": "Képlet helyett közvetlen értéket adj meg.",
+  "This client is shared with another tenant and cannot be edited here.": "Az ügyfél másik tenanttal is meg van osztva, ezért itt nem szerkeszthető.",
+  "Tenant settings changed during validation. Upload the workbook again.": "Ellenőrzés közben megváltoztak a tenantbeállítások. Töltsd fel újra a munkafüzetet."
+};
+
+async function errorWorkbook(workbook, sheet, issues, language = 'en') {
   const affected = new Set(issues.map(({ row }) => row));
   for (const index of affected) {
     for (let col = 1; col <= sheet.columnCount; col++) sheet.getCell(index, col).fill = fill('FFFFE6E6');
@@ -124,7 +152,7 @@ async function errorWorkbook(workbook, sheet, issues) {
   for (const { row, col, message } of issues) {
     const cell = sheet.getCell(row, col);
     if (!cells.has(cell.address)) cells.set(cell.address, { cell, messages: new Set() });
-    cells.get(cell.address).messages.add(message);
+    cells.get(cell.address).messages.add(language === 'hu' && Object.hasOwn(importNotesHu, message) ? importNotesHu[message] : message);
   }
   for (const { cell, messages } of cells.values()) {
     cell.fill = fill('FFFF7070');

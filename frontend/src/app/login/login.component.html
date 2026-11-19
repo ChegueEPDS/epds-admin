@@ -11,88 +11,88 @@
       @if (completedEnrollment?.recoveryCodes; as codes) {
         <app-recovery-codes [codes]="codes" (done)="finishEnrollment()"/>
       } @else if (verification; as flow) {
-        <h2>{{ flow.setup ? 'Set up two-step verification' : 'Verify it’s you' }}</h2>
-        <p *ngIf="verificationError" role="alert">{{ verificationError }}</p>
+        <h2>{{ flow.setup ? ('Set up two-step verification' | uiText) : ('Verify it’s you' | uiText) }}</h2>
+        <p *ngIf="verificationError" role="alert">{{ verificationError | uiText }}</p>
         @if (flow.setup) {
-          <p>Your role requires two-step verification.</p>
+          <p>{{ 'Your role requires two-step verification.' | uiText }}</p>
           @if (verificationSetup; as setup) {
             <app-mfa-setup [setup]="setup"/>
           } @else if (isLoading()) {
-            <p role="status">Preparing your authenticator setup…</p>
+            <p role="status">{{ 'Preparing your authenticator setup…' | uiText }}</p>
           } @else {
-            <button mat-button type="button" (click)="startEnrollment()">Try setup again</button>
+            <button mat-button type="button" (click)="startEnrollment()">{{ 'Try setup again' | uiText }}</button>
           }
         }
         @if (flow.setup ? verificationSetup : verificationMethod !== 'passkey') {
           <form class="login-form" #codeForm="ngForm" (ngSubmit)="verify()">
             <mat-form-field appearance="outline">
-              <mat-label>{{ verificationMethod === 'recovery' ? 'Recovery code' : 'Six-digit code' }}</mat-label>
+              <mat-label>{{ verificationMethod === 'recovery' ? ('Recovery code' | uiText) : ('Six-digit code' | uiText) }}</mat-label>
               <input matInput name="verificationCode" autocomplete="one-time-code" required
                 [attr.inputmode]="verificationMethod === 'recovery' ? 'text' : 'numeric'"
                 [attr.maxlength]="verificationMethod === 'recovery' ? 40 : 6" [(ngModel)]="verificationCode">
             </mat-form-field>
-            <button mat-flat-button type="submit" [disabled]="isLoading() || codeForm.invalid">Verify code</button>
+            <button mat-flat-button type="submit" [disabled]="isLoading() || codeForm.invalid">{{ 'Verify code' | uiText }}</button>
           </form>
         }
         @if (!flow.setup && verificationMethod === 'passkey') {
-          <p>Use your passkey to finish signing in.</p>
-          <button mat-flat-button type="button" [disabled]="isLoading()" (click)="verify()">Continue with passkey</button>
+          <p>{{ 'Use your passkey to finish signing in.' | uiText }}</p>
+          <button mat-flat-button type="button" [disabled]="isLoading()" (click)="verify()">{{ 'Continue with passkey' | uiText }}</button>
         }
         @if (!flow.setup) {
           <button mat-button type="button" [disabled]="isLoading()" [attr.aria-expanded]="otherMethods"
-            (click)="otherMethods = !otherMethods">Sign in another way</button>
+            (click)="otherMethods = !otherMethods">{{ 'Sign in another way' | uiText }}</button>
           @if (otherMethods) {
             <div>
-              <button mat-button type="button" [disabled]="isLoading()" (click)="chooseMethod('totp')">Authenticator app</button>
-              <button mat-button type="button" [disabled]="isLoading()" (click)="chooseMethod('recovery')">Recovery code</button>
+              <button mat-button type="button" [disabled]="isLoading()" (click)="chooseMethod('totp')">{{ 'Authenticator app' | uiText }}</button>
+              <button mat-button type="button" [disabled]="isLoading()" (click)="chooseMethod('recovery')">{{ 'Recovery code' | uiText }}</button>
               @if (canUsePasskey && verificationMethod !== 'passkey') {
-                <button mat-button type="button" [disabled]="isLoading()" (click)="chooseMethod('passkey')">Passkey</button>
+                <button mat-button type="button" [disabled]="isLoading()" (click)="chooseMethod('passkey')">{{ 'Passkey' | uiText }}</button>
               }
             </div>
           }
         }
-        <button mat-button type="button" [disabled]="isLoading()" (click)="cancelVerification()">Back to sign in</button>
+        <button mat-button type="button" [disabled]="isLoading()" (click)="cancelVerification()">{{ 'Back to sign in' | uiText }}</button>
       } @else {
       <ng-container *ngIf="linkPurpose; else standardLogin">
-        <h2>{{ linkPurpose === 'invite' ? 'Activate your account' : linkPurpose === 'recovery' ? 'Recover your account' : 'Reset your password' }}</h2>
-        <p *ngIf="linkError" role="alert">{{ linkError }}</p>
-        <p *ngIf="!linkMethod && !linkError" role="status">Checking your invitation…</p>
+        <h2>{{ linkPurpose === 'invite' ? ('Activate your account' | uiText) : linkPurpose === 'recovery' ? ('Recover your account' | uiText) : ('Reset your password' | uiText) }}</h2>
+        <p *ngIf="linkError" role="alert">{{ linkError | uiText }}</p>
+        <p *ngIf="!linkMethod && !linkError" role="status">{{ 'Checking your invitation…' | uiText }}</p>
 
-        <button *ngIf="linkMethod === 'microsoft'" class="microsoft-sign-in" lang="en" type="button"
+        <button *ngIf="linkMethod === 'microsoft'" class="microsoft-sign-in" type="button"
           [disabled]="isLoading()" (click)="loginWithMicrosoft()">
           <span class="microsoft-mark" aria-hidden="true"></span>
-          Sign in with Microsoft
+          {{ 'Sign in with Microsoft' | uiText }}
         </button>
 
         <form *ngIf="linkMethod === 'password'" class="login-form" #passwordForm="ngForm" (ngSubmit)="setPassword()">
           <mat-form-field appearance="outline">
-            <mat-label>New password</mat-label>
+            <mat-label>{{ 'New password' | uiText }}</mat-label>
             <input matInput type="password" name="newPassword" autocomplete="new-password"
               [(ngModel)]="newPassword" [minlength]="minimumPasswordLength" maxlength="72" required>
           </mat-form-field>
           <mat-form-field appearance="outline">
-            <mat-label>Confirm password</mat-label>
+            <mat-label>{{ 'Confirm password' | uiText }}</mat-label>
             <input matInput type="password" name="confirmPassword" autocomplete="new-password"
               [(ngModel)]="confirmPassword" required>
           </mat-form-field>
-          <button mat-flat-button color="primary" type="submit" [disabled]="isLoading() || !passwordForm.valid">Save password</button>
+          <button mat-flat-button color="primary" type="submit" [disabled]="isLoading() || !passwordForm.valid">{{ 'Save password' | uiText }}</button>
         </form>
-        <a mat-button routerLink="/login" [replaceUrl]="true">Back to sign in</a>
+        <a mat-button routerLink="/login" [replaceUrl]="true">{{ 'Back to sign in' | uiText }}</a>
       </ng-container>
       <ng-template #standardLogin>
-        <p *ngIf="notice" role="status">{{ notice }}</p>
+        <p *ngIf="notice" role="status">{{ notice | uiText }}</p>
         <ng-container *ngIf="!resetFormOpen; else resetForm">
-          <button class="microsoft-sign-in" lang="en" type="button" [disabled]="isLoading()" (click)="loginWithMicrosoft()">
+          <button class="microsoft-sign-in" type="button" [disabled]="isLoading()" (click)="loginWithMicrosoft()">
             <span class="microsoft-mark" aria-hidden="true"></span>
-            Sign in with Microsoft
+            {{ 'Sign in with Microsoft' | uiText }}
           </button>
 
-          <div class="divider"><span lang="en">OR</span></div>
+          <div class="divider"><span>{{ 'OR' | uiText }}</span></div>
 
           <button mat-stroked-button class="password-toggle" type="button"
             [attr.aria-expanded]="passwordFormOpen()" aria-controls="password-sign-in"
             (click)="passwordFormOpen.set(!passwordFormOpen())">
-            Bejelentkezés e-mail-címmel és jelszóval
+            {{ 'Bejelentkezés e-mail-címmel és jelszóval' | uiText }}
             <mat-icon iconPositionEnd aria-hidden="true" class="material-symbols-outlined">expand_more</mat-icon>
           </button>
 
@@ -101,32 +101,32 @@
             <div class="password-panel-content">
               <form class="login-form" (ngSubmit)="loginWithPassword()">
                 <mat-form-field appearance="outline">
-                  <mat-label>E-mail</mat-label>
+                  <mat-label>{{ 'E-mail' | uiText }}</mat-label>
                   <input matInput type="email" name="email" autocomplete="email" [(ngModel)]="email" required>
                 </mat-form-field>
 
                 <mat-form-field appearance="outline">
-                  <mat-label>Jelszó</mat-label>
+                  <mat-label>{{ 'Jelszó' | uiText }}</mat-label>
                   <input matInput type="password" name="password" autocomplete="current-password" [(ngModel)]="password" required>
                 </mat-form-field>
 
                 <button mat-flat-button color="primary" type="submit" [disabled]="isLoading()">
                   <mat-icon class="material-symbols-outlined">login</mat-icon>
-                  Belépés
+                  {{ 'Belépés' | uiText }}
                 </button>
               </form>
-              <button mat-button type="button" (click)="resetFormOpen = true; notice = ''">Forgot password?</button>
+              <button mat-button type="button" (click)="resetFormOpen = true; notice = ''">{{ 'Forgot password?' | uiText }}</button>
             </div>
           </div>
         </ng-container>
         <ng-template #resetForm>
           <form class="login-form" #resetRequest="ngForm" (ngSubmit)="requestReset()">
             <mat-form-field appearance="outline">
-              <mat-label>Email</mat-label>
+              <mat-label>{{ 'Email' | uiText }}</mat-label>
               <input matInput type="email" name="resetEmail" autocomplete="email" [(ngModel)]="email" email required>
             </mat-form-field>
-            <button mat-flat-button color="primary" type="submit" [disabled]="isLoading() || !resetRequest.valid">Send reset link</button>
-            <button mat-button type="button" (click)="resetFormOpen = false">Back to sign in</button>
+            <button mat-flat-button color="primary" type="submit" [disabled]="isLoading() || !resetRequest.valid">{{ 'Send reset link' | uiText }}</button>
+            <button mat-button type="button" (click)="resetFormOpen = false">{{ 'Back to sign in' | uiText }}</button>
           </form>
         </ng-template>
       </ng-template>

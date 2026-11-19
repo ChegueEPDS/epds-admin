@@ -1,3 +1,4 @@
+const { requestLanguage } = require('../services/uiLanguage');
 const { canRecover, completeRecovery } = require('../services/accountRecovery');
 const bcrypt = require('bcryptjs');
 const accounts = require('../services/accountStore');
@@ -116,7 +117,7 @@ exports.requestPasswordReset = async (req, res, next) => {
     const user = validEmail(email) && email !== SUPERADMIN_EMAIL ? await accounts.findEmail(email) : null;
     const pendingRecovery = user?.accountTokenPurpose === 'recovery' && new Date(user.accountTokenExpiresAt) > new Date();
     if (!pendingRecovery && user?.password && user.role !== 'SuperAdmin' && user.loginMethod !== 'microsoft' && await hasTenant(user)) {
-      sendAccountLink(user, 'reset').catch(() => {});
+      sendAccountLink(user, 'reset', requestLanguage(req)).catch(() => {});
     }
     return res.json({ ok: true });
   } catch (error) { next(error); }

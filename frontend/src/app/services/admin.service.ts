@@ -1,3 +1,4 @@
+import type { UiLanguage } from '../i18n/ui-language.service';
 import { HttpClient } from '@angular/common/http';
 import { Injectable } from '@angular/core';
 import { Observable, map } from 'rxjs';
@@ -60,6 +61,7 @@ export type AdminUser = {
 export type AssignableRole = 'User' | 'Admin' | 'Finance';
 
 export type CreateAdminUserPayload = {
+  language?: UiLanguage;
   email: string;
   loginMethod: LoginMethod;
   firstName: string;

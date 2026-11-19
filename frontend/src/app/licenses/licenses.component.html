@@ -1,8 +1,8 @@
 <section class="page">
   <div class="page-title">
     <div>
-      <h1>EPDS Licenses</h1>
-      <p>Customer license status, object limits and expiry dates.</p>
+      <h1>{{ 'EPDS Licenses' | uiText }}</h1>
+      <p>{{ 'Customer license status, object limits and expiry dates.' | uiText }}</p>
     </div>
   </div>
 
@@ -10,41 +10,41 @@
     <button type="button" class="summary-tile status-active" [class.active]="statusFilter === 'active'" (click)="statusFilter = 'active'">
       <mat-icon class="material-symbols-outlined">check_circle</mat-icon>
       <span>{{ summary('active') }}</span>
-      <strong>Active</strong>
+      <strong>{{ 'Active' | uiText }}</strong>
     </button>
     <button type="button" class="summary-tile status-expired" [class.active]="statusFilter === 'expired'" (click)="statusFilter = 'expired'">
       <mat-icon class="material-symbols-outlined">event_busy</mat-icon>
       <span>{{ summary('expired') }}</span>
-      <strong>Expired</strong>
+      <strong>{{ 'Expired' | uiText }}</strong>
     </button>
     <button type="button" class="summary-tile status-pending" [class.active]="statusFilter === 'pending'" (click)="statusFilter = 'pending'">
       <mat-icon class="material-symbols-outlined">pending_actions</mat-icon>
       <span>{{ summary('pending') }}</span>
-      <strong>Pending</strong>
+      <strong>{{ 'Pending' | uiText }}</strong>
     </button>
     <button type="button" class="summary-tile status-inactive" [class.active]="statusFilter === 'inactive'" (click)="statusFilter = 'inactive'">
       <mat-icon class="material-symbols-outlined">pause_circle</mat-icon>
       <span>{{ summary('inactive') }}</span>
-      <strong>Inactive</strong>
+      <strong>{{ 'Inactive' | uiText }}</strong>
     </button>
     <button type="button" class="summary-tile status-all" [class.active]="statusFilter === 'all'" (click)="statusFilter = 'all'">
       <mat-icon class="material-symbols-outlined">business</mat-icon>
       <span>{{ summary('all') }}</span>
-      <strong>All customers</strong>
+      <strong>{{ 'All customers' | uiText }}</strong>
     </button>
   </div>
 
   <div class="toolbar-row">
     <mat-form-field appearance="outline">
-      <mat-label>Search</mat-label>
+      <mat-label>{{ 'Search' | uiText }}</mat-label>
       <mat-icon matPrefix class="material-symbols-outlined">search</mat-icon>
-      <input matInput [(ngModel)]="searchTerm" placeholder="Customer name">
+      <input matInput [(ngModel)]="searchTerm" placeholder="{{ 'Customer name' | uiText }}">
     </mat-form-field>
     <div class="toolbar-actions">
       <button mat-button type="button" (click)="loadLicenses()" [disabled]="isLoading">
         <mat-progress-spinner *ngIf="isLoading" diameter="18" mode="indeterminate"></mat-progress-spinner>
         <mat-icon *ngIf="!isLoading" class="material-symbols-outlined">refresh</mat-icon>
-        Refresh
+        {{ 'Refresh' | uiText }}
       </button>
       <button
         mat-flat-button
@@ -52,11 +52,11 @@
         type="button"
         *ngIf="auth.canEditFeature('licenses')"
         [disabled]="!clientTenants.length"
-        [matTooltip]="clientTenants.length ? 'Add customer' : 'Create a client tenant first'"
+        [matTooltip]="clientTenants.length ? ('Add customer' | uiText) : 'Create a client tenant first'"
         (click)="openLicenseDialog()"
       >
         <mat-icon class="material-symbols-outlined">add</mat-icon>
-        Add customer
+        {{ 'Add customer' | uiText }}
       </button>
     </div>
   </div>
@@ -73,11 +73,11 @@
         </colgroup>
         <thead>
           <tr>
-            <th>Status</th>
-            <th>Customer</th>
-            <th>Object count</th>
-            <th>Expiry</th>
-            <th>Updated</th>
+            <th>{{ 'Status' | uiText }}</th>
+            <th>{{ 'Customer' | uiText }}</th>
+            <th>{{ 'Object count' | uiText }}</th>
+            <th>{{ 'Expiry' | uiText }}</th>
+            <th>{{ 'Updated' | uiText }}</th>
           </tr>
         </thead>
         <tbody>
@@ -96,23 +96,23 @@
             </td>
             <td>
               <strong>{{ customerDisplayName(license) }}</strong>
-              <span class="customer-subtext">Created {{ license.createdAt | date:'shortDate' }}</span>
+              <span class="customer-subtext">{{ 'Created {0}' | uiText: (license.createdAt | date:'shortDate') }}</span>
             </td>
             <td>
               <strong>{{ objectLimitText(license) }}</strong>
-              <span class="customer-subtext" *ngIf="license.objectLimitOption === 'custom'">Custom limit</span>
+              <span class="customer-subtext" *ngIf="license.objectLimitOption === 'custom'">{{ 'Custom limit' | uiText }}</span>
             </td>
             <td>
               <strong>{{ license.expiresAt | date:'mediumDate' }}</strong>
-              <span class="customer-subtext" *ngIf="isExpired(license)">Past expiry date</span>
-              <span class="customer-subtext" *ngIf="expiresSoon(license)">Within 30 days</span>
+              <span class="customer-subtext" *ngIf="isExpired(license)">{{ 'Past expiry date' | uiText }}</span>
+              <span class="customer-subtext" *ngIf="expiresSoon(license)">{{ 'Within 30 days' | uiText }}</span>
             </td>
             <td>{{ license.updatedAt | date:'short' }}</td>
           </tr>
           <tr *ngIf="!filteredLicenses.length">
             <td colspan="5" class="empty-state">
               <mat-icon class="material-symbols-outlined">license</mat-icon>
-              No licenses match the current filter.
+              {{ 'No licenses match the current filter.' | uiText }}
             </td>
           </tr>
         </tbody>

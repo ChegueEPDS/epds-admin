@@ -8,7 +8,7 @@ const operations=require('../repositories/domainOperationRepository');
 const {monthPeriod,previousMonth,monthKey,calculateMonthlyMetrics}=require('./domainMonthlyMetrics');
 const {generateMonthlyPdf}=require('./domainMonthlyPdfService');
 const { buildPageSpeedHistory, lcpStatus } = require('./pageSpeedService');
-const {recipientConfiguration,tenantId}=require('./domainNotificationService');
+const {recipientConfiguration,customerLanguage,tenantId}=require('./domainNotificationService');
 const {withJobLease}=require('./scheduledJobLeaseService');
 const { monthlyReportMail } = require('./mailTemplates');
 const PDF_VERSION = 2;
@@ -46,10 +46,10 @@ async function buildDomainSummary(domain, period, comparisonPeriod, retentionSta
   return { name: domain.name, metrics, previousP95, pageSpeed, tls };
 }
 
-async function monthlyDownloadContent(item) {
+async function monthlyDownloadContent(item, language = 'en') {
   const archived = item.payload?.report;
-  return item.payload?.pdfVersion !== PDF_VERSION && Array.isArray(archived?.domains)
-    ? generateMonthlyPdf(archived)
+  return (language === 'hu' || item.payload?.pdfVersion !== PDF_VERSION) && Array.isArray(archived?.domains)
+    ? generateMonthlyPdf(archived, language)
     : item.content;
 }
 
@@ -76,7 +76,7 @@ async function ensureMonthlyReport(tenant,month) {
     if(!report.domains.length)return null;
     const content=await generateMonthlyPdf(report);
     const to=recipientConfiguration()[tenant]||[];
-    return operations.insert({key,kind:'monthly',tenantId:tenant,month,content,payload:{to,report,pdfVersion:PDF_VERSION, ...monthlyReportMail(month)}});
+    return operations.insert({key,kind:'monthly',tenantId:tenant,month,content,payload:{to,report,pdfVersion:PDF_VERSION, ...monthlyReportMail(month, customerLanguage(tenant))}});
   });
   if(outcome.acquired)return outcome.value;
   const cached=await operations.find(key);

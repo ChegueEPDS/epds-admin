@@ -1,5 +1,7 @@
+import { UiLanguageService } from '../../i18n/ui-language.service';
+import { UiTextPipe } from '../../i18n/ui-text.pipe';
 import { CommonModule } from '@angular/common';
-import { Component, Inject, OnInit, signal } from '@angular/core';
+import { inject, Component, Inject, OnInit, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
 import { MatCheckboxModule } from '@angular/material/checkbox';
@@ -24,25 +26,25 @@ import {
 @Component({
   selector: 'app-integration-dialog',
   standalone: true,
-  imports: [CommonModule, FormsModule, MatButtonModule, MatCheckboxModule, MatDialogModule, MatFormFieldModule, MatInputModule],
+  imports: [UiTextPipe, CommonModule, FormsModule, MatButtonModule, MatCheckboxModule, MatDialogModule, MatFormFieldModule, MatInputModule],
   template: `
-    <h2 mat-dialog-title>{{ data.client ? 'Edit integration' : 'New integration' }}</h2>
+    <h2 mat-dialog-title>{{ data.client ? ('Edit integration' | uiText) : ('New integration' | uiText) }}</h2>
     <mat-dialog-content>
-      <p class="dialog-note">API access always includes all licenses, event polling and license-file upload.</p>
+      <p class="dialog-note">{{ 'API access always includes all licenses, event polling and license-file upload.' | uiText }}</p>
       <mat-form-field appearance="outline">
-        <mat-label>Name</mat-label>
+        <mat-label>{{ 'Name' | uiText }}</mat-label>
         <input matInput [(ngModel)]="name" maxlength="120" required>
       </mat-form-field>
       <mat-form-field appearance="outline">
-        <mat-label>Webhook URL</mat-label>
+        <mat-label>{{ 'Webhook URL' | uiText }}</mat-label>
         <input matInput [(ngModel)]="webhookUrl" type="url" placeholder="https://service.example.com/epds-webhook">
-        <mat-hint>Public HTTPS URL without a custom port.</mat-hint>
+        <mat-hint>{{ 'Public HTTPS URL without a custom port.' | uiText }}</mat-hint>
       </mat-form-field>
-      <mat-checkbox [(ngModel)]="webhookEnabled">Enable webhook delivery</mat-checkbox>
+      <mat-checkbox [(ngModel)]="webhookEnabled">{{ 'Enable webhook delivery' | uiText }}</mat-checkbox>
     </mat-dialog-content>
     <mat-dialog-actions align="end">
-      <button mat-button mat-dialog-close type="button">Cancel</button>
-      <button mat-flat-button color="primary" type="button" (click)="save()" [disabled]="!canSave()">Save</button>
+      <button mat-button mat-dialog-close type="button">{{ 'Cancel' | uiText }}</button>
+      <button mat-flat-button color="primary" type="button" (click)="save()" [disabled]="!canSave()">{{ 'Save' | uiText }}</button>
     </mat-dialog-actions>
   `,
   styles: [`
@@ -82,25 +84,25 @@ export class IntegrationDialogComponent {
 @Component({
   selector: 'app-integration-credentials-dialog',
   standalone: true,
-  imports: [CommonModule, MatButtonModule, MatDialogModule, MatIconModule, MatTooltipModule],
+  imports: [UiTextPipe, CommonModule, MatButtonModule, MatDialogModule, MatIconModule, MatTooltipModule],
   template: `
-    <h2 mat-dialog-title>Store these credentials now</h2>
+    <h2 mat-dialog-title>{{ 'Store these credentials now' | uiText }}</h2>
     <mat-dialog-content>
-      <p>Secrets are shown once and cannot be retrieved later.</p>
+      <p>{{ 'Secrets are shown once and cannot be retrieved later.' | uiText }}</p>
       <div class="secret" *ngIf="data.apiKey">
-        <span>API key</span><code>{{ data.apiKey }}</code>
-        <button mat-icon-button type="button" matTooltip="Copy API key" (click)="copy(data.apiKey!)">
+        <span>{{ 'API key' | uiText }}</span><code>{{ data.apiKey }}</code>
+        <button mat-icon-button type="button" matTooltip="{{ 'Copy API key' | uiText }}" (click)="copy(data.apiKey!)">
           <mat-icon class="material-symbols-outlined">content_copy</mat-icon>
         </button>
       </div>
       <div class="secret" *ngIf="data.webhookSecret">
-        <span>Webhook signing secret</span><code>{{ data.webhookSecret }}</code>
-        <button mat-icon-button type="button" matTooltip="Copy webhook secret" (click)="copy(data.webhookSecret!)">
+        <span>{{ 'Webhook signing secret' | uiText }}</span><code>{{ data.webhookSecret }}</code>
+        <button mat-icon-button type="button" matTooltip="{{ 'Copy webhook secret' | uiText }}" (click)="copy(data.webhookSecret!)">
           <mat-icon class="material-symbols-outlined">content_copy</mat-icon>
         </button>
       </div>
     </mat-dialog-content>
-    <mat-dialog-actions align="end"><button mat-flat-button color="primary" mat-dialog-close>Stored securely</button></mat-dialog-actions>
+    <mat-dialog-actions align="end"><button mat-flat-button color="primary" mat-dialog-close>{{ 'Stored securely' | uiText }}</button></mat-dialog-actions>
   `,
   styles: [`
     mat-dialog-content { min-width: min(620px, 80vw); }
@@ -121,6 +123,7 @@ export class IntegrationCredentialsDialogComponent {
   selector: 'app-admin-integrations',
   standalone: true,
   imports: [
+    UiTextPipe,
     CommonModule,
     MatButtonModule,
     MatDialogModule,
@@ -136,6 +139,7 @@ export class IntegrationCredentialsDialogComponent {
   styleUrl: './admin-integrations.component.scss'
 })
 export class AdminIntegrationsComponent implements OnInit {
+  private readonly ui = inject(UiLanguageService);
   clients = signal<IntegrationClient[]>([]);
   loading = signal(false);
   busyId = signal<string | null>(null);
@@ -217,5 +221,5 @@ export class AdminIntegrationsComponent implements OnInit {
     });
   }
 
-  private notify(message: string): void { this.snackBar.open(message, 'Close', { duration: 4500 }); }
+  private notify(message: string): void { this.snackBar.open(this.ui.text(message), this.ui.text('Close'), { duration: 4500 }); }
 }

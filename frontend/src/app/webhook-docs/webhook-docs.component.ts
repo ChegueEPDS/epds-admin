@@ -1,3 +1,4 @@
+import { UiTextPipe } from '../i18n/ui-text.pipe';
 import { CommonModule } from '@angular/common';
 import { Component } from '@angular/core';
 import { MatButtonModule } from '@angular/material/button';
@@ -15,7 +16,7 @@ type DocEndpoint = {
 @Component({
   selector: 'app-webhook-docs',
   standalone: true,
-  imports: [CommonModule, MatButtonModule, MatIconModule, RouterLink],
+  imports: [UiTextPipe, CommonModule, MatButtonModule, MatIconModule, RouterLink],
   templateUrl: './webhook-docs.component.html',
   styleUrl: './webhook-docs.component.scss'
 })

@@ -1,18 +1,18 @@
 <div class="license-dialog-header">
   <div>
-    <h2 mat-dialog-title>{{ data.license ? customerDisplayName() : 'Add customer license' }}</h2>
-    <p>{{ isEditing ? 'Editing license data' : 'Customer license sheet' }}</p>
+    <h2 mat-dialog-title>{{ data.license ? customerDisplayName() : ('Add customer license' | uiText) }}</h2>
+    <p>{{ isEditing ? ('Editing license data' | uiText) : ('Customer license sheet' | uiText) }}</p>
   </div>
   <div class="dialog-header-actions">
     <button mat-stroked-button type="button" *ngIf="data.license && !isEditing && data.canEdit" (click)="startEdit()">
       <mat-icon class="material-symbols-outlined">edit</mat-icon>
-      Edit
+      {{ 'Edit' | uiText }}
     </button>
     <button mat-stroked-button color="warn" type="button" *ngIf="data.license && !isEditing && data.canDelete" (click)="deleteFromSheet()">
       <mat-icon class="material-symbols-outlined">delete</mat-icon>
-      Delete
+      {{ 'Delete' | uiText }}
     </button>
-    <button mat-icon-button type="button" mat-dialog-close matTooltip="Close">
+    <button mat-icon-button type="button" mat-dialog-close matTooltip="{{ 'Close' | uiText }}">
       <mat-icon class="material-symbols-outlined">close</mat-icon>
     </button>
   </div>
@@ -22,9 +22,9 @@
     <ng-container *ngIf="!isEditing; else editSheet">
       <section class="detail-hero" [ngClass]="statusClass()">
         <div>
-          <span class="detail-eyebrow">EPDS license</span>
+          <span class="detail-eyebrow">{{ 'EPDS license' | uiText }}</span>
           <h3>{{ customerDisplayName() }}</h3>
-          <p>{{ statusText() }} · {{ objectLimitText() }} · expires {{ expiryDate | date:'mediumDate' }}</p>
+          <p>{{ '{0} · {1} · expires {2}' | uiText: (statusText()): (objectLimitText()): (expiryDate | date:'mediumDate') }}</p>
         </div>
         <span class="detail-status">
           <mat-icon class="material-symbols-outlined">{{ statusIcon() }}</mat-icon>
@@ -33,37 +33,37 @@
       </section>
 
       <section class="detail-section">
-        <h3>License</h3>
+        <h3>{{ 'License' | uiText }}</h3>
         <div class="detail-grid license-detail-grid">
           <div class="license-status-card" [ngClass]="statusClass()">
             <div>
-              <span>Status</span>
+              <span>{{ 'Status' | uiText }}</span>
               <strong>{{ statusText() }}</strong>
             </div>
-            <button mat-icon-button type="button" *ngIf="canOrderLicense()" matTooltip="Order approve" (click)="openOrderLicenseDialog()">
+            <button mat-icon-button type="button" *ngIf="canOrderLicense()" matTooltip="{{ 'Order approve' | uiText }}" (click)="openOrderLicenseDialog()">
               <mat-icon class="material-symbols-outlined">order_approve</mat-icon>
             </button>
-            <button mat-icon-button type="button" *ngIf="canActivateLicense()" matTooltip="License activated" (click)="activateLicense()">
+            <button mat-icon-button type="button" *ngIf="canActivateLicense()" matTooltip="{{ 'License activated' | uiText }}" (click)="activateLicense()">
               <mat-icon class="material-symbols-outlined">play_arrow</mat-icon>
             </button>
           </div>
           <div>
-            <span>Object count</span>
+            <span>{{ 'Object count' | uiText }}</span>
             <strong>{{ objectLimitText() }}</strong>
           </div>
           <div [class.license-expiry-warning]="model.status === 'expired' || (model.status === 'active' && isExpired())">
-            <span>Expiry date</span>
+            <span>{{ 'Expiry date' | uiText }}</span>
             <strong>{{ expiryDate | date:'mediumDate' }}</strong>
           </div>
           <div class="license-file-card">
             <div class="license-file-text">
-              <span>Mobile app</span>
-              <strong>{{ model.mobileApp ? 'Yes' : 'No' }}</strong>
-              <small *ngIf="model.mobileApp">Version: {{ mobileAppVersionText() }}</small>
+              <span>{{ 'Mobile app' | uiText }}</span>
+              <strong>{{ model.mobileApp ? ('Yes' | uiText) : ('No' | uiText) }}</strong>
+              <small *ngIf="model.mobileApp">{{ 'Version: {0}' | uiText: (mobileAppVersionText()) }}</small>
               <small *ngIf="model.mobileApp && mobileAppFileName()" [matTooltip]="mobileAppFileName()">
                 APK: {{ mobileAppFileName() }}
               </small>
-              <small *ngIf="model.mobileApp && !mobileAppFileName()">No APK uploaded</small>
+              <small *ngIf="model.mobileApp && !mobileAppFileName()">{{ 'No APK uploaded' | uiText }}</small>
             </div>
             <input #readonlyMobileAppFileInput type="file" accept=".apk" hidden (change)="uploadMobileAppFile(readonlyMobileAppFileInput)">
             <button
@@ -79,7 +79,7 @@
           </div>
           <div class="license-file-card" *ngIf="canManageLicenseFile() || canDownloadLicenseFile()">
             <div class="license-file-text">
-              <span>License file</span>
+              <span>{{ 'License file' | uiText }}</span>
               <strong [matTooltip]="licenseFileName()" [matTooltipDisabled]="!licenseFileName()">{{ licenseFileName() || 'No file uploaded' }}</strong>
               <!--small *ngIf="licenseFileUpdatedText()">{{ licenseFileUpdatedText() }}</small-->
             </div>
@@ -87,7 +87,7 @@
             <button
               mat-icon-button
               type="button"
-              [matTooltip]="showLicenseUploadButton() ? 'Upload license file' : 'Download license file'"
+              [matTooltip]="showLicenseUploadButton() ? ('Upload license file' | uiText) : 'Download license file'"
               (click)="showLicenseUploadButton() ? readonlyLicenseFileInput.click() : downloadLicenseFile()"
               [disabled]="isUploadingLicenseFile || (!showLicenseUploadButton() && !canDownloadLicenseFile())"
             >
@@ -98,21 +98,21 @@
       </section>
 
       <section class="detail-section">
-        <h3>Commercial</h3>
+        <h3>{{ 'Commercial' | uiText }}</h3>
         <div class="detail-grid">
           <div>
-            <span>License price</span>
+            <span>{{ 'License price' | uiText }}</span>
             <strong>{{ priceText(model.licensePrice, model.licenseCurrency) }}</strong>
           </div>
           <div>
-            <span>Support price</span>
+            <span>{{ 'Support price' | uiText }}</span>
             <strong>{{ priceText(model.supportPrice, model.supportCurrency) }}</strong>
           </div>
         </div>
       </section>
 
       <section class="detail-section">
-        <h3>Contacts</h3>
+        <h3>{{ 'Contacts' | uiText }}</h3>
         <div class="contact-card-grid" *ngIf="model.contacts.length; else noContacts">
           <div class="contact-card" *ngFor="let contact of model.contacts">
             <div class="contact-card-head">
@@ -132,12 +132,12 @@
           </div>
         </div>
         <ng-template #noContacts>
-          <div class="notes-empty">No contacts.</div>
+          <div class="notes-empty">{{ 'No contacts.' | uiText }}</div>
         </ng-template>
       </section>
 
       <section class="detail-section">
-        <h3>Infrastructure</h3>
+        <h3>{{ 'Infrastructure' | uiText }}</h3>
         <div class="infrastructure-card-grid" *ngIf="model.infrastructureGroups.length; else noInfrastructureGroups">
           <div class="infrastructure-card" *ngFor="let group of model.infrastructureGroups">
             <span class="environment-badge" [ngClass]="environmentClass(group.environment)">
@@ -147,7 +147,7 @@
               <div class="infrastructure-line">
                 <mat-icon class="material-symbols-outlined">dns</mat-icon>
                 <div>
-                  <span>Application server</span>
+                  <span>{{ 'Application server' | uiText }}</span>
                   <strong>{{ emptyText(group.applicationServerAddress) }}</strong>
                   <small>{{ group.applicationServerType || '-' }}</small>
                 </div>
@@ -156,7 +156,7 @@
               <div class="infrastructure-line">
                 <mat-icon class="material-symbols-outlined">database</mat-icon>
                 <div>
-                  <span>Database server</span>
+                  <span>{{ 'Database server' | uiText }}</span>
                   <strong>{{ emptyText(group.databaseServerAddress) }}</strong>
                   <small>{{ group.databaseServerType || '-' }}</small>
                 </div>
@@ -165,34 +165,34 @@
               <div class="infrastructure-line">
                 <mat-icon class="material-symbols-outlined">storage</mat-icon>
                 <div>
-                  <span>Database</span>
+                  <span>{{ 'Database' | uiText }}</span>
                   <strong>{{ emptyText(group.databaseName) }}</strong>
-                  <small> <b>Login name:</b> {{ emptyText(group.databaseLoginName) }} · <b>Auth. method:</b> {{ group.databaseAuthenticationMethod || '-' }}</small>
+                  <small> <b>{{ 'Login name:' | uiText }}</b> {{ emptyText(group.databaseLoginName) }} · <b>{{ 'Auth. method:' | uiText }}</b> {{ group.databaseAuthenticationMethod || '-' }}</small>
                 </div>
               </div>
               <mat-divider></mat-divider>
               <div class="infrastructure-line">
                 <mat-icon class="material-symbols-outlined">outgoing_mail</mat-icon>
                 <div>
-                  <span>Mail server</span>
+                  <span>{{ 'Mail server' | uiText }}</span>
                   <strong>{{ emptyText(group.mailServer) }}</strong>
-                  <small> <b>Protocol (port):</b> {{ emptyText(group.mailServerPortProtocol) }}</small>
+                  <small> <b>{{ 'Protocol (port):' | uiText }}</b> {{ emptyText(group.mailServerPortProtocol) }}</small>
                 </div>
               </div>
               <mat-divider></mat-divider>
               <div class="infrastructure-line">
                 <mat-icon class="material-symbols-outlined">alternate_email</mat-icon>
                 <div>
-                  <span>Mail account</span>
+                  <span>{{ 'Mail account' | uiText }}</span>
                   <strong>{{ emptyText(group.mailUsername) }}</strong>
-                  <small> <b>Sender address:</b> {{ emptyText(group.mailSenderAddress) }}</small>
+                  <small> <b>{{ 'Sender address:' | uiText }}</b> {{ emptyText(group.mailSenderAddress) }}</small>
                 </div>
               </div>
               <mat-divider></mat-divider>
               <div class="infrastructure-line">
                 <mat-icon class="material-symbols-outlined">language</mat-icon>
                 <div>
-                  <span>Application address</span>
+                  <span>{{ 'Application address' | uiText }}</span>
                   <strong>{{ emptyText(group.applicationAddress) }}</strong>
                 </div>
               </div>
@@ -200,31 +200,31 @@
           </div>
         </div>
         <ng-template #noInfrastructureGroups>
-          <div class="notes-empty">No infrastructure groups.</div>
+          <div class="notes-empty">{{ 'No infrastructure groups.' | uiText }}</div>
         </ng-template>
       </section>
 
       <section class="detail-section">
-        <h3>Remote Access</h3>
+        <h3>{{ 'Remote Access' | uiText }}</h3>
         <div class="detail-grid">
           <div>
-            <span>VPN app</span>
+            <span>{{ 'VPN app' | uiText }}</span>
             <strong>{{ emptyText(model.vpnApp) }}</strong>
           </div>
           <div>
-            <span>VPN app address</span>
+            <span>{{ 'VPN app address' | uiText }}</span>
             <strong>{{ emptyText(model.accessAddresses[0]?.address) }}</strong>
           </div>
           <div>
-            <span>2FA app</span>
+            <span>{{ '2FA app' | uiText }}</span>
             <strong>{{ emptyText(model.twoFactorApp) }}</strong>
           </div>
         </div>
         <ng-container *ngIf="showVpnLogins()">
           <div class="mini-table" *ngIf="model.vpnCredentials.length; else noVpnCredentials">
             <div class="mini-table-head two-col">
-              <span>VPN login name</span>
-              <span>Password</span>
+              <span>{{ 'VPN login name' | uiText }}</span>
+              <span>{{ 'Password' | uiText }}</span>
             </div>
             <div class="mini-table-row two-col" *ngFor="let credential of model.vpnCredentials; let i = index">
               <strong>{{ emptyText(credential.username) }}</strong>
@@ -237,76 +237,76 @@
             </div>
           </div>
           <ng-template #noVpnCredentials>
-            <div class="notes-empty">No VPN logins.</div>
+            <div class="notes-empty">{{ 'No VPN logins.' | uiText }}</div>
           </ng-template>
         </ng-container>
       </section>
 
       <section class="detail-section">
-        <h3>Notes</h3>
+        <h3>{{ 'Notes' | uiText }}</h3>
         <div class="notes-readonly" *ngIf="model.notesHtml; else noNotes" [innerHTML]="model.notesHtml"></div>
         <ng-template #noNotes>
-          <div class="notes-empty">No notes.</div>
+          <div class="notes-empty">{{ 'No notes.' | uiText }}</div>
         </ng-template>
       </section>
     </ng-container>
 
     <ng-template #editSheet>
     <section class="dialog-section">
-      <h3>License</h3>
+      <h3>{{ 'License' | uiText }}</h3>
       <div class="dialog-grid license-grid">
         <mat-form-field appearance="outline" *ngIf="data.clientTenants?.length; else customerTextField">
-          <mat-label>Customer</mat-label>
+          <mat-label>{{ 'Customer' | uiText }}</mat-label>
           <mat-select name="tenantId" [(ngModel)]="model.tenantId" required>
             <mat-option *ngFor="let tenant of data.clientTenants || []" [value]="tenant.id">{{ clientTenantLabel(tenant) }}</mat-option>
           </mat-select>
         </mat-form-field>
         <ng-template #customerTextField>
           <mat-form-field appearance="outline">
-            <mat-label>Customer</mat-label>
+            <mat-label>{{ 'Customer' | uiText }}</mat-label>
             <input matInput name="customerName" [(ngModel)]="model.customerName" required>
           </mat-form-field>
         </ng-template>
 
         <mat-form-field appearance="outline">
-          <mat-label>Description</mat-label>
+          <mat-label>{{ 'Description' | uiText }}</mat-label>
           <input matInput name="description" maxlength="32" [(ngModel)]="model.description">
         </mat-form-field>
 
         <mat-form-field appearance="outline">
-          <mat-label>Status</mat-label>
+          <mat-label>{{ 'Status' | uiText }}</mat-label>
           <mat-select name="status" [(ngModel)]="model.status" required>
-            <mat-option value="active">Active</mat-option>
-            <mat-option value="inactive">Inactive</mat-option>
-            <mat-option value="expired">Expired</mat-option>
-            <mat-option value="pending">Pending</mat-option>
-            <mat-option value="ordered">Ordered</mat-option>
+            <mat-option value="active">{{ 'Active' | uiText }}</mat-option>
+            <mat-option value="inactive">{{ 'Inactive' | uiText }}</mat-option>
+            <mat-option value="expired">{{ 'Expired' | uiText }}</mat-option>
+            <mat-option value="pending">{{ 'Pending' | uiText }}</mat-option>
+            <mat-option value="ordered">{{ 'Ordered' | uiText }}</mat-option>
           </mat-select>
         </mat-form-field>
 
         <mat-form-field appearance="outline">
-          <mat-label>Object count</mat-label>
+          <mat-label>{{ 'Object count' | uiText }}</mat-label>
           <mat-select name="objectLimitOption" [(ngModel)]="model.objectLimitOption" required>
             <mat-option *ngFor="let option of objectLimitOptions" [value]="option">{{ objectLimitLabel(option) }}</mat-option>
           </mat-select>
         </mat-form-field>
 
         <mat-form-field appearance="outline" *ngIf="model.objectLimitOption === 'custom'">
-          <mat-label>Custom object count</mat-label>
+          <mat-label>{{ 'Custom object count' | uiText }}</mat-label>
           <input matInput type="number" min="1" step="1" name="customObjectLimit" [(ngModel)]="model.customObjectLimit" required>
         </mat-form-field>
 
         <mat-form-field appearance="outline">
-          <mat-label>Expiry date</mat-label>
+          <mat-label>{{ 'Expiry date' | uiText }}</mat-label>
           <input matInput [matDatepicker]="expiresAtPicker" name="expiresAt" [(ngModel)]="expiryDate" required>
           <mat-datepicker-toggle matIconSuffix [for]="expiresAtPicker"></mat-datepicker-toggle>
           <mat-datepicker #expiresAtPicker></mat-datepicker>
         </mat-form-field>
 
         <div class="license-file-edit-cell">
-          <mat-checkbox name="mobileApp" [(ngModel)]="model.mobileApp">Mobile app</mat-checkbox>
+          <mat-checkbox name="mobileApp" [(ngModel)]="model.mobileApp">{{ 'Mobile app' | uiText }}</mat-checkbox>
           <mat-form-field appearance="outline" class="mobile-version-field">
-            <mat-label>Mobile app version</mat-label>
+            <mat-label>{{ 'Mobile app version' | uiText }}</mat-label>
             <input matInput name="mobileAppVersion" maxlength="64" [(ngModel)]="model.mobileAppVersion" [disabled]="!model.mobileApp">
           </mat-form-field>
           <input #licenseFileInput type="file" accept=".zip,.txt,.docx" hidden (change)="uploadLicenseFile(licenseFileInput)">
@@ -318,7 +318,7 @@
             [disabled]="isUploadingLicenseFile"
           >
             <mat-icon class="material-symbols-outlined">{{ isUploadingLicenseFile ? 'hourglass_top' : 'upload_file' }}</mat-icon>
-            {{ isUploadingLicenseFile ? 'Uploading...' : 'Upload license file' }}
+            {{ isUploadingLicenseFile ? ('Uploading...' | uiText) : ('Upload license file' | uiText) }}
           </button>
           <input #mobileAppFileInput type="file" accept=".apk" hidden (change)="uploadMobileAppFile(mobileAppFileInput)">
           <button
@@ -329,32 +329,32 @@
             [disabled]="isUploadingMobileAppFile || !model.mobileApp"
           >
             <mat-icon class="material-symbols-outlined">{{ isUploadingMobileAppFile ? 'hourglass_top' : 'android' }}</mat-icon>
-            {{ isUploadingMobileAppFile ? 'Uploading...' : 'Upload APK' }}
+            {{ isUploadingMobileAppFile ? ('Uploading...' | uiText) : ('Upload APK' | uiText) }}
           </button>
         </div>
       </div>
     </section>
 
     <section class="dialog-section">
-      <h3>Commercial</h3>
+      <h3>{{ 'Commercial' | uiText }}</h3>
       <div class="dialog-grid">
         <mat-form-field appearance="outline">
-          <mat-label>License price</mat-label>
+          <mat-label>{{ 'License price' | uiText }}</mat-label>
           <input matInput type="number" min="0" step="1" name="licensePrice" [(ngModel)]="model.licensePrice">
         </mat-form-field>
         <mat-form-field appearance="outline">
-          <mat-label>License currency</mat-label>
+          <mat-label>{{ 'License currency' | uiText }}</mat-label>
           <mat-select name="licenseCurrency" [(ngModel)]="model.licenseCurrency">
             <mat-option *ngFor="let currency of currencies" [value]="currency">{{ currencyLabel(currency) }}</mat-option>
           </mat-select>
         </mat-form-field>
 
         <mat-form-field appearance="outline">
-          <mat-label>Support price</mat-label>
+          <mat-label>{{ 'Support price' | uiText }}</mat-label>
           <input matInput type="number" min="0" step="1" name="supportPrice" [(ngModel)]="model.supportPrice">
         </mat-form-field>
         <mat-form-field appearance="outline">
-          <mat-label>Support currency</mat-label>
+          <mat-label>{{ 'Support currency' | uiText }}</mat-label>
           <mat-select name="supportCurrency" [(ngModel)]="model.supportCurrency">
             <mat-option *ngFor="let currency of currencies" [value]="currency">{{ currencyLabel(currency) }}</mat-option>
           </mat-select>
@@ -364,73 +364,73 @@
 
     <section class="dialog-section">
       <div class="section-head">
-        <h3>Contacts</h3>
+        <h3>{{ 'Contacts' | uiText }}</h3>
         <button mat-stroked-button type="button" (click)="addContact()">
           <mat-icon class="material-symbols-outlined">add</mat-icon>
-          Add more
+          {{ 'Add more' | uiText }}
         </button>
       </div>
       <div class="repeater-list" *ngIf="model.contacts.length; else emptyContactsEdit">
         <div class="repeater-row contact-row" *ngFor="let contact of model.contacts; let i = index">
           <mat-form-field appearance="outline">
-            <mat-label>Name</mat-label>
+            <mat-label>{{ 'Name' | uiText }}</mat-label>
             <input matInput [name]="'contactName' + i" [(ngModel)]="contact.name">
           </mat-form-field>
           <mat-form-field appearance="outline">
-            <mat-label>E-mail</mat-label>
+            <mat-label>{{ 'E-mail' | uiText }}</mat-label>
             <input matInput type="email" [name]="'contactEmail' + i" [(ngModel)]="contact.email">
           </mat-form-field>
           <mat-form-field appearance="outline">
-            <mat-label>Phone</mat-label>
+            <mat-label>{{ 'Phone' | uiText }}</mat-label>
             <input matInput type="tel" autocomplete="tel" inputmode="tel" [name]="'contactPhone' + i" [(ngModel)]="contact.phone">
           </mat-form-field>
           <mat-form-field appearance="outline">
-            <mat-label>Type</mat-label>
+            <mat-label>{{ 'Type' | uiText }}</mat-label>
             <mat-select [name]="'contactArea' + i" [(ngModel)]="contact.area">
-              <mat-option [value]="null">Not set</mat-option>
+              <mat-option [value]="null">{{ 'Not set' | uiText }}</mat-option>
               <mat-option *ngFor="let area of contactAreas" [value]="area">{{ area }}</mat-option>
             </mat-select>
           </mat-form-field>
-          <button mat-icon-button type="button" matTooltip="Remove contact" (click)="removeContact(i)">
+          <button mat-icon-button type="button" matTooltip="{{ 'Remove contact' | uiText }}" (click)="removeContact(i)">
             <mat-icon class="material-symbols-outlined">delete</mat-icon>
           </button>
         </div>
       </div>
       <ng-template #emptyContactsEdit>
-        <div class="notes-empty">No contacts added.</div>
+        <div class="notes-empty">{{ 'No contacts added.' | uiText }}</div>
       </ng-template>
     </section>
 
     <section class="dialog-section">
       <div class="section-head">
-        <h3>Infrastructure</h3>
+        <h3>{{ 'Infrastructure' | uiText }}</h3>
         <button mat-stroked-button type="button" (click)="addInfrastructureGroup()">
           <mat-icon class="material-symbols-outlined">add</mat-icon>
-          Add group
+          {{ 'Add group' | uiText }}
         </button>
       </div>
       <div class="repeater-list" *ngIf="model.infrastructureGroups.length; else emptyInfrastructureGroupsEdit">
         <div class="repeater-row infrastructure-group-row" *ngFor="let group of model.infrastructureGroups; let i = index">
           <div class="infrastructure-block infrastructure-application-block">
             <div class="infrastructure-block-title">
-              <span>Application server</span>
+              <span>{{ 'Application server' | uiText }}</span>
               <mat-divider></mat-divider>
             </div>
             <div class="infrastructure-fields infrastructure-application-fields">
               <mat-form-field appearance="outline" class="environment-field">
-                <mat-label>Type</mat-label>
+                <mat-label>{{ 'Type' | uiText }}</mat-label>
                 <mat-select [name]="'infrastructureEnvironment' + i" [(ngModel)]="group.environment">
                   <mat-option *ngFor="let environment of addressEnvironments" [value]="environment">{{ environmentLabel(environment) }}</mat-option>
                 </mat-select>
               </mat-form-field>
               <mat-form-field appearance="outline">
-                <mat-label>Server</mat-label>
+                <mat-label>{{ 'Server' | uiText }}</mat-label>
                 <input matInput [name]="'infrastructureApplicationServer' + i" [(ngModel)]="group.applicationServerAddress">
               </mat-form-field>
               <mat-form-field appearance="outline">
-                <mat-label>Type</mat-label>
+                <mat-label>{{ 'Type' | uiText }}</mat-label>
                 <mat-select [name]="'infrastructureApplicationServerType' + i" [(ngModel)]="group.applicationServerType">
-                  <mat-option [value]="null">Not set</mat-option>
+                  <mat-option [value]="null">{{ 'Not set' | uiText }}</mat-option>
                   <mat-option *ngFor="let type of applicationServerTypes" [value]="type">{{ type }}</mat-option>
                 </mat-select>
               </mat-form-field>
@@ -439,35 +439,35 @@
 
           <div class="infrastructure-block infrastructure-database-block">
             <div class="infrastructure-block-title">
-              <span>Database server</span>
+              <span>{{ 'Database server' | uiText }}</span>
               <mat-divider></mat-divider>
             </div>
             <div class="infrastructure-fields infrastructure-server-fields">
               <mat-form-field appearance="outline">
-                <mat-label>Server</mat-label>
+                <mat-label>{{ 'Server' | uiText }}</mat-label>
                 <input matInput [name]="'infrastructureDatabaseServer' + i" [(ngModel)]="group.databaseServerAddress">
               </mat-form-field>
               <mat-form-field appearance="outline">
-                <mat-label>Type</mat-label>
+                <mat-label>{{ 'Type' | uiText }}</mat-label>
                 <mat-select [name]="'infrastructureDatabaseServerType' + i" [(ngModel)]="group.databaseServerType">
-                  <mat-option [value]="null">Not set</mat-option>
+                  <mat-option [value]="null">{{ 'Not set' | uiText }}</mat-option>
                   <mat-option *ngFor="let type of databaseServerTypes" [value]="type">{{ type }}</mat-option>
                 </mat-select>
               </mat-form-field>
             </div>
             <div class="infrastructure-fields infrastructure-database-fields">
               <mat-form-field appearance="outline">
-                <mat-label>Database name</mat-label>
+                <mat-label>{{ 'Database name' | uiText }}</mat-label>
                 <input matInput [name]="'infrastructureDatabaseName' + i" [(ngModel)]="group.databaseName">
               </mat-form-field>
               <mat-form-field appearance="outline">
-                <mat-label>Login name</mat-label>
+                <mat-label>{{ 'Login name' | uiText }}</mat-label>
                 <input matInput [name]="'infrastructureDatabaseLoginName' + i" [(ngModel)]="group.databaseLoginName">
               </mat-form-field>
               <mat-form-field appearance="outline">
-                <mat-label>Authentication method</mat-label>
+                <mat-label>{{ 'Authentication method' | uiText }}</mat-label>
                 <mat-select [name]="'infrastructureDatabaseAuthenticationMethod' + i" [(ngModel)]="group.databaseAuthenticationMethod">
-                  <mat-option [value]="null">Not set</mat-option>
+                  <mat-option [value]="null">{{ 'Not set' | uiText }}</mat-option>
                   <mat-option *ngFor="let method of databaseAuthenticationMethods" [value]="method">{{ method }}</mat-option>
                 </mat-select>
               </mat-form-field>
@@ -476,24 +476,24 @@
 
           <div class="infrastructure-block infrastructure-mail-block">
             <div class="infrastructure-block-title">
-              <span>Mail server</span>
+              <span>{{ 'Mail server' | uiText }}</span>
               <mat-divider></mat-divider>
             </div>
             <div class="infrastructure-fields infrastructure-mail-fields">
               <mat-form-field appearance="outline">
-                <mat-label>Server</mat-label>
+                <mat-label>{{ 'Server' | uiText }}</mat-label>
                 <input matInput [name]="'infrastructureMailServer' + i" [(ngModel)]="group.mailServer">
               </mat-form-field>
               <mat-form-field appearance="outline">
-                <mat-label>Port (protocol)</mat-label>
+                <mat-label>{{ 'Port (protocol)' | uiText }}</mat-label>
                 <input matInput [name]="'infrastructureMailServerPortProtocol' + i" [(ngModel)]="group.mailServerPortProtocol">
               </mat-form-field>
               <mat-form-field appearance="outline">
-                <mat-label>Username</mat-label>
+                <mat-label>{{ 'Username' | uiText }}</mat-label>
                 <input matInput [name]="'infrastructureMailUsername' + i" [(ngModel)]="group.mailUsername">
               </mat-form-field>
               <mat-form-field appearance="outline">
-                <mat-label>Sender address</mat-label>
+                <mat-label>{{ 'Sender address' | uiText }}</mat-label>
                 <input matInput type="email" [name]="'infrastructureMailSenderAddress' + i" [(ngModel)]="group.mailSenderAddress">
               </mat-form-field>
             </div>
@@ -501,82 +501,82 @@
 
           <div class="infrastructure-block infrastructure-address-block">
             <div class="infrastructure-block-title">
-              <span>Access</span>
+              <span>{{ 'Access' | uiText }}</span>
               <mat-divider></mat-divider>
             </div>
             <div class="infrastructure-fields infrastructure-address-fields">
               <mat-form-field appearance="outline">
-                <mat-label>Application URL</mat-label>
+                <mat-label>{{ 'Application URL' | uiText }}</mat-label>
                 <input matInput [name]="'infrastructureApplicationAddress' + i" [(ngModel)]="group.applicationAddress">
               </mat-form-field>
             </div>
           </div>
 
-          <button mat-icon-button type="button" matTooltip="Remove infrastructure group" (click)="removeInfrastructureGroup(i)">
+          <button mat-icon-button type="button" matTooltip="{{ 'Remove infrastructure group' | uiText }}" (click)="removeInfrastructureGroup(i)">
             <mat-icon class="material-symbols-outlined">delete</mat-icon>
           </button>
         </div>
       </div>
       <ng-template #emptyInfrastructureGroupsEdit>
-        <div class="notes-empty">No infrastructure groups added.</div>
+        <div class="notes-empty">{{ 'No infrastructure groups added.' | uiText }}</div>
       </ng-template>
     </section>
 
     <section class="dialog-section">
-      <h3>Remote Access</h3>
+      <h3>{{ 'Remote Access' | uiText }}</h3>
       <div class="dialog-grid">
         <mat-form-field appearance="outline">
-          <mat-label>VPN app</mat-label>
+          <mat-label>{{ 'VPN app' | uiText }}</mat-label>
           <input matInput name="vpnApp" [(ngModel)]="model.vpnApp">
         </mat-form-field>
         <mat-form-field appearance="outline">
-          <mat-label>VPN app address</mat-label>
+          <mat-label>{{ 'VPN app address' | uiText }}</mat-label>
           <input matInput name="vpnAppAddress" [(ngModel)]="model.accessAddresses[0].address">
         </mat-form-field>
         <mat-form-field appearance="outline">
-          <mat-label>2FA app</mat-label>
+          <mat-label>{{ '2FA app' | uiText }}</mat-label>
           <input matInput name="twoFactorApp" [(ngModel)]="model.twoFactorApp">
         </mat-form-field>
       </div>
 
       <ng-container *ngIf="showVpnLogins()">
       <div class="section-head">
-        <h3>VPN logins</h3>
+        <h3>{{ 'VPN logins' | uiText }}</h3>
         <button mat-stroked-button type="button" (click)="addVpnCredential()">
           <mat-icon class="material-symbols-outlined">add</mat-icon>
-          Add login
+          {{ 'Add login' | uiText }}
         </button>
       </div>
       <div class="repeater-list" *ngIf="model.vpnCredentials.length; else emptyVpnEdit">
         <div class="repeater-row vpn-row" *ngFor="let credential of model.vpnCredentials; let i = index">
           <mat-form-field appearance="outline">
-            <mat-label>VPN login name</mat-label>
+            <mat-label>{{ 'VPN login name' | uiText }}</mat-label>
             <input matInput [name]="'vpnUsername' + i" [(ngModel)]="credential.username">
           </mat-form-field>
           <mat-form-field appearance="outline">
-            <mat-label>Password</mat-label>
+            <mat-label>{{ 'Password' | uiText }}</mat-label>
             <input matInput [type]="isVpnPasswordVisible(i) ? 'text' : 'password'" autocomplete="new-password" [name]="'vpnPassword' + i" [(ngModel)]="credential.password">
             <button mat-icon-button matSuffix type="button" [matTooltip]="isVpnPasswordVisible(i) ? 'Hide password' : 'Show password'" (click)="toggleVpnPassword(i)">
               <mat-icon class="material-symbols-outlined">{{ isVpnPasswordVisible(i) ? 'visibility_off' : 'visibility' }}</mat-icon>
             </button>
           </mat-form-field>
-          <button mat-icon-button type="button" matTooltip="Remove login" (click)="removeVpnCredential(i)">
+          <button mat-icon-button type="button" matTooltip="{{ 'Remove login' | uiText }}" (click)="removeVpnCredential(i)">
             <mat-icon class="material-symbols-outlined">delete</mat-icon>
           </button>
         </div>
       </div>
       <ng-template #emptyVpnEdit>
-        <div class="notes-empty">No VPN logins added.</div>
+        <div class="notes-empty">{{ 'No VPN logins added.' | uiText }}</div>
       </ng-template>
       </ng-container>
     </section>
 
     <section class="dialog-section">
-      <h3>Notes</h3>
+      <h3>{{ 'Notes' | uiText }}</h3>
       <app-rich-text-editor
         class="body-field"
         ariaLabel="License notes"
-        placeholder="Write notes..."
+        placeholder="{{ 'Write notes...' | uiText }}"
         minHeight="180px"
         [(html)]="model.notesHtml"
       ></app-rich-text-editor>
@@ -584,10 +584,10 @@
     </ng-template>
   </mat-dialog-content>
   <mat-dialog-actions align="end" *ngIf="isEditing">
-    <button mat-button type="button" (click)="cancelEdit()">{{ data.license ? 'Cancel edit' : 'Cancel' }}</button>
+    <button mat-button type="button" (click)="cancelEdit()">{{ data.license ? ('Cancel edit' | uiText) : ('Cancel' | uiText) }}</button>
     <button mat-flat-button color="primary" type="submit">
       <mat-icon class="material-symbols-outlined">save</mat-icon>
-      Save
+      {{ 'Save' | uiText }}
     </button>
   </mat-dialog-actions>
 </form>

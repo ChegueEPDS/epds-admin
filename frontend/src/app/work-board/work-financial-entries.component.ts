@@ -1,3 +1,4 @@
+import { UiTextPipe } from '../i18n/ui-text.pipe';
 import { CommonModule } from '@angular/common';
 import { Component, Input } from '@angular/core';
 import { FormsModule } from '@angular/forms';
@@ -10,23 +11,23 @@ import { WorkRateInfoComponent } from './work-rate-info.component';
 
 @Component({
   selector: 'app-work-financial-entries',
-  imports: [CommonModule, FormsModule, MatButtonModule, MatIconModule, MatFormFieldModule, MatInputModule, WorkRateInfoComponent],
+  imports: [UiTextPipe, CommonModule, FormsModule, MatButtonModule, MatIconModule, MatFormFieldModule, MatInputModule, WorkRateInfoComponent],
   template: `
-    <section aria-label="Exchange rates and financial entries">
-      <header><div><h3>Exchange rates & financial entries</h3>
-        <p>Pipeline uses current rates. Accepted work and dated financial entries keep their fixed rates.</p></div></header>
+    <section aria-label="{{ 'Exchange rates and financial entries' | uiText }}">
+      <header><div><h3>{{ 'Exchange rates &amp; financial entries' | uiText }}</h3>
+        <p>{{ 'Pipeline uses current rates. Accepted work and dated financial entries keep their fixed rates.' | uiText }}</p></div></header>
       @if (contractEnabled) {
         <div class="acceptance">
-          <p class="rate">Contract · {{ rateLabel(reporting.exchangeRates?.contract) }}<app-work-rate-info [rate]="reporting.exchangeRates?.contract"/></p>
+          <p class="rate">{{ 'Contract · {0}' | uiText: (rateLabel(reporting.exchangeRates?.contract)) }}<app-work-rate-info [rate]="reporting.exchangeRates?.contract"/></p>
         </div>
       }
       @for (group of visibleGroups; track group.key) {
         <div class="entry-group">
-          <header><h4>{{ group.label }} · {{ currency }}</h4>
+          <header><h4>{{ group.label | uiText }} · {{ currency }}</h4>
             @if (editable) {
               <button mat-stroked-button type="button" (click)="add(group.key)">
                 <mat-icon class="material-symbols-outlined">add</mat-icon>
-                {{ reporting[group.key] === undefined ? 'Itemize ' + group.label.toLowerCase() : 'Add entry' }}
+                {{ reporting[group.key] === undefined ? 'Itemize ' + group.label.toLowerCase() : ('Add entry' | uiText) }}
               </button>
             }
           </header>
@@ -34,13 +35,13 @@ import { WorkRateInfoComponent } from './work-rate-info.component';
             @for (entry of entries; track entry.id; let index = $index) {
               <div class="entry">
                 @if (editable) {
-                  <mat-form-field appearance="outline"><mat-label>Date</mat-label>
+                  <mat-form-field appearance="outline"><mat-label>{{ 'Date' | uiText }}</mat-label>
                     <input matInput type="date" required [max]="today" [(ngModel)]="entry.date" [ngModelOptions]="{standalone:true}">
                   </mat-form-field>
-                  <mat-form-field appearance="outline"><mat-label>{{ group.key === 'invoices' ? 'Invoice number' : 'Payment reference' }}</mat-label>
+                  <mat-form-field appearance="outline"><mat-label>{{ group.key === 'invoices' ? ('Invoice number' | uiText) : ('Payment reference' | uiText) }}</mat-label>
                     <input matInput maxlength="150" [(ngModel)]="entry.reference" [ngModelOptions]="{standalone:true}">
                   </mat-form-field>
-                  <mat-form-field appearance="outline"><mat-label>Amount · {{ currency }}</mat-label>
+                  <mat-form-field appearance="outline"><mat-label>{{ 'Amount · {0}' | uiText: (currency) }}</mat-label>
                     <input matInput type="number" required min="0.01" step="0.01" [(ngModel)]="entry.amount" (ngModelChange)="updateTotal(group.key)" [ngModelOptions]="{standalone:true}">
                   </mat-form-field>
                   <button mat-icon-button type="button" (click)="remove(group.key, index)" [attr.aria-label]="'Remove ' + group.label.toLowerCase() + ' entry ' + (index + 1)">
@@ -52,15 +53,14 @@ import { WorkRateInfoComponent } from './work-rate-info.component';
                 }
                 <p class="rate entry-rate">{{ rateLabel(entry.date === entry.rate?.requestedDate ? entry.rate : undefined) }}<app-work-rate-info [rate]="entry.rate"/></p>
               </div>
-            } @empty { <p class="muted">No entries.</p> }
-            <p class="total">Total: {{ reporting[group.amount] || 0 | number:'1.0-2' }} {{ currency }}</p>
+            } @empty { <p class="muted">{{ 'No entries.' | uiText }}</p> }
+            <p class="total">{{ 'Total: {0} {1}' | uiText: (reporting[group.amount] || 0 | number:'1.0-2'): (currency) }}</p>
           } @else {
-            <p class="muted">Existing total: {{ reporting[group.amount] == null ? 'Not entered' : (reporting[group.amount] | number:'1.0-2') }} {{ currency }}
-              · {{ rateLabel(reporting.exchangeRates?.[group.key]) }}<app-work-rate-info [rate]="reporting.exchangeRates?.[group.key]"/></p>
+            <p class="muted">{{ 'Existing total: {0} {1} · {2}' | uiText: (reporting[group.amount] == null ? 'Not entered' : (reporting[group.amount] | number:'1.0-2')): (currency): (rateLabel(reporting.exchangeRates?.[group.key])) }}<app-work-rate-info [rate]="reporting.exchangeRates?.[group.key]"/></p>
           }
         </div>
       }
-      @if (editable) { <p class="muted">Verify dates when itemizing an existing total. Rates are fixed on save; weekends and holidays use the preceding published MNB rate. Invoices are settled oldest first.</p> }
+      @if (editable) { <p class="muted">{{ 'Verify dates when itemizing an existing total. Rates are fixed on save; weekends and holidays use the preceding published MNB rate. Invoices are settled oldest first.' | uiText }}</p> }
     </section>
   `,
   styles: [`

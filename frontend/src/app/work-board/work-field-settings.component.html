@@ -1,67 +1,67 @@
 <main>
   <header>
-    <p class="muted">Tenant settings</p>
-    <h1>Project Tracker settings</h1>
-    <p class="muted">Manage organizational units, service types and custom fields for this tenant.</p>
+    <p class="muted">{{ 'Tenant settings' | uiText }}</p>
+    <h1>{{ 'Project Tracker settings' | uiText }}</h1>
+    <p class="muted">{{ 'Manage organizational units, service types and custom fields for this tenant.' | uiText }}</p>
   </header>
-  @if (error) { <p class="error" role="alert">{{ error }}</p> }
-  @if (notice) { <p role="status">{{ notice }}</p> }
+  @if (error) { <p class="error" role="alert">{{ error | uiText }}</p> }
+  @if (notice) { <p role="status">{{ notice | uiText }}</p> }
   <ng-template #confirmWorkNumbering>
-    <h2 mat-dialog-title id="work-numbering-confirmation-title">Update existing work numbers?</h2>
+    <h2 mat-dialog-title id="work-numbering-confirmation-title">{{ 'Update existing work numbers?' | uiText }}</h2>
     <mat-dialog-content>
       @if (addServiceTypeCodeToWorkNumber) {
-        <p>Apply the current service type code to existing work numbers, including archived works. Works without a service type code and custom work numbers keep their current numbers.</p>
+        <p>{{ 'Apply the current service type code to existing work numbers, including archived works. Works without a service type code and custom work numbers keep their current numbers.' | uiText }}</p>
       } @else {
-        <p>Remove the service type prefix from existing work numbers, including archived works. Custom work numbers keep their current numbers.</p>
+        <p>{{ 'Remove the service type prefix from existing work numbers, including archived works. Custom work numbers keep their current numbers.' | uiText }}</p>
       }
     </mat-dialog-content>
     <mat-dialog-actions align="end">
-      <button mat-button mat-dialog-close type="button">Cancel</button>
-      <button mat-stroked-button mat-dialog-close="save" type="button">Save only</button>
-      <button mat-flat-button color="primary" mat-dialog-close="update" type="button">Save and update</button>
+      <button mat-button mat-dialog-close type="button">{{ 'Cancel' | uiText }}</button>
+      <button mat-stroked-button mat-dialog-close="save" type="button">{{ 'Save only' | uiText }}</button>
+      <button mat-flat-button color="primary" mat-dialog-close="update" type="button">{{ 'Save and update' | uiText }}</button>
     </mat-dialog-actions>
   </ng-template>
   <ng-template #fieldEditor>
     @if (draft; as field) {
       <form #fieldForm="ngForm" (ngSubmit)="fieldForm.valid && stageField(field)">
-        <h2 mat-dialog-title id="tracker-field-editor-title">{{ field.id.startsWith('new:') ? 'New field' : 'Edit field' }}</h2>
+        <h2 mat-dialog-title id="tracker-field-editor-title">{{ field.id.startsWith('new:') ? ('New field' | uiText) : ('Edit field' | uiText) }}</h2>
         <mat-dialog-content class="drawer-fields">
         <div class="form-grid">
-          <mat-form-field appearance="outline"><mat-label>Field name</mat-label><input matInput name="label" [(ngModel)]="field.label" maxlength="100" required></mat-form-field>
-          <mat-form-field appearance="outline"><mat-label>Data type</mat-label><mat-select name="type" [(ngModel)]="field.type" [disabled]="!field.id.startsWith('new:')">
-            @for (type of types; track type.id) { <mat-option [value]="type.id">{{ type.label }}</mat-option> }
+          <mat-form-field appearance="outline"><mat-label>{{ 'Field name' | uiText }}</mat-label><input matInput name="label" [(ngModel)]="field.label" maxlength="100" required></mat-form-field>
+          <mat-form-field appearance="outline"><mat-label>{{ 'Data type' | uiText }}</mat-label><mat-select name="type" [(ngModel)]="field.type" [disabled]="!field.id.startsWith('new:')">
+            @for (type of types; track type.id) { <mat-option [value]="type.id">{{ type.label | uiText }}</mat-option> }
           </mat-select></mat-form-field>
-          <mat-form-field appearance="outline"><mat-label>Card on work details</mat-label><mat-select name="card" [(ngModel)]="field.card">
-            @for (card of cards; track card.id) { <mat-option [value]="card.id">{{ card.label }}</mat-option> }
+          <mat-form-field appearance="outline"><mat-label>{{ 'Card on work details' | uiText }}</mat-label><mat-select name="card" [(ngModel)]="field.card">
+            @for (card of cards; track card.id) { <mat-option [value]="card.id">{{ card.label | uiText }}</mat-option> }
           </mat-select></mat-form-field>
         </div>
         @if (field.type === 'list') {
           <div class="options">
-            <h3>List options</h3>
-            <mat-checkbox name="multiple" [(ngModel)]="field.multiple" [disabled]="!field.id.startsWith('new:')">Allow multiple selections</mat-checkbox>
+            <h3>{{ 'List options' | uiText }}</h3>
+            <mat-checkbox name="multiple" [(ngModel)]="field.multiple" [disabled]="!field.id.startsWith('new:')">{{ 'Allow multiple selections' | uiText }}</mat-checkbox>
             @for (option of field.options; track option; let i = $index) {
               <div class="row">
-                <mat-form-field appearance="outline"><mat-label>Option {{ i + 1 }}</mat-label><input matInput [name]="'option-' + i" [(ngModel)]="option.label" maxlength="100" required></mat-form-field>
+                <mat-form-field appearance="outline"><mat-label>{{ 'Option {0}' | uiText: (i + 1) }}</mat-label><input matInput [name]="'option-' + i" [(ngModel)]="option.label" maxlength="100" required></mat-form-field>
                 @if (option.id) {
-                  <button mat-button type="button" (click)="option.archived = !option.archived">{{ option.archived ? 'Restore option' : 'Archive option' }}</button>
+                  <button mat-button type="button" (click)="option.archived = !option.archived">{{ option.archived ? ('Restore option' | uiText) : ('Archive option' | uiText) }}</button>
                 } @else {
-                  <button mat-button type="button" (click)="field.options.splice(i, 1)">Remove option</button>
+                  <button mat-button type="button" (click)="field.options.splice(i, 1)">{{ 'Remove option' | uiText }}</button>
                 }
               </div>
             }
-            <div><button mat-stroked-button type="button" (click)="field.options.push({ id: '', label: '', archived: false })" [disabled]="field.options.length >= 100">Add option</button></div>
+            <div><button mat-stroked-button type="button" (click)="field.options.push({ id: '', label: '', archived: false })" [disabled]="field.options.length >= 100">{{ 'Add option' | uiText }}</button></div>
           </div>
         }
         <div class="actions">
-          <mat-checkbox name="required" [(ngModel)]="field.required">Required when its card applies</mat-checkbox>
+          <mat-checkbox name="required" [(ngModel)]="field.required">{{ 'Required when its card applies' | uiText }}</mat-checkbox>
         </div>
         </mat-dialog-content>
         <mat-dialog-actions align="end">
           @if (canRemoveField(field.id)) {
-            <button mat-button type="button" (click)="toggleArchived(field)">{{ field.id.startsWith('new:') ? 'Remove field' : 'Archive field' }}</button>
+            <button mat-button type="button" (click)="toggleArchived(field)">{{ field.id.startsWith('new:') ? ('Remove field' | uiText) : ('Archive field' | uiText) }}</button>
           }
-          <button mat-button type="button" mat-dialog-close>Cancel</button>
-          <button mat-flat-button color="primary" type="submit" [disabled]="fieldForm.invalid || !field.label.trim()">Apply</button>
+          <button mat-button type="button" mat-dialog-close>{{ 'Cancel' | uiText }}</button>
+          <button mat-flat-button color="primary" type="submit" [disabled]="fieldForm.invalid || !field.label.trim()">{{ 'Apply' | uiText }}</button>
         </mat-dialog-actions>
       </form>
     }
@@ -70,50 +70,50 @@
     <mat-tab-group animationDuration="0ms" [preserveContent]="true" [mat-stretch-tabs]="false">
       <mat-tab label="Fields and layout">
         <div class="tab-content">
-          <p class="muted">Drag fields within a card. Use the eye for the work sheet and the checkbox for the default work table.</p>
+          <p class="muted">{{ 'Drag fields within a card. Use the eye for the work sheet and the checkbox for the default work table.' | uiText }}</p>
           @for (card of cards; track card.id) {
             @let items = layoutItems(card.id);
             <details class="layout-card" [open]="card.id === 'basic'">
-              <summary><strong>{{ card.label }}</strong><span>{{ items.length }} fields · {{ hiddenCount(items) }} hidden</span></summary>
+              <summary><strong>{{ card.label | uiText }}</strong><span>{{ '{0} fields · {1} hidden' | uiText: (items.length): (hiddenCount(items)) }}</span></summary>
               <div class="layout-content">
                 @if (items.length) {
                   <app-work-layout-list [items]="items" [disabled]="busy" [fieldVisibility]="true"
                     (itemsChange)="changeLayout(card.id, $event)" (editField)="editField($event, fieldEditor)"
                     (tableVisibilityChange)="setColumnVisibility($event.id, $event.visible)"/>
-                } @else { <p class="muted">No configurable fields.</p> }
+                } @else { <p class="muted">{{ 'No configurable fields.' | uiText }}</p> }
                 <div class="actions">
-                  <button mat-stroked-button type="button" [disabled]="busy || fields.length >= 50" (click)="newField(card.id, fieldEditor)">Add custom field</button>
-                  <button mat-button type="button" [disabled]="busy || !items.length" (click)="resetOrder(card.id)">Reset order</button>
+                  <button mat-stroked-button type="button" [disabled]="busy || fields.length >= 50" (click)="newField(card.id, fieldEditor)">{{ 'Add custom field' | uiText }}</button>
+                  <button mat-button type="button" [disabled]="busy || !items.length" (click)="resetOrder(card.id)">{{ 'Reset order' | uiText }}</button>
                 </div>
               </div>
             </details>
           }
           <details class="layout-card">
-            <summary><strong>Table-only columns</strong></summary>
+            <summary><strong>{{ 'Table-only columns' | uiText }}</strong></summary>
             <div class="layout-content">
               @for (column of tableOnlyColumns; track column.id) {
                 <mat-checkbox [disabled]="busy" [checked]="defaultTableVisibility(column.id)"
-                  (change)="setColumnVisibility(column.id, $event.checked)">{{ column.label }}</mat-checkbox>
+                  (change)="setColumnVisibility(column.id, $event.checked)">{{ column.label | uiText }}</mat-checkbox>
               }
             </div>
           </details>
           @if (archivedFields.length) {
             <details class="layout-card">
-              <summary><strong>Archived fields</strong><span>{{ archivedFields.length }}</span></summary>
+              <summary><strong>{{ 'Archived fields' | uiText }}</strong><span>{{ archivedFields.length }}</span></summary>
               <div class="layout-content">
                 @for (field of archivedFields; track field.id) {
                   <div class="row field-row"><span>{{ field.label }}</span>
-                    <button mat-button type="button" [disabled]="busy" (click)="toggleArchived(field)">Restore</button>
+                    <button mat-button type="button" [disabled]="busy" (click)="toggleArchived(field)">{{ 'Restore' | uiText }}</button>
                   </div>
                 }
               </div>
             </details>
           }
           <div class="row layout-actions">
-            <span class="muted" aria-live="polite">{{ layoutDirty ? 'Unsaved layout changes' : 'Layout is up to date' }}</span>
+            <span class="muted" aria-live="polite">{{ layoutDirty ? ('Unsaved layout changes' | uiText) : ('Layout is up to date' | uiText) }}</span>
             <div class="actions">
-              <button mat-button type="button" [disabled]="busy || !layoutDirty" (click)="discardLayout()">Discard changes</button>
-              <button mat-flat-button color="primary" type="button" [disabled]="busy || !layoutDirty" (click)="saveLayout()">Save layout</button>
+              <button mat-button type="button" [disabled]="busy || !layoutDirty" (click)="discardLayout()">{{ 'Discard changes' | uiText }}</button>
+              <button mat-flat-button color="primary" type="button" [disabled]="busy || !layoutDirty" (click)="saveLayout()">{{ 'Save layout' | uiText }}</button>
             </div>
           </div>
         </div>
@@ -123,40 +123,40 @@
           @for (catalog of catalogs; track catalog.key) {
             <section class="panel">
               <div class="row">
-                <h2>{{ catalog.title }}</h2>
+                <h2>{{ catalog.title | uiText }}</h2>
                 <button mat-stroked-button type="button" (click)="editCatalog(catalog.key)"
-                  [disabled]="busy || !!draft || !!catalogDraft || config[catalog.key].length >= 200">Add {{ catalog.label.toLowerCase() }}</button>
+                  [disabled]="busy || !!draft || !!catalogDraft || config[catalog.key].length >= 200">{{ 'Add {0}' | uiText: (catalog.label.toLowerCase()) }}</button>
               </div>
               @if (catalogDraft; as pending) {
                 @if (pending.catalog === catalog.key) {
                   <form class="actions" (ngSubmit)="pending.entry.label.trim() && validServiceTypeCode(pending.entry.code) && save(pending)">
                     <mat-form-field appearance="outline" subscriptSizing="dynamic">
-                      <mat-label>{{ catalog.label }} name</mat-label>
+                      <mat-label>{{ '{0} name' | uiText: (catalog.label) }}</mat-label>
                       <input matInput name="entryName" [(ngModel)]="pending.entry.label" maxlength="100" required>
                     </mat-form-field>
                     @if (catalog.key === 'serviceTypes') {
                       <mat-form-field appearance="outline" subscriptSizing="dynamic">
-                        <mat-label>Service type code</mat-label>
+                        <mat-label>{{ 'Service type code' | uiText }}</mat-label>
                         <input matInput name="entryCode" [(ngModel)]="pending.entry.code" autocapitalize="characters">
-                        <mat-hint>{{ validServiceTypeCode(pending.entry.code) ? '2 to 4 letters, e.g. INS' : 'Use 2 to 4 letters.' }}</mat-hint>
+                        <mat-hint>{{ validServiceTypeCode(pending.entry.code) ? ('2 to 4 letters, e.g. INS' | uiText) : ('Use 2 to 4 letters.' | uiText) }}</mat-hint>
                       </mat-form-field>
                     }
                     <div class="actions">
-                      <button mat-flat-button color="primary" type="submit" [disabled]="busy || !pending.entry.label.trim() || !validServiceTypeCode(pending.entry.code)">Save {{ catalog.label.toLowerCase() }}</button>
-                      <button mat-button type="button" (click)="catalogDraft = undefined" [disabled]="busy">Cancel</button>
+                      <button mat-flat-button color="primary" type="submit" [disabled]="busy || !pending.entry.label.trim() || !validServiceTypeCode(pending.entry.code)">{{ 'Save {0}' | uiText: (catalog.label.toLowerCase()) }}</button>
+                      <button mat-button type="button" (click)="catalogDraft = undefined" [disabled]="busy">{{ 'Cancel' | uiText }}</button>
                     </div>
                   </form>
                 }
               }
               @for (entry of config[catalog.key]; track entry.id) {
                 <div class="row field-row">
-                  <div><strong>{{ workCatalogLabel(entry) }}</strong> @if (entry.archived) { <span class="muted"> · Archived</span> }</div>
+                  <div><strong>{{ workCatalogLabel(entry) }}</strong> @if (entry.archived) { <span class="muted"> {{ '· Archived' | uiText }}</span> }</div>
                   <div class="actions">
-                    <button mat-button type="button" (click)="editCatalog(catalog.key, entry)" [disabled]="busy || !!draft || !!catalogDraft">Edit</button>
-                    <button mat-button type="button" (click)="toggleCatalogArchived(catalog.key, entry)" [disabled]="busy || !!draft || !!catalogDraft">{{ entry.archived ? 'Restore' : 'Archive' }}</button>
+                    <button mat-button type="button" (click)="editCatalog(catalog.key, entry)" [disabled]="busy || !!draft || !!catalogDraft">{{ 'Edit' | uiText }}</button>
+                    <button mat-button type="button" (click)="toggleCatalogArchived(catalog.key, entry)" [disabled]="busy || !!draft || !!catalogDraft">{{ entry.archived ? ('Restore' | uiText) : ('Archive' | uiText) }}</button>
                   </div>
                 </div>
-              } @empty { <p class="muted">No entries for this tenant.</p> }
+              } @empty { <p class="muted">{{ 'No entries for this tenant.' | uiText }}</p> }
             </section>
           }
         </div>
@@ -164,32 +164,32 @@
       <mat-tab label="General">
         <div class="tab-content">
           <section class="panel">
-            <h2>Work numbering</h2>
+            <h2>{{ 'Work numbering' | uiText }}</h2>
             <form class="settings-form" (ngSubmit)="saveWorkNumbering(confirmWorkNumbering)">
               <mat-checkbox name="addServiceTypeCodeToWorkNumber" [(ngModel)]="addServiceTypeCodeToWorkNumber"
-                [disabled]="busy || !!catalogDraft">Add service type code to work number</mat-checkbox>
-              <p class="muted">New works require a service type with a code when this is enabled. With code INS, the work number will look like INS26-0003.</p>
-              <button mat-flat-button color="primary" type="submit" [disabled]="busy || !!catalogDraft">Save work numbering</button>
+                [disabled]="busy || !!catalogDraft">{{ 'Add service type code to work number' | uiText }}</mat-checkbox>
+              <p class="muted">{{ 'New works require a service type with a code when this is enabled. With code INS, the work number will look like INS26-0003.' | uiText }}</p>
+              <button mat-flat-button color="primary" type="submit" [disabled]="busy || !!catalogDraft">{{ 'Save work numbering' | uiText }}</button>
             </form>
           </section>
           @if (turnoverPreference) {
             <section class="panel">
-              <h2>Turnover date</h2>
-              <p class="muted">The dashboard summarizes works created since the latest turnover date.
-                @if (turnoverMonth === 2 && turnoverDay === 29) { The turnover date falls on February 28 in non-leap years. }
+              <h2>{{ 'Turnover date' | uiText }}</h2>
+              <p class="muted">{{ 'The dashboard summarizes works created since the latest turnover date.' | uiText }}
+                @if (turnoverMonth === 2 && turnoverDay === 29) { {{ 'The turnover date falls on February 28 in non-leap years.' | uiText }} }
               </p>
               <form class="settings-form" (ngSubmit)="saveTurnover()">
                 <div class="actions">
                   <mat-form-field appearance="outline" subscriptSizing="dynamic">
-                    <mat-label>Month</mat-label>
+                    <mat-label>{{ 'Month' | uiText }}</mat-label>
                     <mat-select name="turnoverMonth" [ngModel]="turnoverMonth" (ngModelChange)="onTurnoverMonthChange($event)" [disabled]="turnoverBusy">
                       @for (month of turnoverMonths; track month; let i = $index) {
-                        <mat-option [value]="i + 1">{{ month }}</mat-option>
+                        <mat-option [value]="i + 1">{{ month | uiText }}</mat-option>
                       }
                     </mat-select>
                   </mat-form-field>
                   <mat-form-field appearance="outline" subscriptSizing="dynamic">
-                    <mat-label>Day</mat-label>
+                    <mat-label>{{ 'Day' | uiText }}</mat-label>
                     <mat-select name="turnoverDay" [(ngModel)]="turnoverDay" [disabled]="turnoverBusy">
                       @for (day of calendarDays.slice(0, daysInTurnoverMonth); track day) {
                         <mat-option [value]="day">{{ day }}</mat-option>
@@ -197,18 +197,18 @@
                     </mat-select>
                   </mat-form-field>
                 </div>
-                <mat-checkbox name="alignWorkSequence" [(ngModel)]="alignWorkSequence" [disabled]="turnoverBusy">Align work numbering with the turnover date</mat-checkbox>
-                <button mat-flat-button color="primary" type="submit" [disabled]="turnoverBusy || !turnoverChanged">Save turnover settings</button>
+                <mat-checkbox name="alignWorkSequence" [(ngModel)]="alignWorkSequence" [disabled]="turnoverBusy">{{ 'Align work numbering with the turnover date' | uiText }}</mat-checkbox>
+                <button mat-flat-button color="primary" type="submit" [disabled]="turnoverBusy || !turnoverChanged">{{ 'Save turnover settings' | uiText }}</button>
               </form>
             </section>
           }
           @if (currencyPreference; as preference) {
             <section class="panel">
-              <h2>Currency</h2>
-              <p class="muted">Used for Project Tracker totals and as the initial currency for new works.</p>
+              <h2>{{ 'Currency' | uiText }}</h2>
+              <p class="muted">{{ 'Used for Project Tracker totals and as the initial currency for new works.' | uiText }}</p>
               <form class="actions" (ngSubmit)="saveCurrency()">
                 <mat-form-field appearance="outline" subscriptSizing="dynamic">
-                  <mat-label>Default currency</mat-label>
+                  <mat-label>{{ 'Default currency' | uiText }}</mat-label>
                   <mat-select name="defaultCurrency" [(ngModel)]="defaultCurrency" [disabled]="currencyBusy">
                     @for (currency of preference.currencies; track currency) {
                       <mat-option [value]="currency">{{ currency === 'AED' ? 'AED · UAE dirham' : currency }}</mat-option>
@@ -218,15 +218,15 @@
                     }
                   </mat-select>
                 </mat-form-field>
-                <button mat-flat-button color="primary" type="submit" [disabled]="currencyBusy || defaultCurrency === preference.defaultCurrency">Save currency</button>
+                <button mat-flat-button color="primary" type="submit" [disabled]="currencyBusy || defaultCurrency === preference.defaultCurrency">{{ 'Save currency' | uiText }}</button>
               </form>
             </section>
           }
           <section class="panel">
-            <h2>Dashboard</h2>
+            <h2>{{ 'Dashboard' | uiText }}</h2>
             <mat-checkbox [checked]="config.projectSizeGrouping" [disabled]="busy || !!draft || !!catalogDraft"
-              (change)="save({ projectSizeGrouping: $event.checked })">Project size grouping</mat-checkbox>
-            <p class="muted">Adds Project size to the work sheet and size statistics to the dashboard. Automatic grouping uses thresholds of €5,000 and €20,000.</p>
+              (change)="save({ projectSizeGrouping: $event.checked })">{{ 'Project size grouping' | uiText }}</mat-checkbox>
+            <p class="muted">{{ 'Adds Project size to the work sheet and size statistics to the dashboard. Automatic grouping uses thresholds of €5,000 and €20,000.' | uiText }}</p>
           </section>
         </div>
       </mat-tab>

@@ -1,3 +1,4 @@
+import { UiTextPipe } from '../i18n/ui-text.pipe';
 import { Component, EventEmitter, Input, Output } from '@angular/core';
 import { NgTemplateOutlet } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -10,7 +11,7 @@ import { displayWorkField, isWorkFieldFile, WorkField, WorkFieldAmount, WorkFiel
 @Component({
   selector: 'app-work-field-values',
   host: { '[class.embedded]': 'embedded' },
-  imports: [FormsModule, MatButtonModule, MatFormFieldModule, MatInputModule, MatSelectModule, NgTemplateOutlet],
+  imports: [UiTextPipe, FormsModule, MatButtonModule, MatFormFieldModule, MatInputModule, MatSelectModule, NgTemplateOutlet],
   templateUrl: './work-field-values.component.html',
   styles: [`
     .fields { display: grid; gap: 10px 14px; margin-top: 12px;

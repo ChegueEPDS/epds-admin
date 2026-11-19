@@ -1,34 +1,43 @@
-<h2 mat-dialog-title>{{ title }}</h2>
+<h2 mat-dialog-title>{{ title | uiText }}</h2>
 
 <form class="dialog-form" #userForm="ngForm" (ngSubmit)="save()">
   <mat-dialog-content>
     <div class="name-grid">
       <mat-form-field appearance="outline">
-        <mat-label>First name</mat-label>
+        <mat-label>{{ 'First name' | uiText }}</mat-label>
         <input matInput name="firstName" [(ngModel)]="firstName" [disabled]="isMicrosoftUser" required>
       </mat-form-field>
 
       <mat-form-field appearance="outline">
-        <mat-label>Last name</mat-label>
+        <mat-label>{{ 'Last name' | uiText }}</mat-label>
         <input matInput name="lastName" [(ngModel)]="lastName" [disabled]="isMicrosoftUser" required>
       </mat-form-field>
     </div>
 
     <mat-form-field appearance="outline">
-      <mat-label>Email</mat-label>
+      <mat-label>{{ 'Email' | uiText }}</mat-label>
       <input matInput type="email" name="email" [(ngModel)]="email" email [disabled]="isMicrosoftUser" required>
     </mat-form-field>
 
     <mat-form-field appearance="outline" *ngIf="!isEditMode">
-      <mat-label>Sign-in method</mat-label>
+      <mat-label>{{ 'Sign-in method' | uiText }}</mat-label>
       <mat-select name="loginMethod" [(ngModel)]="loginMethod" required>
-        <mat-option value="microsoft">Microsoft</mat-option>
-        <mat-option value="password">Email and password</mat-option>
+        <mat-option value="microsoft">{{ 'Microsoft' | uiText }}</mat-option>
+        <mat-option value="password">{{ 'Email and password' | uiText }}</mat-option>
       </mat-select>
     </mat-form-field>
 
+    @if (!isEditMode) {
+      <mat-form-field appearance="outline">
+        <mat-label>{{ 'Invitation language' | uiText }}</mat-label>
+        <mat-select name="invitationLanguage" [(ngModel)]="invitationLanguage">
+          <mat-option value="en" lang="en">English</mat-option>
+          <mat-option value="hu" lang="hu">Magyar</mat-option>
+        </mat-select>
+      </mat-form-field>
+    }
     <mat-form-field appearance="outline">
-      <mat-label>{{ data.isSuperAdmin ? 'Primary tenant' : 'Tenant' }}</mat-label>
+      <mat-label>{{ data.isSuperAdmin ? ('Primary tenant' | uiText) : ('Tenant' | uiText) }}</mat-label>
       <mat-select name="tenantId" [(ngModel)]="tenantId" (ngModelChange)="onTenantChange()" required>
         <mat-option *ngFor="let tenant of data.tenants" [value]="tenant.id">
           {{ tenantLabel(tenant) }} ({{ tenant.type }})
@@ -37,7 +46,7 @@
     </mat-form-field>
 
     <mat-form-field appearance="outline" *ngIf="data.isSuperAdmin && tenantId && role !== 'Finance' && additionalTenantOptions.length">
-      <mat-label>Additional tenants</mat-label>
+      <mat-label>{{ 'Additional tenants' | uiText }}</mat-label>
       <mat-select name="additionalTenantIds" [(ngModel)]="additionalTenantIds" multiple>
         <mat-option *ngFor="let tenant of additionalTenantOptions" [value]="tenant.id">
           {{ tenantLabel(tenant) }}
@@ -46,17 +55,17 @@
     </mat-form-field>
 
     <mat-form-field appearance="outline">
-      <mat-label>Role</mat-label>
+      <mat-label>{{ 'Role' | uiText }}</mat-label>
       <mat-select name="role" [(ngModel)]="role" required>
         <mat-option *ngFor="let roleOption of roles" [value]="roleOption.value">
-          {{ roleOption.label }}
+          {{ roleOption.label | uiText }}
         </mat-option>
       </mat-select>
     </mat-form-field>
   </mat-dialog-content>
 
   <mat-dialog-actions align="end">
-    <button mat-button type="button" mat-dialog-close [disabled]="saving()">Cancel</button>
-    <button mat-flat-button color="primary" type="submit" [disabled]="saving() || !userForm.valid">{{ submitLabel }}</button>
+    <button mat-button type="button" mat-dialog-close [disabled]="saving()">{{ 'Cancel' | uiText }}</button>
+    <button mat-flat-button color="primary" type="submit" [disabled]="saving() || !userForm.valid">{{ submitLabel | uiText }}</button>
   </mat-dialog-actions>
 </form>

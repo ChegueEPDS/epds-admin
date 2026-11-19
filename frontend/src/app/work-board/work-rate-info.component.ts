@@ -1,3 +1,4 @@
+import { UiTextPipe } from '../i18n/ui-text.pipe';
 import { CommonModule } from '@angular/common';
 import { Component, Input, inject } from '@angular/core';
 import { MatButtonModule } from '@angular/material/button';
@@ -7,34 +8,34 @@ import { MatTooltipModule } from '@angular/material/tooltip';
 import { WorkExchangeRate } from './work-fields';
 
 @Component({
-  imports: [CommonModule, MatButtonModule, MatDialogModule],
+  imports: [UiTextPipe, CommonModule, MatButtonModule, MatDialogModule],
   template: `
-    <h2 mat-dialog-title>How exchange rates are fixed</h2>
+    <h2 mat-dialog-title>{{ 'How exchange rates are fixed' | uiText }}</h2>
     <mat-dialog-content>
       @if (rate) {
-        <section class="saved-rate" aria-label="Saved exchange rate">
-          <h3>This saved rate · {{ rate.currency }}</h3>
+        <section class="saved-rate" aria-label="{{ 'Saved exchange rate' | uiText }}">
+          <h3>{{ 'This saved rate · {0}' | uiText: (rate.currency) }}</h3>
           <dl>
-            <div><dt>Event date used</dt><dd>{{ rate.requestedDate | date:'yyyy.MM.dd.' }}</dd></div>
-            <div><dt>MNB publication date</dt><dd>{{ rate.rateDate | date:'yyyy.MM.dd.' }}</dd></div>
-            <div><dt>Fixed on save</dt><dd>{{ rate.fixedAt | date:'yyyy.MM.dd. HH:mm' }}</dd></div>
+            <div><dt>{{ 'Event date used' | uiText }}</dt><dd>{{ rate.requestedDate | date:'yyyy.MM.dd.' }}</dd></div>
+            <div><dt>{{ 'MNB publication date' | uiText }}</dt><dd>{{ rate.rateDate | date:'yyyy.MM.dd.' }}</dd></div>
+            <div><dt>{{ 'Fixed on save' | uiText }}</dt><dd>{{ rate.fixedAt | date:'yyyy.MM.dd. HH:mm' }}</dd></div>
           </dl>
-          @if (rate.estimated) { <p>The original event date was not recorded. This is a marked baseline rate. Enter the actual event date to fix the corresponding historical rate.</p> }
+          @if (rate.estimated) { <p>{{ 'The original event date was not recorded. This is a marked baseline rate. Enter the actual event date to fix the corresponding historical rate.' | uiText }}</p> }
         </section>
       }
-      <p>Amounts stay in the work’s original currency. These rules apply when converting them to the tenant’s default currency.</p>
+      <p>{{ 'Amounts stay in the work’s original currency. These rules apply when converting them to the tenant’s default currency.' | uiText }}</p>
       <div class="rules">
         @for (rule of rules; track rule.title) {
-          <section><h3>{{ rule.title }}</h3><p><strong>When:</strong> {{ rule.when }}</p><p><strong>Why:</strong> {{ rule.why }}</p></section>
+          <section><h3>{{ rule.title | uiText }}</h3><p><strong>{{ 'When:' | uiText }}</strong> {{ rule.when | uiText }}</p><p><strong>{{ 'Why:' | uiText }}</strong> {{ rule.why | uiText }}</p></section>
         }
       </div>
-      <h3>Dates, corrections and existing works</h3>
-      <p>A rate is fixed when you save. The event date chooses the rate; it can differ from the save date. Weekends and holidays use the preceding published MNB rate.</p>
-      <p>Ordinary edits and amount corrections keep the saved rate. Changing an event date fixes the rate for the corrected date. Missing historical rates stop the save that needs a new rate.</p>
-      <p>Existing amounts without fixed rates use current rates and are flagged on the dashboard. On their next save, known event dates are used; missing dates receive a marked baseline. An unknown acceptance date is never inferred from the work’s creation date.</p>
-      <p class="source">Source: MNB. AED uses the dated MNB USD rate and the 3.6725 AED/USD peg. Changing the tenant’s default currency keeps the historical snapshots.</p>
+      <h3>{{ 'Dates, corrections and existing works' | uiText }}</h3>
+      <p>{{ 'A rate is fixed when you save. The event date chooses the rate; it can differ from the save date. Weekends and holidays use the preceding published MNB rate.' | uiText }}</p>
+      <p>{{ 'Ordinary edits and amount corrections keep the saved rate. Changing an event date fixes the rate for the corrected date. Missing historical rates stop the save that needs a new rate.' | uiText }}</p>
+      <p>{{ 'Existing amounts without fixed rates use current rates and are flagged on the dashboard. On their next save, known event dates are used; missing dates receive a marked baseline. An unknown acceptance date is never inferred from the work’s creation date.' | uiText }}</p>
+      <p class="source">{{ 'Source: MNB. AED uses the dated MNB USD rate and the 3.6725 AED/USD peg. Changing the tenant’s default currency keeps the historical snapshots.' | uiText }}</p>
     </mat-dialog-content>
-    <mat-dialog-actions align="end"><button mat-flat-button mat-dialog-close type="button">Close</button></mat-dialog-actions>
+    <mat-dialog-actions align="end"><button mat-flat-button mat-dialog-close type="button">{{ 'Close' | uiText }}</button></mat-dialog-actions>
   `,
   styles: [`
     :host { display:block; color:var(--brand-ink); background:var(--brand-panel); }
@@ -63,9 +64,9 @@ class WorkRateInfoDialogComponent {
 
 @Component({
   selector: 'app-work-rate-info',
-  imports: [MatButtonModule, MatDialogModule, MatIconModule, MatTooltipModule],
-  template: `<button mat-icon-button type="button" aria-label="How exchange rates are fixed"
-    matTooltip="How exchange rates are fixed" (click)="open($event)">
+  imports: [UiTextPipe, MatButtonModule, MatDialogModule, MatIconModule, MatTooltipModule],
+  template: `<button mat-icon-button type="button" aria-label="{{ 'How exchange rates are fixed' | uiText }}"
+    matTooltip="{{ 'How exchange rates are fixed' | uiText }}" (click)="open($event)">
     <mat-icon class="material-symbols-outlined" aria-hidden="true">info</mat-icon>
   </button>`,
   styles: [`

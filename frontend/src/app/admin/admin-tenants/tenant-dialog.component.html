@@ -1,77 +1,77 @@
-<h2 mat-dialog-title>{{ title }}</h2>
+<h2 mat-dialog-title>{{ title | uiText }}</h2>
 
 <form class="dialog-form" (ngSubmit)="save()">
   <mat-dialog-content>
     <mat-form-field appearance="outline">
-      <mat-label>Name</mat-label>
+      <mat-label>{{ 'Name' | uiText }}</mat-label>
       <input matInput name="name" [(ngModel)]="name" required>
     </mat-form-field>
 
     <mat-form-field appearance="outline">
-      <mat-label>Display name</mat-label>
+      <mat-label>{{ 'Display name' | uiText }}</mat-label>
       <input matInput name="displayName" [(ngModel)]="displayName" required>
     </mat-form-field>
 
     <mat-form-field appearance="outline">
-      <mat-label>Type</mat-label>
+      <mat-label>{{ 'Type' | uiText }}</mat-label>
       <mat-select name="type" [(ngModel)]="type" (ngModelChange)="onTypeChange()" required>
         <mat-option *ngFor="let typeOption of types" [value]="typeOption.value">
-          {{ typeOption.label }}
+          {{ typeOption.label | uiText }}
         </mat-option>
       </mat-select>
     </mat-form-field>
 
     <div class="tenant-logo-field">
-      <label for="tenant-logo">Tenant logo</label>
+      <label for="tenant-logo">{{ 'Tenant logo' | uiText }}</label>
       <input id="tenant-logo" type="file" accept="image/png,image/jpeg,image/webp"
         aria-describedby="tenant-logo-hint" (change)="selectLogo($event)" [disabled]="saving() || readingLogo()">
-      <small id="tenant-logo-hint">PNG, JPEG or WebP · max. 256 KB</small>
+      <small id="tenant-logo-hint">{{ 'PNG, JPEG or WebP · max. 256 KB' | uiText }}</small>
       @if (logoPreview; as logo) {
-        <img [src]="logo" alt="Tenant logo preview">
-        <button mat-button type="button" (click)="logoChange = null" [disabled]="saving() || readingLogo()">Remove logo</button>
+        <img [src]="logo" alt="{{ 'Tenant logo preview' | uiText }}">
+        <button mat-button type="button" (click)="logoChange = null" [disabled]="saving() || readingLogo()">{{ 'Remove logo' | uiText }}</button>
       }
     </div>
 
     <section class="feature-list" *ngIf="type !== 'finance'">
-      <h3>Features</h3>
+      <h3>{{ 'Features' | uiText }}</h3>
       <div class="feature-row header-row" aria-hidden="true">
-        <span>Feature</span>
-        <span>Read</span>
-        <span>Write</span>
-        <span>Delete</span>
+        <span>{{ 'Feature' | uiText }}</span>
+        <span>{{ 'Read' | uiText }}</span>
+        <span>{{ 'Write' | uiText }}</span>
+        <span>{{ 'Delete' | uiText }}</span>
       </div>
       <div class="feature-row" *ngFor="let feature of featureOptions" [class.disabled-row]="isFeatureDisabled(feature)">
-        <span>{{ feature.label }}</span>
+        <span>{{ feature.label | uiText }}</span>
         <mat-slide-toggle
           [(ngModel)]="features[feature.key].enabled"
           (ngModelChange)="onFeatureEnabledChange(feature)"
           [name]="feature.key + 'Enabled'"
           [disabled]="isFeatureDisabled(feature)"
-          aria-label="Read permission"></mat-slide-toggle>
+          aria-label="{{ 'Read permission' | uiText }}"></mat-slide-toggle>
         <mat-checkbox
           *ngIf="hasPermissionControls(feature); else noPermissionControls"
           [(ngModel)]="features[feature.key].edit"
           [name]="feature.key + 'Edit'"
           [disabled]="isEditDisabled(feature)"
-          aria-label="Write permission"></mat-checkbox>
+          aria-label="{{ 'Write permission' | uiText }}"></mat-checkbox>
         <mat-checkbox
           *ngIf="hasPermissionControls(feature); else noDeleteControl"
           [(ngModel)]="features[feature.key].delete"
           [name]="feature.key + 'Delete'"
           [disabled]="isDeleteDisabled(feature)"
-          aria-label="Delete permission"></mat-checkbox>
+          aria-label="{{ 'Delete permission' | uiText }}"></mat-checkbox>
         <ng-template #noPermissionControls><span class="permission-na">-</span></ng-template>
         <ng-template #noDeleteControl><span class="permission-na">-</span></ng-template>
       </div>
       <mat-checkbox name="financeAccess" [(ngModel)]="financeAccess" [disabled]="!features.workBoard.enabled">
-        Pénzügyi hozzáférés a Project Trackerhez
+        {{ 'Pénzügyi hozzáférés a Project Trackerhez' | uiText }}
       </mat-checkbox>
     </section>
-    <p *ngIf="type === 'finance'">A Pénzügy szerepkörű tagok az engedélyezett tenantok munkatábláit érik el.</p>
+    <p *ngIf="type === 'finance'">{{ 'A Pénzügy szerepkörű tagok az engedélyezett tenantok munkatábláit érik el.' | uiText }}</p>
   </mat-dialog-content>
 
   <mat-dialog-actions align="end">
-    <button mat-button type="button" mat-dialog-close [disabled]="saving()">Cancel</button>
-    <button mat-flat-button color="primary" type="submit" [disabled]="saving() || readingLogo()">{{ submitLabel }}</button>
+    <button mat-button type="button" mat-dialog-close [disabled]="saving()">{{ 'Cancel' | uiText }}</button>
+    <button mat-flat-button color="primary" type="submit" [disabled]="saving() || readingLogo()">{{ submitLabel | uiText }}</button>
   </mat-dialog-actions>
 </form>

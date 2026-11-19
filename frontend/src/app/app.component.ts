@@ -1,7 +1,10 @@
+import { UiLanguageService } from './i18n/ui-language.service';
+import { UiTextPipe } from './i18n/ui-text.pipe';
 import { CommonModule } from '@angular/common';
-import { Component } from '@angular/core';
+import { Component, effect, inject } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { NavigationEnd, Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
+import { DateAdapter } from '@angular/material/core';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatDialog, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
@@ -19,6 +22,7 @@ import { ThemeService } from './services/theme.service';
   selector: 'app-root',
   standalone: true,
   imports: [
+    UiTextPipe,
     CommonModule,
     FormsModule,
     RouterOutlet,
@@ -46,11 +50,14 @@ export class AppComponent {
   constructor(
     public auth: AuthService,
     public theme: ThemeService,
+    public ui: UiLanguageService,
     private admin: AdminService,
     private router: Router,
     private mfa: MfaApi,
     private dialog: MatDialog
   ) {
+    const dateAdapter = inject(DateAdapter);
+    effect(() => dateAdapter.setLocale(this.ui.locale()));
     this.currentUrl = this.router.url;
     this.isPublicRoute = this.isPublicPath(this.currentUrl);
     this.router.events

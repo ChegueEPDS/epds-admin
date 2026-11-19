@@ -2,17 +2,17 @@
   <section class="page home-page">
     <div class="home-hero">
       <div>
-        <p class="eyebrow">PROJECT TRACKER</p>
-        <h1>Pénzügy</h1>
-        <p>Válassz tenantot a számlázási és fizetési adatok megnyitásához.</p>
+        <p class="eyebrow">{{ 'PROJECT TRACKER' | uiText }}</p>
+        <h1>{{ 'Pénzügy' | uiText }}</h1>
+        <p>{{ 'Válassz tenantot a számlázási és fizetési adatok megnyitásához.' | uiText }}</p>
       </div>
     </div>
 
     @if (auth.financeTenants$ | async; as access) {
       @if (access.loading) {
-        <p role="status">Tenantok betöltése…</p>
+        <p role="status">{{ 'Tenantok betöltése…' | uiText }}</p>
       } @else if (access.error) {
-        <p role="alert">A tenantok betöltése sikertelen. Frissítsd az oldalt az újrapróbálkozáshoz.</p>
+        <p role="alert">{{ 'A tenantok betöltése sikertelen. Frissítsd az oldalt az újrapróbálkozáshoz.' | uiText }}</p>
       } @else if (access.tenants.length) {
         <div class="feature-grid">
           @for (tenant of access.tenants; track tenant.id) {
@@ -25,14 +25,14 @@
                   <span class="icon-wrap" [class.logo-fallback]="tenant.logoDataUrl">
                     <mat-icon class="material-symbols-outlined">apartment</mat-icon>
                   </span>
-                  <div><h2>{{ tenant.name }}</h2><p>Project Tracker · Table</p></div>
+                  <div><h2>{{ tenant.name }}</h2><p>{{ 'Project Tracker · Table' | uiText }}</p></div>
                 </mat-card-content>
               </mat-card>
             </a>
           }
         </div>
       } @else {
-        <p>Nincs hozzád rendelt pénzügyi hozzáférés.</p>
+        <p>{{ 'Nincs hozzád rendelt pénzügyi hozzáférés.' | uiText }}</p>
       }
     }
   </section>
@@ -40,9 +40,9 @@
 <section class="page home-page">
   <div class="home-hero">
     <div>
-      <p class="eyebrow">EPDS CONTROL CENTER</p>
-      <h1>Good to see you, {{ auth.getLastName() || 'there' }}.</h1>
-      <p>Choose a workspace and keep the platform moving.</p>
+      <p class="eyebrow">{{ 'EPDS CONTROL CENTER' | uiText }}</p>
+      <h1>@if (auth.getLastName(); as lastName) { {{ 'Good to see you, {0}.' | uiText: lastName }} } @else { {{ 'Good to see you.' | uiText }} }</h1>
+      <p>{{ 'Choose a workspace and keep the platform moving.' | uiText }}</p>
     </div>
     <span
       class="live-status"
@@ -50,7 +50,7 @@
       [class.has-issues]="hasActiveIssues"
       [class.status-unavailable]="!hasActiveIssues && hasUnavailableStatus">
       <span class="status-dot" aria-hidden="true"></span>
-      {{ systemStatusLabel }}
+      {{ systemStatusLabel | uiText }}
     </span>
   </div>
 
@@ -69,8 +69,8 @@
             <mat-icon class="material-symbols-outlined">{{ card.icon }}</mat-icon>
           </span>
           <div>
-            <h2>{{ card.title }}</h2>
-            <p>{{ card.description }}</p>
+            <h2>{{ card.title | uiText }}</h2>
+            <p>{{ card.description | uiText }}</p>
           </div>
         </mat-card-content>
       </mat-card>
@@ -82,8 +82,8 @@
           <mat-icon class="material-symbols-outlined">more_horiz</mat-icon>
         </span>
         <div>
-          <h2>More</h2>
-          <p>Future admin tools.</p>
+          <h2>{{ 'More' | uiText }}</h2>
+          <p>{{ 'Future admin tools.' | uiText }}</p>
         </div>
       </mat-card-content>
     </mat-card>
@@ -96,8 +96,8 @@
           <mat-icon class="material-symbols-outlined">lock</mat-icon>
         </span>
         <div>
-          <h2>Access pending</h2>
-          <p>Your Microsoft account is signed in. Feature access will be configured later.</p>
+          <h2>{{ 'Access pending' | uiText }}</h2>
+          <p>{{ 'Your Microsoft account is signed in. Feature access will be configured later.' | uiText }}</p>
         </div>
       </mat-card-content>
     </mat-card>

@@ -1,3 +1,4 @@
+const { requestLanguage } = require('../services/uiLanguage');
 const dns = require('dns').promises;
 const DomainMonitor = require('../models/domainMonitor');
 const DomainHealthCheck = require('../models/domainHealthCheck');
@@ -403,7 +404,7 @@ exports.getPublicStatusReport = async (req, res, next) => {
 exports.downloadPublicStatusReportPdf = async (req, res, next) => {
   try {
     const report = await customerReport(req);
-    const content = await generatePublicStatusPdf(report);
+    const content = await generatePublicStatusPdf(report, requestLanguage(req));
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Cache-Control', 'private, no-store');
     res.setHeader('Content-Disposition', `attachment; filename="service-status-${report.ownerSlug}.pdf"`);
@@ -431,7 +432,7 @@ exports.downloadMonthlyReport = async (req,res,next) => {
     const { ensureMonthlyReport, monthlyDownloadContent } = require('../services/domainMonthlyReportService');
     const report = await ensureMonthlyReport(tenant,req.params.month);
     if (!report) return res.status(404).json({error:'Report not found'});
-    const content = await monthlyDownloadContent(report);
+    const content = await monthlyDownloadContent(report, requestLanguage(req));
     res.setHeader('Cache-Control','private, no-store');
     res.setHeader('Content-Type','application/pdf');
     res.setHeader('Content-Disposition',`attachment; filename="service-report-${report.month}.pdf"`);

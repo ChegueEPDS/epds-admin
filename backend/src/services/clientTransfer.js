@@ -31,12 +31,18 @@ async function scopedClients(tenantId, transaction) {
   return data.map((row) => ({ ...row, id: String(row._id), shared: row.tenantIds.length > 1 }));
 }
 
-async function exportClients(tenantId, template) {
+async function exportClients(tenantId, template, language) {
   const clients = template ? [] : await scopedClients(tenantId);
   return createWorkbook(columns, clients, (client) => ({
     ...Object.fromEntries(columns.map(({ key }) => [key, String(client[key] ?? '')])),
     revision: version(client)
-  }), { sheetName, instructions: [
+  }), { sheetName, language, instructions: language === 'hu' ? [
+    'Meglévő ügyfélnél tartsd meg az azonosítót és a rejtett exportverziót. Új ügyfélnél mindkettőt hagyd üresen.',
+    'Add meg a cég nevét. Ha az ország ismeretlen, hagyd üresen a Country mezőt. Az adószám HU országkód esetén kötelező.',
+    'Az adószámot és az irányítószámot szövegként add meg, hogy a kezdő nullák megmaradjanak.',
+    'A kihagyott oszlopok értékei megmaradnak. A jelen lévő opcionális oszlopok üres cellái törlik az értéket.',
+    'A más tenantokkal megosztott ügyfelek ezzel az importtal nem módosíthatók.'
+  ] : [
     'Keep the ID and hidden export version for existing clients. Leave both empty for a new client.',
     'Enter a company name. Leave Country blank if unknown. Tax number is required only when Country is HU.',
     'Format tax numbers and postal codes as text to preserve leading zeros.',

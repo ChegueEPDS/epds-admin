@@ -1,31 +1,31 @@
 <section class="docs-page">
   <header class="docs-hero">
     <div>
-      <p class="eyebrow">EPDS LICENSE INTEGRATION API V1</p>
-      <h1>Developer integration guide</h1>
-      <p class="lead">Everything needed to receive ordered license events, verify webhook signatures and upload generated license or mobile app files.</p>
+      <p class="eyebrow">{{ 'EPDS LICENSE INTEGRATION API V1' | uiText }}</p>
+      <h1>{{ 'Developer integration guide' | uiText }}</h1>
+      <p class="lead">{{ 'Everything needed to receive ordered license events, verify webhook signatures and upload generated license or mobile app files.' | uiText }}</p>
     </div>
     <a mat-flat-button routerLink="/webhook" target="_blank" rel="noopener">
       <mat-icon class="material-symbols-outlined">webhook</mat-icon>
-      Open tester
+      {{ 'Open tester' | uiText }}
     </a>
   </header>
 
   <section class="quick-grid">
     <article>
       <span class="step">01</span>
-      <h2>Create API credentials</h2>
-      <p>SuperAdmin creates an integration in Settings > License integrations. API keys and webhook secrets are shown once.</p>
+      <h2>{{ 'Create API credentials' | uiText }}</h2>
+      <p>{{ 'SuperAdmin creates an integration in Settings > License integrations. API keys and webhook secrets are shown once.' | uiText }}</p>
     </article>
     <article>
       <span class="step">02</span>
-      <h2>Receive ordered event</h2>
-      <p>Webhook or polling returns a <code>license.ordered</code> event containing the license ID and customer license details.</p>
+      <h2>{{ 'Receive ordered event' | uiText }}</h2>
+      <p>{{ 'Webhook or polling returns a' | uiText }} <code>license.ordered</code> {{ 'event containing the license ID and customer license details.' | uiText }}</p>
     </article>
     <article>
       <span class="step">03</span>
-      <h2>Upload file</h2>
-      <p>Use the license ID with the matching upload endpoint. License files move ordered licenses to pending; APK uploads replace the current mobile app file.</p>
+      <h2>{{ 'Upload file' | uiText }}</h2>
+      <p>{{ 'Use the license ID with the matching upload endpoint. License files move ordered licenses to pending; APK uploads replace the current mobile app file.' | uiText }}</p>
     </article>
   </section>
 
@@ -33,16 +33,16 @@
     <main class="main-column">
       <section class="panel">
         <div class="section-heading">
-          <span class="label">Base URL</span>
+          <span class="label">{{ 'Base URL' | uiText }}</span>
           <code>{{ apiUrl }}{{ basePath }}</code>
         </div>
-        <p>Send the API key in <code>Authorization: Bearer &lt;api-key&gt;</code> or <code>X-API-Key: &lt;api-key&gt;</code>. All API responses are JSON except multipart uploads.</p>
+        <p>{{ 'Send the API key in' | uiText }} <code>Authorization: Bearer &lt;api-key&gt;</code> {{ 'or' | uiText }} <code>X-API-Key: &lt;api-key&gt;</code>{{ '. All API responses are JSON except multipart uploads.' | uiText }}</p>
       </section>
 
       <section class="panel">
         <div class="section-heading">
-          <span class="label">Endpoints</span>
-          <p>Use webhook delivery for push automation, or event polling when a receiver is not available.</p>
+          <span class="label">{{ 'Endpoints' | uiText }}</span>
+          <p>{{ 'Use webhook delivery for push automation, or event polling when a receiver is not available.' | uiText }}</p>
         </div>
         <div class="endpoint-list">
           <article *ngFor="let endpoint of endpoints">
@@ -58,36 +58,36 @@
 
       <section class="panel">
         <div class="section-heading">
-          <span class="label">Webhook payload</span>
-          <p>The webhook sends the same event envelope as the events endpoint.</p>
+          <span class="label">{{ 'Webhook payload' | uiText }}</span>
+          <p>{{ 'The webhook sends the same event envelope as the events endpoint.' | uiText }}</p>
         </div>
         <pre>{{ webhookPayload }}</pre>
-        <p class="note"><code>objectLimit</code> is a number for fixed/custom limits or <code>"unlimited"</code>. File metadata excludes blob paths and signed URLs.</p>
+        <p class="note"><code>objectLimit</code> {{ 'is a number for fixed/custom limits or' | uiText }} <code>"unlimited"</code>{{ '. File metadata excludes blob paths and signed URLs.' | uiText }}</p>
       </section>
 
       <section class="panel">
         <div class="section-heading">
-          <span class="label">Upload example</span>
-          <p><code>Idempotency-Key</code> is required and must be unique per upload attempt.</p>
+          <span class="label">{{ 'Upload example' | uiText }}</span>
+          <p><code>Idempotency-Key</code> {{ 'is required and must be unique per upload attempt.' | uiText }}</p>
         </div>
         <pre>{{ uploadExample }}</pre>
         <div class="rule-list">
-          <span>.zip, .txt, .docx only</span>
-          <span>Maximum 3 MB</span>
-          <span>ZIP/DOCX signatures and TXT UTF-8 are checked</span>
+          <span>{{ '.zip, .txt, .docx only' | uiText }}</span>
+          <span>{{ 'Maximum 3 MB' | uiText }}</span>
+          <span>{{ 'ZIP/DOCX signatures and TXT UTF-8 are checked' | uiText }}</span>
         </div>
         <pre>{{ mobileUploadExample }}</pre>
         <div class="rule-list">
-          <span>.apk only</span>
-          <span>Maximum 100 MB</span>
-          <span>Allowed only when <code>mobileApp</code> is true</span>
+          <span>{{ '.apk only' | uiText }}</span>
+          <span>{{ 'Maximum 100 MB' | uiText }}</span>
+          <span>{{ 'Allowed only when' | uiText }} <code>mobileApp</code> {{ 'is true' | uiText }}</span>
         </div>
       </section>
 
       <section class="panel">
         <div class="section-heading">
-          <span class="label">Polling example</span>
-          <p>Poll when the integration cannot expose a public HTTPS webhook endpoint.</p>
+          <span class="label">{{ 'Polling example' | uiText }}</span>
+          <p>{{ 'Poll when the integration cannot expose a public HTTPS webhook endpoint.' | uiText }}</p>
         </div>
         <pre>{{ pollEventsExample }}</pre>
       </section>
@@ -95,41 +95,41 @@
 
     <aside class="side-column">
       <section class="panel compact">
-        <h2>Webhook headers</h2>
+        <h2>{{ 'Webhook headers' | uiText }}</h2>
         <dl>
           <dt>X-EPDS-Event-Id</dt>
-          <dd>Globally unique event ID.</dd>
+          <dd>{{ 'Globally unique event ID.' | uiText }}</dd>
           <dt>X-EPDS-Timestamp</dt>
-          <dd>Unix timestamp in seconds.</dd>
+          <dd>{{ 'Unix timestamp in seconds.' | uiText }}</dd>
           <dt>X-EPDS-Signature</dt>
           <dd><code>v1=&lt;hex HMAC-SHA256&gt;</code></dd>
         </dl>
       </section>
 
       <section class="panel compact">
-        <h2>Signature verification</h2>
+        <h2>{{ 'Signature verification' | uiText }}</h2>
         <pre>{{ signatureBase }}</pre>
-        <p>Reject timestamps older than five minutes and compare signatures using a constant-time function.</p>
+        <p>{{ 'Reject timestamps older than five minutes and compare signatures using a constant-time function.' | uiText }}</p>
       </section>
 
       <section class="panel compact">
-        <h2>Operational responses</h2>
+        <h2>{{ 'Operational responses' | uiText }}</h2>
         <div class="status-list">
-          <span><strong>400</strong> Invalid input or idempotency key</span>
-          <span><strong>401</strong> Missing or invalid API key</span>
-          <span><strong>403</strong> Missing API scope</span>
-          <span><strong>404</strong> License not found</span>
-          <span><strong>409</strong> Idempotency conflict</span>
-          <span><strong>413</strong> File too large</span>
-          <span><strong>415</strong> Unsupported file content</span>
-          <span><strong>429</strong> Rate limit exceeded</span>
+          <span><strong>400</strong> {{ 'Invalid input or idempotency key' | uiText }}</span>
+          <span><strong>401</strong> {{ 'Missing or invalid API key' | uiText }}</span>
+          <span><strong>403</strong> {{ 'Missing API scope' | uiText }}</span>
+          <span><strong>404</strong> {{ 'License not found' | uiText }}</span>
+          <span><strong>409</strong> {{ 'Idempotency conflict' | uiText }}</span>
+          <span><strong>413</strong> {{ 'File too large' | uiText }}</span>
+          <span><strong>415</strong> {{ 'Unsupported file content' | uiText }}</span>
+          <span><strong>429</strong> {{ 'Rate limit exceeded' | uiText }}</span>
         </div>
       </section>
 
       <section class="panel compact accent">
-        <h2>Webhook tester</h2>
-        <p>The tester creates a receiver URL, displays the latest 100 requests and verifies <code>X-EPDS-Signature</code> with the one-time webhook secret.</p>
-        <a mat-button routerLink="/webhook" target="_blank" rel="noopener">Open receiver</a>
+        <h2>{{ 'Webhook tester' | uiText }}</h2>
+        <p>{{ 'The tester creates a receiver URL, displays the latest 100 requests and verifies' | uiText }} <code>X-EPDS-Signature</code> {{ 'with the one-time webhook secret.' | uiText }}</p>
+        <a mat-button routerLink="/webhook" target="_blank" rel="noopener">{{ 'Open receiver' | uiText }}</a>
       </section>
     </aside>
   </div>

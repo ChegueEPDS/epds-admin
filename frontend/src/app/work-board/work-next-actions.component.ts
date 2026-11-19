@@ -1,3 +1,4 @@
+import { UiTextPipe } from '../i18n/ui-text.pipe';
 import { Component, Input, OnChanges } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
@@ -10,41 +11,41 @@ import { WorkItem } from '../services/work-board.service';
 
 @Component({
   selector: 'app-work-next-actions',
-  imports: [FormsModule, MatButtonModule, MatFormFieldModule, MatInputModule, MatSelectModule],
+  imports: [UiTextPipe, FormsModule, MatButtonModule, MatFormFieldModule, MatInputModule, MatSelectModule],
   template: `
-    <h4>Next actions</h4>
-    @if (loading) { <p>Loading tasks…</p> }
+    <h4>{{ 'Next actions' | uiText }}</h4>
+    @if (loading) { <p>{{ 'Loading tasks…' | uiText }}</p> }
     @if (error) { <p role="alert">{{ error }}</p> }
     @for (task of tasks; track task.id) {
       <div class="task-row">
         <div>
           <strong>{{ task.name }}</strong>
           @if (task.subWorkItem; as sub) { <div>{{ sub.subWorkNumber }} · {{ sub.name }}</div> }
-          @if (task.dueDate) { <div>Due {{ task.dueDate }}</div> }
-          @if (task.status === 'closed') { <div>Completed</div> }
+          @if (task.dueDate) { <div>{{ 'Due {0}' | uiText: (task.dueDate) }}</div> }
+          @if (task.status === 'closed') { <div>{{ 'Completed' | uiText }}</div> }
         </div>
         @if (editable && !work.archivedAt && canEditTask(task)) {
-          <button mat-button type="button" (click)="start(task)" [disabled]="saving">Edit</button>
+          <button mat-button type="button" (click)="start(task)" [disabled]="saving">{{ 'Edit' | uiText }}</button>
         }
       </div>
     } @empty {
-      @if (!loading && !error && !work.reporting?.nextAction) { <p>No next actions.</p> }
+      @if (!loading && !error && !work.reporting?.nextAction) { <p>{{ 'No next actions.' | uiText }}</p> }
     }
     @if (editable && !work.archivedAt && !loading) {
       @if (editing) {
         <form class="action-form" (ngSubmit)="save()">
           <mat-form-field appearance="outline">
-            <mat-label>Next action</mat-label>
+            <mat-label>{{ 'Next action' | uiText }}</mat-label>
             <input matInput name="actionName" [(ngModel)]="name" required maxlength="200">
           </mat-form-field>
           <mat-form-field appearance="outline">
-            <mat-label>Due date</mat-label>
+            <mat-label>{{ 'Due date' | uiText }}</mat-label>
             <input matInput type="date" name="actionDueDate" [(ngModel)]="dueDate">
           </mat-form-field>
           <mat-form-field appearance="outline">
-            <mat-label>Sub-work</mat-label>
+            <mat-label>{{ 'Sub-work' | uiText }}</mat-label>
             <mat-select name="actionSubWork" [(ngModel)]="subWorkId">
-              <mat-option value="">Entire work</mat-option>
+              <mat-option value="">{{ 'Entire work' | uiText }}</mat-option>
               @if (editingTask?.subWorkItemId && !hasSubWork(editingTask?.subWorkItemId)) {
                 <mat-option [value]="editingTask?.subWorkItemId">{{ editingTask?.subWorkItem?.name }}</mat-option>
               }
@@ -54,12 +55,12 @@ import { WorkItem } from '../services/work-board.service';
             </mat-select>
           </mat-form-field>
           <div class="actions">
-            <button mat-button type="button" (click)="editing = false" [disabled]="saving">Cancel</button>
-            <button mat-flat-button type="submit" [disabled]="saving || !name.trim()">Save action</button>
+            <button mat-button type="button" (click)="editing = false" [disabled]="saving">{{ 'Cancel' | uiText }}</button>
+            <button mat-flat-button type="submit" [disabled]="saving || !name.trim()">{{ 'Save action' | uiText }}</button>
           </div>
         </form>
       } @else {
-        <button mat-stroked-button type="button" (click)="start()">Add next action</button>
+        <button mat-stroked-button type="button" (click)="start()">{{ 'Add next action' | uiText }}</button>
       }
     }
   `,

@@ -1,3 +1,4 @@
+import { UiTextPipe } from '../../i18n/ui-text.pipe';
 import { CommonModule } from '@angular/common';
 import { AfterViewInit, Component, ElementRef, EventEmitter, Input, Output, ViewChild } from '@angular/core';
 import { MatButtonModule } from '@angular/material/button';
@@ -25,6 +26,7 @@ type TableBorderStyle = 'solid' | 'dashed' | 'dotted' | 'double' | 'none';
   selector: 'app-rich-text-editor',
   standalone: true,
   imports: [
+    UiTextPipe,
     CommonModule,
     MatButtonModule,
     MatIconModule,

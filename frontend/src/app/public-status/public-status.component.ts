@@ -1,3 +1,4 @@
+import { UiTextPipe } from '../i18n/ui-text.pipe';
 import { CommonModule } from '@angular/common';
 import { Component, OnDestroy, OnInit } from '@angular/core';
 import { ActivatedRoute } from '@angular/router';
@@ -12,7 +13,7 @@ import { PublicStatusReport, DomainIncident, DomainStatusHistoryBucket, DomainHe
 @Component({
   selector: 'app-public-status',
   standalone: true,
-  imports: [CommonModule, MatButtonModule, MatExpansionModule, MatIconModule, MatProgressSpinnerModule, MatTooltipModule],
+  imports: [UiTextPipe, CommonModule, MatButtonModule, MatExpansionModule, MatIconModule, MatProgressSpinnerModule, MatTooltipModule],
   templateUrl: './public-status.component.html',
   styleUrl: './public-status.component.scss'
 })

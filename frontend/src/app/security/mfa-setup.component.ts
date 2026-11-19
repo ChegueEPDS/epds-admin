@@ -1,15 +1,17 @@
+import { UiTextPipe } from '../i18n/ui-text.pipe';
 import { Component, Input } from '@angular/core';
 import { MfaSetup } from './mfa-api.service';
 
 @Component({
   selector: 'app-mfa-setup',
   standalone: true,
+  imports: [UiTextPipe],
   template: `
-    <p>Scan this QR code with your authenticator app, then enter the six-digit code it displays.</p>
-    <img [src]="setup.qr" width="220" height="220" alt="QR code for setting up your authenticator app">
+    <p>{{ 'Scan this QR code with your authenticator app, then enter the six-digit code it displays.' | uiText }}</p>
+    <img [src]="setup.qr" width="220" height="220" alt="{{ 'QR code for setting up your authenticator app' | uiText }}">
     <details>
-      <summary>Enter setup key manually</summary>
-      <p>Add a time-based account named EPDS Admin in your authenticator app and enter this key.</p>
+      <summary>{{ 'Enter setup key manually' | uiText }}</summary>
+      <p>{{ 'Add a time-based account named EPDS Admin in your authenticator app and enter this key.' | uiText }}</p>
       <code>{{ setup.key }}</code>
     </details>
   `,

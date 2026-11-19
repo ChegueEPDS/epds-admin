@@ -1,5 +1,7 @@
+import { UiLanguageService } from '../../i18n/ui-language.service';
+import { UiTextPipe } from '../../i18n/ui-text.pipe';
 import { CommonModule } from '@angular/common';
-import { Component, Inject, signal } from '@angular/core';
+import { inject, Component, Inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
 import { MAT_DIALOG_DATA, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
@@ -26,6 +28,7 @@ type TenantFeatureOption = {
   selector: 'app-tenant-dialog',
   standalone: true,
   imports: [
+    UiTextPipe,
     CommonModule,
     FormsModule,
     MatButtonModule,
@@ -41,6 +44,7 @@ type TenantFeatureOption = {
   styleUrl: './tenant-dialog.component.scss'
 })
 export class TenantDialogComponent {
+  private readonly ui = inject(UiLanguageService);
   saving = signal(false);
   readingLogo = signal(false);
   logoChange?: string | null;
@@ -147,7 +151,7 @@ export class TenantDialogComponent {
     input.value = '';
     if (!file) return;
     if (file.size === 0 || file.size > 256 * 1024 || !['image/png', 'image/jpeg', 'image/webp'].includes(file.type)) {
-      this.snackBar.open('Choose a PNG, JPEG or WebP image up to 256 KB.', 'Close', { duration: 4500 });
+      this.snackBar.open(this.ui.text('Choose a PNG, JPEG or WebP image up to 256 KB.'), this.ui.text('Close'), { duration: 4500 });
       return;
     }
 
@@ -160,7 +164,7 @@ export class TenantDialogComponent {
         reader.readAsDataURL(file);
       });
     } catch {
-      this.snackBar.open('Logo could not be read.', 'Close', { duration: 4500 });
+      this.snackBar.open(this.ui.text('Logo could not be read.'), this.ui.text('Close'), { duration: 4500 });
     } finally {
       this.readingLogo.set(false);
     }
@@ -181,7 +185,7 @@ export class TenantDialogComponent {
       next: (tenant) => this.dialogRef.close(tenant),
       error: (error) => {
         this.saving.set(false);
-        this.snackBar.open(error?.error?.error || 'Tenant could not be saved.', 'Close', { duration: 4500 });
+        this.snackBar.open(this.ui.text(error?.error?.error || 'Tenant could not be saved.'), this.ui.text('Close'), { duration: 4500 });
       }
     });
   }

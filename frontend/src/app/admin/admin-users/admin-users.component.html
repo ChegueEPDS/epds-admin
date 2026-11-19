@@ -1,12 +1,12 @@
 <section class="admin-page">
   <header class="page-header">
     <div>
-      <h1>Users</h1>
-      <p>{{ users().length }} users</p>
+      <h1>{{ 'Users' | uiText }}</h1>
+      <p>{{ '{0} users' | uiText: (users().length) }}</p>
     </div>
     <button mat-flat-button color="primary" type="button" (click)="openAddUser()" [disabled]="!tenants().length">
       <mat-icon class="material-symbols-outlined">person_add</mat-icon>
-      Add user
+      {{ 'Add user' | uiText }}
     </button>
   </header>
 
@@ -16,52 +16,54 @@
 
   <table mat-table [dataSource]="users()" class="admin-table" *ngIf="!loading()">
     <ng-container matColumnDef="name">
-      <th mat-header-cell *matHeaderCellDef>Name</th>
+      <th mat-header-cell *matHeaderCellDef>{{ 'Name' | uiText }}</th>
       <td mat-cell *matCellDef="let user">{{ user.firstName }} {{ user.lastName }}</td>
     </ng-container>
 
     <ng-container matColumnDef="email">
-      <th mat-header-cell *matHeaderCellDef>Email</th>
+      <th mat-header-cell *matHeaderCellDef>{{ 'Email' | uiText }}</th>
       <td mat-cell *matCellDef="let user">{{ user.email }}</td>
     </ng-container>
 
     <ng-container matColumnDef="role">
-      <th mat-header-cell *matHeaderCellDef>Role</th>
-      <td mat-cell *matCellDef="let user">{{ roleLabel(user.role) }}</td>
+      <th mat-header-cell *matHeaderCellDef>{{ 'Role' | uiText }}</th>
+      <td mat-cell *matCellDef="let user">{{ roleLabel(user.role) | uiText }}</td>
     </ng-container>
 
     <ng-container matColumnDef="tenant">
-      <th mat-header-cell *matHeaderCellDef>Tenant</th>
+      <th mat-header-cell *matHeaderCellDef>{{ 'Tenant' | uiText }}</th>
       <td mat-cell *matCellDef="let user">{{ tenantLabels(user) }}</td>
     </ng-container>
 
     <ng-container matColumnDef="activation">
-      <th mat-header-cell *matHeaderCellDef>Account status</th>
+      <th mat-header-cell *matHeaderCellDef>{{ 'Account status' | uiText }}</th>
       <td mat-cell *matCellDef="let user">
-        {{ invitationStatus(user) }} · {{ user.loginMethod === 'microsoft' ? 'Microsoft' : 'Password' }}
+        {{ invitationStatus(user) | uiText }} · {{ user.loginMethod === 'microsoft' ? ('Microsoft' | uiText) : ('Password' | uiText) }}
       </td>
     </ng-container>
 
     <ng-container matColumnDef="lastLogin">
-      <th mat-header-cell *matHeaderCellDef>Last login</th>
+      <th mat-header-cell *matHeaderCellDef>{{ 'Last login' | uiText }}</th>
       <td mat-cell *matCellDef="let user">{{ user.lastLoginAt ? (user.lastLoginAt | date:'yyyy-MM-dd HH:mm') : '-' }}</td>
     </ng-container>
 
     <ng-container matColumnDef="actions">
       <th mat-header-cell *matHeaderCellDef></th>
       <td mat-cell *matCellDef="let user" class="actions-cell">
-        <button *ngIf="user.pendingActivation && canManage(user)" mat-icon-button type="button"
-          matTooltip="Resend invitation" aria-label="Resend invitation"
-          [disabled]="!!sendingInvitation()" (click)="resendInvitation(user)">
-          <mat-icon class="material-symbols-outlined">send</mat-icon>
-        </button>
-        <button *ngIf="canRecover(user)" mat-icon-button type="button" aria-label="Start account recovery"
-          matTooltip="Start account recovery" [disabled]="sendingRecovery()" (click)="confirmRecovery(user, recoveryDialog)">
-          <mat-icon class="material-symbols-outlined">lock_reset</mat-icon>
-        </button>
-        <button mat-icon-button type="button" matTooltip="Edit user" (click)="openEditUser(user)" [disabled]="!canManage(user)">
-          <mat-icon class="material-symbols-outlined">edit</mat-icon>
-        </button>
+        <div class="row-actions">
+          <button *ngIf="user.pendingActivation && canManage(user)" mat-icon-button type="button"
+            matTooltip="{{ 'Resend invitation' | uiText }}" aria-label="{{ 'Resend invitation' | uiText }}"
+            [disabled]="!!sendingInvitation()" (click)="resendInvitation(user)">
+            <mat-icon class="material-symbols-outlined">send</mat-icon>
+          </button>
+          <button *ngIf="canRecover(user)" mat-icon-button type="button" aria-label="{{ 'Start account recovery' | uiText }}"
+            matTooltip="{{ 'Start account recovery' | uiText }}" [disabled]="sendingRecovery()" (click)="confirmRecovery(user, recoveryDialog)">
+            <mat-icon class="material-symbols-outlined">lock_reset</mat-icon>
+          </button>
+          <button mat-icon-button type="button" matTooltip="{{ 'Edit user' | uiText }}" (click)="openEditUser(user)" [disabled]="!canManage(user)">
+            <mat-icon class="material-symbols-outlined">edit</mat-icon>
+          </button>
+        </div>
       </td>
     </ng-container>
 
@@ -69,18 +71,18 @@
     <tr mat-row *matRowDef="let row; columns: displayedColumns;"></tr>
   </table>
 
-  <div class="empty-state" *ngIf="!loading() && !users().length">No users.</div>
+  <div class="empty-state" *ngIf="!loading() && !users().length">{{ 'No users.' | uiText }}</div>
 </section>
 
 <ng-template #recoveryDialog let-user>
-  <h2 mat-dialog-title>Start account recovery?</h2>
+  <h2 mat-dialog-title>{{ 'Start account recovery?' | uiText }}</h2>
   <mat-dialog-content>
-    <p>Send a single-use recovery link to <strong>{{ user.email }}</strong>. It expires in 30 minutes.</p>
-    <p>When the user sets a new password, their existing verification methods and sessions will be cleared.</p>
-    <p>Send the link only after verifying the account owner’s identity.</p>
+    <p>{{ 'Send a single-use recovery link to' | uiText }} <strong>{{ user.email }}</strong>{{ '. It expires in 30 minutes.' | uiText }}</p>
+    <p>{{ 'When the user sets a new password, their existing verification methods and sessions will be cleared.' | uiText }}</p>
+    <p>{{ 'Send the link only after verifying the account owner’s identity.' | uiText }}</p>
   </mat-dialog-content>
   <mat-dialog-actions align="end">
-    <button mat-button [mat-dialog-close]="false">Cancel</button>
-    <button mat-flat-button [mat-dialog-close]="true">Send recovery link</button>
+    <button mat-button [mat-dialog-close]="false">{{ 'Cancel' | uiText }}</button>
+    <button mat-flat-button [mat-dialog-close]="true">{{ 'Send recovery link' | uiText }}</button>
   </mat-dialog-actions>
 </ng-template>

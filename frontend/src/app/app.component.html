@@ -1,6 +1,14 @@
 <div class="app-shell">
+  <ng-template #languageControl>
+    <select class="language-select" [attr.aria-label]="'Language' | uiText"
+            [ngModel]="ui.language()" (ngModelChange)="ui.setLanguage($event)">
+      <option value="en" lang="en">English</option>
+      <option value="hu" lang="hu">Magyar</option>
+    </select>
+  </ng-template>
+
   <mat-toolbar class="toolbar" *ngIf="!isPublicRoute">
-    <a class="brand" [routerLink]="auth.defaultRouteAfterLogin()" aria-label="EPDS Admin home">
+    <a class="brand" [routerLink]="auth.defaultRouteAfterLogin()" aria-label="{{ 'EPDS Admin home' | uiText }}">
       @if (activeTenantLogo((auth.financeTenants$ | async)?.tenants); as logo) {
         <img class="tenant-brand-logo" [src]="logo" alt="">
       } @else {
@@ -11,27 +19,27 @@
     <nav class="nav desktop-nav" *ngIf="(auth.isLoggedIn$ | async) && auth.canAccessAdminFeatures() && !auth.hasSingleFeatureAccess()">
       <a mat-button routerLink="/home" routerLinkActive="active-link">
         <mat-icon class="material-symbols-outlined">home</mat-icon>
-        HOME
-      </a>
-      <a mat-button routerLink="/mail" routerLinkActive="active-link" *ngIf="auth.canAccessFeature('mail')">
-        <mat-icon class="material-symbols-outlined">mail</mat-icon>
-        MAIL
-      </a>
-      <a mat-button routerLink="/domain-health" routerLinkActive="active-link" *ngIf="auth.canAccessFeature('domainHealth')">
-        <mat-icon class="material-symbols-outlined">health_and_safety</mat-icon>
-        DOMAIN HEALTH
-      </a>
-      <a mat-button routerLink="/licenses" routerLinkActive="active-link" *ngIf="auth.canAccessFeature('licenses')">
-        <mat-icon class="material-symbols-outlined">license</mat-icon>
-        LICENSES
-      </a>
-      <a mat-button routerLink="/effort-tracking" routerLinkActive="active-link" *ngIf="auth.canAccessFeature('effortTracking')">
-        <mat-icon class="material-symbols-outlined">timer</mat-icon>
-        EFFORT TRACKING
+        {{ 'HOME' | uiText }}
       </a>
       <a mat-button routerLink="/project-tracker" routerLinkActive="active-link" *ngIf="auth.canAccessFeature('workBoard')">
         <mat-icon class="material-symbols-outlined">view_list</mat-icon>
-        PROJECT TRACKER
+        {{ 'PROJECT TRACKER' | uiText }}
+      </a>
+      <a mat-button routerLink="/effort-tracking" routerLinkActive="active-link" *ngIf="auth.canAccessFeature('effortTracking')">
+        <mat-icon class="material-symbols-outlined">timer</mat-icon>
+        {{ 'EFFORT TRACKING' | uiText }}
+      </a>
+      <a mat-button routerLink="/domain-health" routerLinkActive="active-link" *ngIf="auth.canAccessFeature('domainHealth')">
+        <mat-icon class="material-symbols-outlined">health_and_safety</mat-icon>
+        {{ 'DOMAIN HEALTH' | uiText }}
+      </a>
+      <a mat-button routerLink="/mail" routerLinkActive="active-link" *ngIf="auth.canAccessFeature('mail')">
+        <mat-icon class="material-symbols-outlined">mail</mat-icon>
+        {{ 'MAIL' | uiText }}
+      </a>
+      <a mat-button routerLink="/licenses" routerLinkActive="active-link" *ngIf="auth.canAccessFeature('licenses')">
+        <mat-icon class="material-symbols-outlined">license</mat-icon>
+        {{ 'LICENSES' | uiText }}
       </a>
       <a
         mat-button
@@ -44,7 +52,7 @@
         [attr.aria-disabled]="isWebhookTesterRoute"
         (click)="preventCurrentWebhookClick($event)">
         <mat-icon class="material-symbols-outlined">webhook</mat-icon>
-        WEBHOOK TESTER
+        {{ 'WEBHOOK TESTER' | uiText }}
       </a>
     </nav>
 
@@ -52,13 +60,13 @@
 
     <label class="tenant-context" *ngIf="auth.isSuperAdmin() || tenants.length > 1">
       <mat-icon class="material-symbols-outlined">apartment</mat-icon>
-      <span class="tenant-context-label">Tenant</span>
+      <span class="tenant-context-label">{{ 'Tenant' | uiText }}</span>
       <select
         name="tenantContext"
         [(ngModel)]="tenantContextId"
         (ngModelChange)="changeTenantContext($event)"
-        aria-label="Active tenant">
-        <option *ngIf="auth.isSuperAdmin()" value="">Global administration</option>
+        aria-label="{{ 'Active tenant' | uiText }}">
+        <option *ngIf="auth.isSuperAdmin()" value="">{{ 'Global administration' | uiText }}</option>
         <option *ngFor="let tenant of tenants" [value]="tenant.id">{{ tenantLabel(tenant) }}</option>
       </select>
     </label>
@@ -67,10 +75,10 @@
       @if (auth.financeTenants$ | async; as access) {
         <label class="tenant-context">
           <mat-icon class="material-symbols-outlined">apartment</mat-icon>
-          <span class="tenant-context-label">Tenant</span>
+          <span class="tenant-context-label">{{ 'Tenant' | uiText }}</span>
           <select name="financeTenant" [ngModel]="financeTenantId" (ngModelChange)="changeFinanceTenant($event)"
-                  [disabled]="access.loading || access.error || !access.tenants.length" aria-label="Pénzügyi tenant">
-            <option value="">Válassz tenantot</option>
+                  [disabled]="access.loading || access.error || !access.tenants.length" aria-label="{{ 'Pénzügyi tenant' | uiText }}">
+            <option value="">{{ 'Válassz tenantot' | uiText }}</option>
             @for (tenant of access.tenants; track tenant.id) {
               <option [value]="tenant.id">{{ tenant.name }}</option>
             }
@@ -79,12 +87,14 @@
       }
     }
 
+    <ng-container *ngTemplateOutlet="languageControl"></ng-container>
+
     <button
       mat-icon-button
       class="mobile-menu-trigger"
       type="button"
       [matMenuTriggerFor]="mobileMenu"
-      aria-label="Open navigation menu">
+      aria-label="{{ 'Open navigation menu' | uiText }}">
       <mat-icon class="material-symbols-outlined">menu</mat-icon>
     </button>
 
@@ -93,7 +103,7 @@
         <div class="mobile-menu-user" (click)="$event.stopPropagation()">
           <mat-icon class="material-symbols-outlined">account_circle</mat-icon>
           <span>
-            <strong>{{ auth.getFullName() || 'Profile' }}</strong>
+            <strong>{{ auth.getFullName() || ('Profile' | uiText) }}</strong>
             <small>{{ mobileUser.email }}</small>
           </span>
         </div>
@@ -101,27 +111,27 @@
 
         <a mat-menu-item routerLink="/home" routerLinkActive="active-menu-item" *ngIf="auth.canAccessAdminFeatures() && !auth.hasSingleFeatureAccess()">
           <mat-icon class="material-symbols-outlined">home</mat-icon>
-          Home
-        </a>
-        <a mat-menu-item routerLink="/mail" routerLinkActive="active-menu-item" *ngIf="auth.canAccessFeature('mail')">
-          <mat-icon class="material-symbols-outlined">mail</mat-icon>
-          Mail
-        </a>
-        <a mat-menu-item routerLink="/domain-health" routerLinkActive="active-menu-item" *ngIf="auth.canAccessFeature('domainHealth')">
-          <mat-icon class="material-symbols-outlined">health_and_safety</mat-icon>
-          Domain Health
-        </a>
-        <a mat-menu-item routerLink="/licenses" routerLinkActive="active-menu-item" *ngIf="auth.canAccessFeature('licenses')">
-          <mat-icon class="material-symbols-outlined">license</mat-icon>
-          Licenses
-        </a>
-        <a mat-menu-item routerLink="/effort-tracking" routerLinkActive="active-menu-item" *ngIf="auth.canAccessFeature('effortTracking')">
-          <mat-icon class="material-symbols-outlined">timer</mat-icon>
-          Effort Tracking
+          {{ 'Home' | uiText }}
         </a>
         <a mat-menu-item routerLink="/project-tracker" routerLinkActive="active-menu-item" *ngIf="auth.canAccessFeature('workBoard')">
           <mat-icon class="material-symbols-outlined">view_list</mat-icon>
-          Project Tracker
+          {{ 'Project Tracker' | uiText }}
+        </a>
+        <a mat-menu-item routerLink="/effort-tracking" routerLinkActive="active-menu-item" *ngIf="auth.canAccessFeature('effortTracking')">
+          <mat-icon class="material-symbols-outlined">timer</mat-icon>
+          {{ 'Effort Tracking' | uiText }}
+        </a>
+        <a mat-menu-item routerLink="/domain-health" routerLinkActive="active-menu-item" *ngIf="auth.canAccessFeature('domainHealth')">
+          <mat-icon class="material-symbols-outlined">health_and_safety</mat-icon>
+          {{ 'Domain Health' | uiText }}
+        </a>
+        <a mat-menu-item routerLink="/mail" routerLinkActive="active-menu-item" *ngIf="auth.canAccessFeature('mail')">
+          <mat-icon class="material-symbols-outlined">mail</mat-icon>
+          {{ 'Mail' | uiText }}
+        </a>
+        <a mat-menu-item routerLink="/licenses" routerLinkActive="active-menu-item" *ngIf="auth.canAccessFeature('licenses')">
+          <mat-icon class="material-symbols-outlined">license</mat-icon>
+          {{ 'Licenses' | uiText }}
         </a>
         <a
           mat-menu-item
@@ -134,35 +144,35 @@
           [attr.aria-disabled]="isWebhookTesterRoute"
           (click)="preventCurrentWebhookClick($event)">
           <mat-icon class="material-symbols-outlined">webhook</mat-icon>
-          Webhook Tester
+          {{ 'Webhook Tester' | uiText }}
         </a>
 
         <ng-container *ngIf="auth.canManageWorkFields() || mobileUser.role === 'SuperAdmin'">
           <div class="mobile-menu-divider"></div>
-          <div class="mobile-menu-label" (click)="$event.stopPropagation()">Settings</div>
+          <div class="mobile-menu-label" (click)="$event.stopPropagation()">{{ 'Settings' | uiText }}</div>
           <a mat-menu-item *ngIf="auth.canManageWorkFields()" routerLink="/settings/work-fields" routerLinkActive="active-menu-item">
             <mat-icon class="material-symbols-outlined">tune</mat-icon>
-            Project Tracker settings
+            {{ 'Project Tracker settings' | uiText }}
           </a>
           <a mat-menu-item routerLink="/admin/email-templates" routerLinkActive="active-menu-item" *ngIf="mobileUser.role === 'SuperAdmin'">
             <mat-icon class="material-symbols-outlined">outgoing_mail</mat-icon>
-            Email templates
+            {{ 'Email templates' | uiText }}
           </a>
         </ng-container>
         <ng-container *ngIf="auth.canManageUsers()">
           <div class="mobile-menu-divider"></div>
-          <div class="mobile-menu-label" (click)="$event.stopPropagation()">Administration</div>
+          <div class="mobile-menu-label" (click)="$event.stopPropagation()">{{ 'Administration' | uiText }}</div>
           <a mat-menu-item routerLink="/admin/users" routerLinkActive="active-menu-item">
             <mat-icon class="material-symbols-outlined">group</mat-icon>
-            Users
+            {{ 'Users' | uiText }}
           </a>
           <a mat-menu-item routerLink="/admin/tenants" routerLinkActive="active-menu-item" *ngIf="mobileUser.role === 'SuperAdmin'">
             <mat-icon class="material-symbols-outlined">business</mat-icon>
-            Tenants
+            {{ 'Tenants' | uiText }}
           </a>
           <a mat-menu-item routerLink="/admin/integrations" routerLinkActive="active-menu-item" *ngIf="mobileUser.role === 'SuperAdmin'">
             <mat-icon class="material-symbols-outlined">api</mat-icon>
-            License integrations
+            {{ 'License integrations' | uiText }}
           </a>
         </ng-container>
       </ng-container>
@@ -170,19 +180,19 @@
       <div class="mobile-menu-divider"></div>
       <button mat-menu-item type="button" (click)="theme.toggle()">
         <mat-icon class="material-symbols-outlined">{{ theme.theme() === 'dark' ? 'light_mode' : 'dark_mode' }}</mat-icon>
-        {{ theme.theme() === 'dark' ? 'Light mode' : 'Dark mode' }}
+        {{ (theme.theme() === 'dark' ? 'Light mode' : 'Dark mode') | uiText }}
       </button>
       <a mat-menu-item routerLink="/login" *ngIf="!(auth.isLoggedIn$ | async)">
         <mat-icon class="material-symbols-outlined">login</mat-icon>
-        Login
+        {{ 'Login' | uiText }}
       </a>
       <a mat-menu-item *ngIf="auth.isLoggedIn$ | async" routerLink="/profile/security">
         <mat-icon class="material-symbols-outlined">security</mat-icon>
-        <span>Profile &amp; security</span>
+        <span>{{ 'Profile &amp; security' | uiText }}</span>
       </a>
       <button mat-menu-item type="button" *ngIf="auth.isLoggedIn$ | async" (click)="logout()">
         <mat-icon class="material-symbols-outlined">logout</mat-icon>
-        Logout
+        {{ 'Logout' | uiText }}
       </button>
     </mat-menu>
 
@@ -190,37 +200,37 @@
       mat-icon-button
       class="theme-toggle desktop-action"
       type="button"
-      [matTooltip]="theme.theme() === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'"
-      [attr.aria-label]="theme.theme() === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'"
+      [matTooltip]="(theme.theme() === 'dark' ? 'Switch to light mode' : 'Switch to dark mode') | uiText"
+      [attr.aria-label]="(theme.theme() === 'dark' ? 'Switch to light mode' : 'Switch to dark mode') | uiText"
       (click)="theme.toggle()">
       <mat-icon class="material-symbols-outlined">{{ theme.theme() === 'dark' ? 'light_mode' : 'dark_mode' }}</mat-icon>
     </button>
 
     <ng-container *ngIf="auth.user$ | async as user">
-      <button mat-icon-button class="desktop-action" *ngIf="auth.canManageUsers() || auth.canManageWorkFields()" [matMenuTriggerFor]="settingsMenu" aria-label="Settings">
+      <button mat-icon-button class="desktop-action" *ngIf="auth.canManageUsers() || auth.canManageWorkFields()" [matMenuTriggerFor]="settingsMenu" aria-label="{{ 'Settings' | uiText }}">
         <mat-icon class="material-symbols-outlined">settings</mat-icon>
       </button>
       <mat-menu #settingsMenu="matMenu">
         <a mat-menu-item routerLink="/settings/work-fields" *ngIf="auth.canManageWorkFields()">
           <mat-icon class="material-symbols-outlined">tune</mat-icon>
-          Project Tracker settings
+          {{ 'Project Tracker settings' | uiText }}
         </a>
         <a mat-menu-item routerLink="/admin/users" *ngIf="auth.canManageUsers()">
           <mat-icon class="material-symbols-outlined">group</mat-icon>
-          Users
+          {{ 'Users' | uiText }}
         </a>
         <ng-container *ngIf="user.role === 'SuperAdmin'">
           <a mat-menu-item routerLink="/admin/tenants">
             <mat-icon class="material-symbols-outlined">business</mat-icon>
-            Tenants
+            {{ 'Tenants' | uiText }}
           </a>
           <a mat-menu-item routerLink="/admin/email-templates">
             <mat-icon class="material-symbols-outlined">outgoing_mail</mat-icon>
-            Email templates
+            {{ 'Email templates' | uiText }}
           </a>
           <a mat-menu-item routerLink="/admin/integrations">
             <mat-icon class="material-symbols-outlined">api</mat-icon>
-            License integrations
+            {{ 'License integrations' | uiText }}
           </a>
         </ng-container>
       </mat-menu>
@@ -228,24 +238,28 @@
 
     <button mat-button class="desktop-action" *ngIf="!(auth.isLoggedIn$ | async)" routerLink="/login">
       <mat-icon class="material-symbols-outlined">login</mat-icon>
-      Login
+      {{ 'Login' | uiText }}
     </button>
 
     <button mat-button class="profile-button desktop-action" *ngIf="auth.isLoggedIn$ | async" [matMenuTriggerFor]="profileMenu">
       <mat-icon class="material-symbols-outlined">account_circle</mat-icon>
-      {{ auth.getFullName() || 'Profile' }}
+      {{ auth.getFullName() || ('Profile' | uiText) }}
     </button>
     <mat-menu #profileMenu="matMenu">
       <a mat-menu-item routerLink="/profile/security">
         <mat-icon class="material-symbols-outlined">security</mat-icon>
-        <span>Profile &amp; security</span>
+        <span>{{ 'Profile &amp; security' | uiText }}</span>
       </a>
       <button mat-menu-item (click)="logout()">
         <mat-icon class="material-symbols-outlined">logout</mat-icon>
-        Logout
+        {{ 'Logout' | uiText }}
       </button>
     </mat-menu>
   </mat-toolbar>
+
+  <div *ngIf="isPublicRoute" class="public-language">
+    <ng-container *ngTemplateOutlet="languageControl"></ng-container>
+  </div>
 
   <main class="app-content">
     <router-outlet></router-outlet>

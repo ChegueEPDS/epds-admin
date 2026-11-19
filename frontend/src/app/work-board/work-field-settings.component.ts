@@ -1,3 +1,4 @@
+import { UiTextPipe } from '../i18n/ui-text.pipe';
 import { Component, OnInit, TemplateRef, inject } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
@@ -13,7 +14,7 @@ import { WORK_TABLE_COLUMNS, WORK_CATALOGS, WORK_FIELD_CARDS, WORK_FIELD_TYPES, 
 import { WorkLayoutListComponent } from './work-layout-list.component';
 
 @Component({
-  imports: [FormsModule, MatButtonModule, MatCheckboxModule, MatFormFieldModule, MatInputModule, MatSelectModule, MatTabsModule, MatDialogModule, WorkLayoutListComponent],
+  imports: [UiTextPipe, FormsModule, MatButtonModule, MatCheckboxModule, MatFormFieldModule, MatInputModule, MatSelectModule, MatTabsModule, MatDialogModule, WorkLayoutListComponent],
   templateUrl: './work-field-settings.component.html',
   styles: [`
     :host { display: block; color: var(--brand-ink); }

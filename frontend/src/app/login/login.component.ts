@@ -1,5 +1,7 @@
+import { UiLanguageService } from '../i18n/ui-language.service';
+import { UiTextPipe } from '../i18n/ui-text.pipe';
 import { CommonModule } from '@angular/common';
-import { Component, signal } from '@angular/core';
+import { inject, Component, signal } from '@angular/core';
 import { EpdsAtexPandaComponent } from './epds-atex-panda.component';
 import { FormsModule } from '@angular/forms';
 import { HttpClient } from '@angular/common/http';
@@ -20,6 +22,7 @@ import { AuthResponse, AuthService } from '../services/auth.service';
   selector: 'app-login',
   standalone: true,
   imports: [
+    UiTextPipe,
     CommonModule,
     EpdsAtexPandaComponent,
     FormsModule,
@@ -37,6 +40,7 @@ import { AuthResponse, AuthService } from '../services/auth.service';
   styleUrl: './login.component.scss'
 })
 export class LoginComponent {
+  private readonly ui = inject(UiLanguageService);
   isLoading = signal(false);
   isShaking = signal(false);
   readonly passwordFormOpen = signal(false);
@@ -99,7 +103,7 @@ export class LoginComponent {
     } catch (error: any) {
       this.isShaking.set(true);
       setTimeout(() => this.isShaking.set(false), 700);
-      this.snackBar.open(error?.error?.error || error?.message || 'Microsoft login failed.', 'Close', { duration: 4500 });
+      this.snackBar.open(this.ui.text(error?.error?.error || error?.message || 'Microsoft login failed.'), this.ui.text('Close'), { duration: 4500 });
     } finally {
       this.isLoading.set(false);
     }
@@ -157,7 +161,7 @@ export class LoginComponent {
       },
       error: () => {
         this.isLoading.set(false);
-        this.snackBar.open('Unable to request a reset link. Please try again later.', 'Close', { duration: 4500 });
+        this.snackBar.open(this.ui.text('Unable to request a reset link. Please try again later.'), this.ui.text('Close'), { duration: 4500 });
       }
     });
   }
@@ -181,7 +185,7 @@ export class LoginComponent {
         this.isLoading.set(false);
         this.isShaking.set(true);
         setTimeout(() => this.isShaking.set(false), 700);
-        this.snackBar.open(error?.error?.error || 'Login failed.', 'Close', { duration: 4500 });
+        this.snackBar.open(this.ui.text(error?.error?.error || 'Login failed.'), this.ui.text('Close'), { duration: 4500 });
       }
     });
   }

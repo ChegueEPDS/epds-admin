@@ -1,64 +1,64 @@
 <section class="effort-page" lang="en" aria-labelledby="effort-title">
   <header class="page-header">
     <div>
-      <h1 id="effort-title">Effort Tracking</h1>
-      <p>Project Tracker projects and task time</p>
+      <h1 id="effort-title">{{ 'Effort Tracking' | uiText }}</h1>
+      <p>{{ 'Project Tracker projects and task time' | uiText }}</p>
     </div>
     <div class="header-actions">
       @if (activeTask; as task) {
         <button type="button" mat-stroked-button class="active-timer" (click)="showActiveTask()"
-          [matTooltip]="'Go to the running timer for ' + task.name">
+          [matTooltip]="'Go to the running timer for {0}' | uiText: task.name">
           <mat-icon class="material-symbols-outlined">timer</mat-icon>
-          Running timer · {{ formatDuration(taskNet(task)) }}
+          {{ 'Running timer · {0}' | uiText: (formatDuration(taskNet(task))) }}
         </button>
       }
       @if (canCreateWork) {
         <button type="button" mat-flat-button color="primary" [disabled]="saving || loading" (click)="startProjectEditor()">
           <mat-icon class="material-symbols-outlined">add</mat-icon>
-          New project
+          {{ 'New project' | uiText }}
         </button>
       } @else if (canEdit && !loadError) {
         <button type="button" mat-stroked-button [disabled]="saving || loading" (click)="startProjectEditor()">
           <mat-icon class="material-symbols-outlined">add</mat-icon>
-          Personal project
+          {{ 'Personal project' | uiText }}
         </button>
       }
     </div>
   </header>
 
   @if (loading) {
-    <div class="board-message"><mat-spinner diameter="34" aria-label="Loading the board"></mat-spinner></div>
+    <div class="board-message"><mat-spinner diameter="34" aria-label="{{ 'Loading the board' | uiText }}"></mat-spinner></div>
   } @else if (loadError) {
     <div class="board-message" role="alert">
-      <p>{{ loadError }}</p>
-      <button type="button" mat-stroked-button (click)="load()">Retry</button>
+      <p>{{ loadError | uiText }}</p>
+      <button type="button" mat-stroked-button (click)="load()">{{ 'Retry' | uiText }}</button>
     </div>
   } @else {
-    <div class="filters" role="group" aria-label="Task filters">
-      <label>Assignee
+    <div class="filters" role="group" aria-label="{{ 'Task filters' | uiText }}">
+      <label>{{ 'Assignee' | uiText }}
         <select [(ngModel)]="filters.who" (ngModelChange)="applyFilters()">
-          <option [value]="all">All assignees</option>
-          <option [value]="unassigned">Unassigned</option>
+          <option [value]="all">{{ 'All assignees' | uiText }}</option>
+          <option [value]="unassigned">{{ 'Unassigned' | uiText }}</option>
           @for (person of people; track person.id) { <option [value]="person.id">{{ person.fullName }}</option> }
         </select>
       </label>
-      <label>Project
+      <label>{{ 'Project' | uiText }}
         <select [(ngModel)]="filters.project" (ngModelChange)="applyFilters()">
-          <option [value]="all">All projects</option>
+          <option [value]="all">{{ 'All projects' | uiText }}</option>
           @for (row of rows; track row.id) {
             <option [value]="row.id">{{ row.workNumber ? row.workNumber + ' · ' : '' }}{{ row.name }}</option>
           }
         </select>
       </label>
-      <label>Status
+      <label>{{ 'Status' | uiText }}
         <select [(ngModel)]="filters.status" (ngModelChange)="applyFilters()">
-          <option [value]="all">All statuses</option>
-          @for (lane of lanes; track lane.id) { <option [value]="lane.id">{{ lane.label }}</option> }
+          <option [value]="all">{{ 'All statuses' | uiText }}</option>
+          @for (lane of lanes; track lane.id) { <option [value]="lane.id">{{ lane.label | uiText }}</option> }
         </select>
       </label>
-      <label>Sub-work
+      <label>{{ 'Sub-work' | uiText }}
         <select [(ngModel)]="filters.sub" (ngModelChange)="applyFilters()">
-          <option [value]="all">All sub-works</option>
+          <option [value]="all">{{ 'All sub-works' | uiText }}</option>
           @for (sub of subFilters; track sub.id) { <option [value]="sub.id">{{ sub.label }}</option> }
         </select>
       </label>
@@ -67,15 +67,15 @@
     <div class="board">
       <div class="board-grid board-head">
         <div class="project-heading">
-          <span>Project <span class="count">{{ visibleRows.length }}</span></span>
-          <button type="button" mat-icon-button [disabled]="!visibleRows.length" [attr.aria-label]="toggleLabel"
-            [matTooltip]="toggleLabel" aria-controls="effort-rows" (click)="toggleAll()">
+          <span>{{ 'Project' | uiText }} <span class="count">{{ visibleRows.length }}</span></span>
+          <button type="button" mat-icon-button [disabled]="!visibleRows.length" [attr.aria-label]="toggleLabel | uiText"
+            [matTooltip]="toggleLabel | uiText" aria-controls="effort-rows" (click)="toggleAll()">
             <mat-icon class="material-symbols-outlined">{{ anyOpen ? 'unfold_less' : 'unfold_more' }}</mat-icon>
           </button>
         </div>
         @for (lane of lanes; track lane.id) {
           <div class="lane-heading" [class]="lane.id">
-            <span class="status-dot" aria-hidden="true"></span>{{ lane.label }}
+            <span class="status-dot" aria-hidden="true"></span>{{ lane.label | uiText }}
             <span class="count">{{ laneCounts[lane.id] }}</span>
           </div>
         }
@@ -91,22 +91,22 @@
                 </button>
                 @if (personalProjects(row).length) {
                   <button type="button" mat-icon-button [matMenuTriggerFor]="personalMenu" [disabled]="saving"
-                    aria-label="Personal project actions" matTooltip="Personal project actions">
+                    aria-label="{{ 'Personal project actions' | uiText }}" matTooltip="{{ 'Personal project actions' | uiText }}">
                     <mat-icon class="material-symbols-outlined">more_vert</mat-icon>
                   </button>
                   <mat-menu #personalMenu="matMenu">
                     @for (project of personalProjects(row); track project.id) {
                       @if (canEdit && project.status === 'open') {
-                        <button mat-menu-item (click)="startProjectEditor(project)">Edit · {{ project.name }}</button>
-                        <button mat-menu-item (click)="changePersonalProject(project, 'close')">Close · {{ project.name }}</button>
+                        <button mat-menu-item (click)="startProjectEditor(project)">{{ 'Edit · {0}' | uiText: (project.name) }}</button>
+                        <button mat-menu-item (click)="changePersonalProject(project, 'close')">{{ 'Close · {0}' | uiText: (project.name) }}</button>
                       } @else {
-                        <button mat-menu-item (click)="startProjectEditor(project)">Details · {{ project.name }}</button>
+                        <button mat-menu-item (click)="startProjectEditor(project)">{{ 'Details · {0}' | uiText: (project.name) }}</button>
                         @if (canEdit) {
-                          <button mat-menu-item (click)="changePersonalProject(project, 'reopen')">Reopen · {{ project.name }}</button>
+                          <button mat-menu-item (click)="changePersonalProject(project, 'reopen')">{{ 'Reopen · {0}' | uiText: (project.name) }}</button>
                         }
                       }
                       @if (canDelete) {
-                        <button mat-menu-item (click)="changePersonalProject(project, 'delete')">Delete · {{ project.name }}</button>
+                        <button mat-menu-item (click)="changePersonalProject(project, 'delete')">{{ 'Delete · {0}' | uiText: (project.name) }}</button>
                       }
                     }
                   </mat-menu>
@@ -118,26 +118,26 @@
                 } @else if (row.workNumber) {
                   <span>{{ row.workNumber }}</span>
                 } @else {
-                  <span>Personal project</span>
+                  <span>{{ 'Personal project' | uiText }}</span>
                 }
                 @if (row.customer) { <span>{{ row.customer }}</span> }
-                <span class="duration">Net time {{ formatDuration(rowNet(row)) }}</span>
+                <span class="duration">{{ 'Net time {0}' | uiText: (formatDuration(rowNet(row))) }}</span>
               </div>
             </div>
 
             @for (lane of lanes; track lane.id; let i = $index) {
               @if (collapsed.has(row.id)) {
                 <div class="lane-summary" [class]="lane.id">
-                  <span class="mobile-lane-label">{{ lane.label }}</span>
+                  <span class="mobile-lane-label">{{ lane.label | uiText }}</span>
                   <span class="count" [attr.aria-label]="lane.label + ' tasks: ' + row.byStatus[lane.id].length">
                     {{ row.byStatus[lane.id].length }}
                   </span>
                 </div>
               } @else {
-                <div class="lane" [class]="lane.id" [attr.aria-label]="lane.label"
+                <div class="lane" [class]="lane.id" [attr.aria-label]="lane.label | uiText"
                   cdkDropList [id]="row.dropIds[i]" [cdkDropListConnectedTo]="row.dropIds"
                   [cdkDropListData]="lane.id" [cdkDropListSortingDisabled]="true" (cdkDropListDropped)="drop($event)">
-                  <div class="mobile-lane-label"><span class="status-dot" aria-hidden="true"></span>{{ lane.label }}
+                  <div class="mobile-lane-label"><span class="status-dot" aria-hidden="true"></span>{{ lane.label | uiText }}
                     <span class="count">{{ row.byStatus[lane.id].length }}</span>
                   </div>
                   @for (task of row.byStatus[lane.id]; track task.id) {
@@ -145,9 +145,9 @@
                       cdkDrag [cdkDragData]="task" [cdkDragDisabled]="saving || !canEditTask(task)" (dblclick)="startTaskEditor(row, task)">
                       <div class="task-title">
                         <h2 cdkDragHandle [class.draggable]="canEditTask(task)" [cdkDragHandleDisabled]="!canEditTask(task)">{{ task.name }}</h2>
-                        @if (task.dueDate) { <small>Due {{ task.dueDate }}</small> }
-                        <button type="button" mat-icon-button class="task-editor-button" aria-label="Open task"
-                          matTooltip="Open task" (click)="startTaskEditor(row, task)" (dblclick)="$event.stopPropagation()">
+                        @if (task.dueDate) { <small>{{ 'Due {0}' | uiText: (task.dueDate) }}</small> }
+                        <button type="button" mat-icon-button class="task-editor-button" aria-label="{{ 'Open task' | uiText }}"
+                          matTooltip="{{ 'Open task' | uiText }}" (click)="startTaskEditor(row, task)" (dblclick)="$event.stopPropagation()">
                           <mat-icon class="material-symbols-outlined">open_in_new</mat-icon>
                         </button>
                       </div>
@@ -158,13 +158,13 @@
                         </span>
                       }
                       <div class="task-fields" (dblclick)="$event.stopPropagation()">
-                        <select aria-label="Task status" [ngModel]="task.status" #statusSelect
+                        <select aria-label="{{ 'Task status' | uiText }}" [ngModel]="task.status" #statusSelect
                           [disabled]="saving || !canEditTask(task)" (ngModelChange)="statusSelect.value = task.status; changeStatus(task, $event)">
-                          @for (status of lanes; track status.id) { <option [value]="status.id">{{ status.label }}</option> }
+                          @for (status of lanes; track status.id) { <option [value]="status.id">{{ status.label | uiText }}</option> }
                         </select>
-                        <select aria-label="Task assignee" [ngModel]="task.assigneeId || unassigned" #assigneeSelect
+                        <select aria-label="{{ 'Task assignee' | uiText }}" [ngModel]="task.assigneeId || unassigned" #assigneeSelect
                           [disabled]="saving || !canEditTask(task)" (ngModelChange)="assigneeSelect.value = task.assigneeId || unassigned; changeAssignee(task, $event)">
-                          <option [value]="unassigned">Unassigned</option>
+                          <option [value]="unassigned">{{ 'Unassigned' | uiText }}</option>
                           @if (task.assigneeId && !peopleById.has(task.assigneeId)) {
                             <option [value]="task.assigneeId">{{ task.assigneeName }}</option>
                           }
@@ -172,27 +172,27 @@
                         </select>
                       </div>
                       <div class="task-times">
-                        <span>Net time <strong>{{ formatDuration(taskNet(task)) }}</strong></span>
-                        <span>Estimate {{ task.estimateMs === null ? '—' : formatDuration(task.estimateMs) }}</span>
+                        <span>{{ 'Net time' | uiText }} <strong>{{ formatDuration(taskNet(task)) }}</strong></span>
+                        <span>{{ 'Estimate {0}' | uiText: (task.estimateMs === null ? '—' : formatDuration(task.estimateMs)) }}</span>
                       </div>
                       @if (task.status === 'in_progress') {
                         <div class="transport" (dblclick)="$event.stopPropagation()">
-                          <button type="button" mat-icon-button [attr.aria-label]="timerLabel(task)" [matTooltip]="timerLabel(task)"
+                          <button type="button" mat-icon-button [attr.aria-label]="timerLabel(task) | uiText" [matTooltip]="timerLabel(task) | uiText"
                             [disabled]="saving || !canEditTask(task) || (task.active && !task.activeByCurrentUser)" (click)="toggleTimer(task)">
                             <mat-icon class="material-symbols-outlined">{{ task.activeByCurrentUser ? 'pause' : 'play_arrow' }}</mat-icon>
                           </button>
-                          <button type="button" mat-icon-button aria-label="Stop timer" matTooltip="Stop timer"
+                          <button type="button" mat-icon-button aria-label="{{ 'Stop timer' | uiText }}" matTooltip="{{ 'Stop timer' | uiText }}"
                             [disabled]="saving || !canEditTask(task) || (!task.activeByCurrentUser && !task.timerPaused)" (click)="stopTimer(task)">
                             <mat-icon class="material-symbols-outlined">stop</mat-icon>
                           </button>
-                          <span>{{ task.active ? (task.activeByCurrentUser ? 'Timer running' : 'Timer running for another user') : task.timerPaused ? 'Paused' : 'Stopped' }}</span>
+                          <span>{{ task.active ? (task.activeByCurrentUser ? ('Timer running' | uiText) : ('Timer running for another user' | uiText)) : task.timerPaused ? ('Paused' | uiText) : ('Stopped' | uiText) }}</span>
                         </div>
                       }
                     </article>
                   }
                   @if (lane.id === 'new' && canAddTask(row)) {
                     <button type="button" class="add-task" mat-stroked-button [disabled]="saving" (click)="startTaskEditor(row)">
-                      <mat-icon class="material-symbols-outlined">add</mat-icon> Add task
+                      <mat-icon class="material-symbols-outlined">add</mat-icon> {{ 'Add task' | uiText }}
                     </button>
                   } @else if (!row.byStatus[lane.id].length) {
                     <span class="lane-empty" aria-hidden="true">—</span>
@@ -202,7 +202,7 @@
             }
           </section>
         } @empty {
-          <div class="board-message" role="status">{{ rows.length ? 'No tasks match the selected filters.' : 'No projects on the board yet.' }}</div>
+          <div class="board-message" role="status">{{ rows.length ? ('No tasks match the selected filters.' | uiText) : ('No projects on the board yet.' | uiText) }}</div>
         }
       </div>
     </div>
@@ -211,51 +211,51 @@
 
 <ng-template #taskEditor>
   <form #taskNgForm="ngForm" (ngSubmit)="taskNgForm.valid && saveTask()" lang="en">
-    <h2 mat-dialog-title>{{ taskInEditor ? 'Task details' : 'New task' }}</h2>
+    <h2 mat-dialog-title>{{ taskInEditor ? ('Task details' | uiText) : ('New task' | uiText) }}</h2>
     <mat-dialog-content>
       <p class="dialog-context">{{ rowInEditor?.workNumber }} {{ rowInEditor?.name }}</p>
       <fieldset class="editor-fields" [disabled]="saving || !editableTask">
-        <label class="full-width">Task name
+        <label class="full-width">{{ 'Task name' | uiText }}
           <input name="title" [(ngModel)]="taskForm.name" required maxlength="200" cdkFocusInitial>
         </label>
-        <label>Due date
+        <label>{{ 'Due date' | uiText }}
           <input type="date" name="dueDate" [(ngModel)]="taskForm.dueDate">
         </label>
-        <label>Sub-work
+        <label>{{ 'Sub-work' | uiText }}
           <select name="sub" [(ngModel)]="taskForm.sub">
-            <option value="">No sub-work</option>
+            <option value="">{{ 'No sub-work' | uiText }}</option>
             @if (taskInEditor?.subWorkItem; as sub) {
               @if (sub.id && !taskSubOptionsById(sub.id)) {
-                <option [value]="sub.id">{{ sub.name }} · archived</option>
+                <option [value]="sub.id">{{ '{0} · archived' | uiText: (sub.name) }}</option>
               }
             }
             @for (sub of taskSubOptions; track sub.id) { <option [value]="sub.id">{{ sub.subWorkNumber }} · {{ sub.name }}</option> }
           </select>
         </label>
-        <label>Assignee
+        <label>{{ 'Assignee' | uiText }}
           <select name="assignee" [(ngModel)]="taskForm.who">
-            <option value="">Unassigned</option>
+            <option value="">{{ 'Unassigned' | uiText }}</option>
             @if (taskInEditor?.assigneeId && !peopleById.has(taskInEditor!.assigneeId!)) {
               <option [value]="taskInEditor!.assigneeId">{{ taskInEditor!.assigneeName }}</option>
             }
             @for (person of people; track person.id) { <option [value]="person.id">{{ person.fullName }}</option> }
           </select>
         </label>
-        <label>Time estimate (minutes)
-          <input type="number" min="0" max="1000000" step="any" name="estimate" [(ngModel)]="taskForm.estimate" placeholder="No estimate">
+        <label>{{ 'Time estimate (minutes)' | uiText }}
+          <input type="number" min="0" max="1000000" step="any" name="estimate" [(ngModel)]="taskForm.estimate" placeholder="{{ 'No estimate' | uiText }}">
         </label>
         @if (taskInEditor; as task) {
-          <label>Adjusted net time (minutes)
+          <label>{{ 'Adjusted net time (minutes)' | uiText }}
             <input type="number" min="0" max="1000000" step="any" name="net" [(ngModel)]="taskForm.net"
               [disabled]="task.active" [placeholder]="(task.netMs / 60000 | number:'1.0-2') || ''">
           </label>
           <p class="duration full-width dialog-context">
-            Measured time {{ formatDuration(task.measuredNetMs) }} · Recorded net time {{ formatDuration(task.netMs) }}
-            @if (task.status === 'closed') { <span class="correction-hint">Total elapsed time {{ formatDuration(task.grossMs) }}</span> }
-            @if (task.active) { <span class="correction-hint">Pause or stop the timer before adjusting the recorded time.</span> }
+            {{ 'Measured time {0} · Recorded net time {1}' | uiText: (formatDuration(task.measuredNetMs)): (formatDuration(task.netMs)) }}
+            @if (task.status === 'closed') { <span class="correction-hint">{{ 'Total elapsed time {0}' | uiText: (formatDuration(task.grossMs)) }}</span> }
+            @if (task.active) { <span class="correction-hint">{{ 'Pause or stop the timer before adjusting the recorded time.' | uiText }}</span> }
           </p>
           @if (taskForm.net !== null) {
-            <label class="full-width">Reason for adjustment
+            <label class="full-width">{{ 'Reason for adjustment' | uiText }}
               <input name="reason" required maxlength="500" [(ngModel)]="taskForm.reason">
             </label>
           }
@@ -265,25 +265,25 @@
         [readonly]="!editableTask" [disabled]="saving" [(html)]="taskForm.note"></app-rich-text-editor>
       @if (taskInEditor?.netCorrections?.length) {
         <details class="corrections">
-          <summary>Time adjustments ({{ taskInEditor!.netCorrections.length }})</summary>
+          <summary>{{ 'Time adjustments ({0})' | uiText: (taskInEditor!.netCorrections.length) }}</summary>
           @for (correction of taskInEditor!.netCorrections; track $index) {
             <div class="correction">
-              <span>{{ correction.at | date:'yyyy.MM.dd. HH:mm' }} · {{ correction.userName || peopleById.get(correction.userId) || 'Former user' }}</span>
+              <span>{{ correction.at | date:'yyyy.MM.dd. HH:mm' }} · {{ correction.userName || peopleById.get(correction.userId) || ('Former user' | uiText) }}</span>
               <strong>{{ formatDuration(correction.previousMs) }} → {{ formatDuration(correction.netMs) }}</strong>
               <span>{{ correction.reason }}</span>
             </div>
           }
         </details>
       }
-      @if (editorError) { <p class="editor-error" role="alert">{{ editorError }}</p> }
+      @if (editorError) { <p class="editor-error" role="alert">{{ editorError | uiText }}</p> }
     </mat-dialog-content>
     <mat-dialog-actions align="end">
       @if (taskInEditor && canDelete) {
-        <button type="button" mat-button class="delete-action" [disabled]="saving || taskInEditor.active" (click)="deleteTask(taskInEditor)">Delete</button>
+        <button type="button" mat-button class="delete-action" [disabled]="saving || taskInEditor.active" (click)="deleteTask(taskInEditor)">{{ 'Delete' | uiText }}</button>
       }
-      <button type="button" mat-button mat-dialog-close [disabled]="saving">{{ editableTask ? 'Cancel' : 'Close' }}</button>
+      <button type="button" mat-button mat-dialog-close [disabled]="saving">{{ editableTask ? ('Cancel' | uiText) : ('Close' | uiText) }}</button>
       @if (editableTask) {
-        <button type="submit" mat-flat-button color="primary" [disabled]="saving || taskNgForm.invalid">Save</button>
+        <button type="submit" mat-flat-button color="primary" [disabled]="saving || taskNgForm.invalid">{{ 'Save' | uiText }}</button>
       }
     </mat-dialog-actions>
   </form>
@@ -291,39 +291,39 @@
 
 <ng-template #projectEditor>
   <form #projectNgForm="ngForm" (ngSubmit)="projectNgForm.valid && saveProject()" lang="en">
-    <h2 mat-dialog-title>{{ projectInEditor ? (editableProject ? 'Edit personal project' : 'Personal project details') : projectEditorMode === 'work' ? 'New project' : 'New personal project' }}</h2>
+    <h2 mat-dialog-title>{{ projectInEditor ? (editableProject ? ('Edit personal project' | uiText) : ('Personal project details' | uiText)) : projectEditorMode === 'work' ? ('New project' | uiText) : ('New personal project' | uiText) }}</h2>
     <mat-dialog-content>
-      @if (projectEditorMode === 'work') { <p class="dialog-context">The project will also appear in Project Tracker.</p> }
+      @if (projectEditorMode === 'work') { <p class="dialog-context">{{ 'The project will also appear in Project Tracker.' | uiText }}</p> }
       @if (projectInEditor?.status === 'closed') {
-        <p class="dialog-context">Net time {{ formatDuration(projectInEditor!.closedNetMs) }} · Total elapsed time {{ formatDuration(projectInEditor!.closedGrossMs) }}</p>
+        <p class="dialog-context">{{ 'Net time {0} · Total elapsed time {1}' | uiText: (formatDuration(projectInEditor!.closedNetMs)): (formatDuration(projectInEditor!.closedGrossMs)) }}</p>
       }
       @if (projectEditorLoading) {
-        <div class="board-message"><mat-spinner diameter="28" aria-label="Loading the form"></mat-spinner></div>
+        <div class="board-message"><mat-spinner diameter="28" aria-label="{{ 'Loading the form' | uiText }}"></mat-spinner></div>
       }
       <fieldset class="editor-fields" [disabled]="saving || projectEditorLoading || !editableProject">
-        <label class="full-width">Project name
+        <label class="full-width">{{ 'Project name' | uiText }}
           <input name="projectName" required maxlength="200" [(ngModel)]="projectForm.name" cdkFocusInitial>
         </label>
         @if (projectEditorMode === 'work') {
-          <label class="full-width">Client
+          <label class="full-width">{{ 'Client' | uiText }}
             <select name="client" [(ngModel)]="projectForm.client">
-              <option value="">No client</option>
+              <option value="">{{ 'No client' | uiText }}</option>
               @for (client of clients; track client.id) { <option [value]="client.id">{{ client.name }}</option> }
             </select>
           </label>
-          <label class="full-width">Description
+          <label class="full-width">{{ 'Description' | uiText }}
             <textarea name="description" rows="3" [(ngModel)]="projectForm.note"></textarea>
           </label>
         } @else {
-          <label class="full-width">Client
+          <label class="full-width">{{ 'Client' | uiText }}
             <input name="customer" [(ngModel)]="projectForm.customer">
           </label>
           @if (availableWorks.length) {
-            <label class="full-width">Link to a Project Tracker project
+            <label class="full-width">{{ 'Link to a Project Tracker project' | uiText }}
               <select name="relatedWork" [(ngModel)]="projectForm.work">
-                <option value="">No linked project</option>
+                <option value="">{{ 'No linked project' | uiText }}</option>
                 @if (projectInEditor?.workItemId && !hasWork(projectInEditor!.workItemId!)) {
-                  <option [value]="projectInEditor!.workItemId">{{ projectInEditor!.workItem?.name }} · archived</option>
+                  <option [value]="projectInEditor!.workItemId">{{ '{0} · archived' | uiText: (projectInEditor!.workItem?.name) }}</option>
                 }
                 @for (work of availableWorks; track work.id) { <option [value]="work.id">{{ work.workNumber }} · {{ work.name }}</option> }
               </select>
@@ -337,12 +337,12 @@
         <app-rich-text-editor label="Notes" ariaLabel="Project notes" minHeight="110px"
           [disabled]="saving" [readonly]="!editableProject" [(html)]="projectForm.note"></app-rich-text-editor>
       }
-      @if (editorError) { <p class="editor-error" role="alert">{{ editorError }}</p> }
+      @if (editorError) { <p class="editor-error" role="alert">{{ editorError | uiText }}</p> }
     </mat-dialog-content>
     <mat-dialog-actions align="end">
-      <button type="button" mat-button mat-dialog-close [disabled]="saving">{{ editableProject ? 'Cancel' : 'Close' }}</button>
+      <button type="button" mat-button mat-dialog-close [disabled]="saving">{{ editableProject ? ('Cancel' | uiText) : ('Close' | uiText) }}</button>
       @if (editableProject) {
-        <button type="submit" mat-flat-button color="primary" [disabled]="saving || projectEditorLoading || projectNgForm.invalid">Save</button>
+        <button type="submit" mat-flat-button color="primary" [disabled]="saving || projectEditorLoading || projectNgForm.invalid">{{ 'Save' | uiText }}</button>
       }
     </mat-dialog-actions>
   </form>

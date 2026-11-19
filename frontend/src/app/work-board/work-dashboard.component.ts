@@ -1,3 +1,5 @@
+import { UiLanguageService } from '../i18n/ui-language.service';
+import { UiTextPipe } from '../i18n/ui-text.pipe';
 import { CommonModule } from '@angular/common';
 import { Component, ElementRef, OnInit, ViewChild, computed, inject } from '@angular/core';
 import { MatButtonModule } from '@angular/material/button';
@@ -7,11 +9,12 @@ import { DashboardFilter, DashboardWorks, WorkBoardService } from '../services/w
 import { WorkRateInfoComponent } from './work-rate-info.component';
 
 @Component({
-  imports: [CommonModule, RouterLink, MatButtonModule, WorkRateInfoComponent],
+  imports: [UiTextPipe, CommonModule, RouterLink, MatButtonModule, WorkRateInfoComponent],
   templateUrl: './work-dashboard.component.html',
   styleUrl: './work-dashboard.component.scss'
 })
 export class WorkDashboardComponent implements OnInit {
+  readonly ui = inject(UiLanguageService);
   private readonly board = inject(WorkBoardService);
   readonly dashboardState = this.board.dashboardState;
   private readonly dashboard = computed(() => this.dashboardState().report);

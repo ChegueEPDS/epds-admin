@@ -1,8 +1,10 @@
+import { UiTextPipe } from '../i18n/ui-text.pipe';
 import { AfterViewInit, Component, ElementRef, Input, NgZone, OnDestroy, ViewChild, inject } from '@angular/core';
 
 @Component({
   selector: 'app-epds-atex-panda',
   standalone: true,
+  imports: [UiTextPipe],
   templateUrl: './epds-atex-panda.component.html',
   styleUrl: './epds-atex-panda.component.scss'
 })

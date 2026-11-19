@@ -1,4 +1,4 @@
-<button class="panda-button" type="button" aria-label="Panda animálása" [style.width.px]="size" [style.height.px]="size" (click)="greet()">
+<button class="panda-button" type="button" aria-label="{{ 'Panda animálása' | uiText }}" [style.width.px]="size" [style.height.px]="size" (click)="greet()">
   <span class="panda-stage" aria-hidden="true" [style.--panda-scale]="size / 340">
     <span #rig class="panda-3d-rig">
       <span class="panda-bounce-wrapper">
