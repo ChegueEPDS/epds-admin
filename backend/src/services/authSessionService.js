@@ -4,6 +4,7 @@ const User = require('../models/user');
 const Tenant = require('../models/tenant');
 const Session = require('../models/session');
 const { databaseEngine } = require('../postgres');
+const { checkSession } = require('./mfaPolicy');
 const { repository } = require('../repositories/repositoryRegistry');
 
 const usingPostgres = () => databaseEngine() === 'postgresql';
@@ -167,7 +168,8 @@ async function signAccessToken(user, session) {
   return jwt.sign(payload, mustJwtSecret(), { expiresIn: accessTtl() });
 }
 
-async function createSession({ user, req }) {
+async function createSession({ user, req, mfaVersion = null }) {
+  await checkSession(user, { mfaVersion });
   const refreshToken = randomToken();
   const now = Date.now();
   const absoluteExpiresAt = new Date(now + absoluteTtlMs());
@@ -176,6 +178,7 @@ async function createSession({ user, req }) {
     userId: user._id,
     tenantId: user.tenantId,
     clientType: 'web',
+    mfaVersion,
     refreshTokenHash: hashToken(refreshToken),
     expiresAt,
     absoluteExpiresAt,
@@ -205,6 +208,7 @@ async function rotateRefreshToken({ refreshToken, req }) {
     if (!session) throw new Error('Invalid refresh token');
     const user = await userStore().findById(session.userId);
     if (!user) throw new Error('Invalid session user');
+    await checkSession(user, session);
     if (session.tokenMatch === 'grace') {
       const accessToken = await signAccessToken(user, session);
       return { session, accessToken, refreshToken: null, user: await buildUserContext(user, session), sessionMeta: buildSessionMetadata(session, accessToken) };
@@ -242,6 +246,7 @@ async function rotateRefreshToken({ refreshToken, req }) {
     if (!session) throw new Error('Invalid refresh token');
     const user = await User.findById(session.userId);
     if (!user) throw new Error('Invalid session user');
+    await checkSession(user, session);
     const accessToken = await signAccessToken(user, session);
     return {
       session,
@@ -259,6 +264,7 @@ async function rotateRefreshToken({ refreshToken, req }) {
 
   const user = await User.findById(session.userId);
   if (!user) throw new Error('Invalid session user');
+  await checkSession(user, session);
 
   const nextRefreshToken = randomToken();
   session.previousRefreshTokenHash = refreshHash;
@@ -302,6 +308,7 @@ async function authenticateAccessToken(token) {
     ? await userStore().findById(session.userId)
     : await User.findById(session.userId).lean();
   if (!user) throw new Error('Invalid session user');
+  await checkSession(user, session);
   return { decoded, session, user: await buildUserContext(user, session) };
 }
 

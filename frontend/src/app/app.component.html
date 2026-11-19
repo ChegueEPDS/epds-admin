@@ -168,6 +168,10 @@
         <mat-icon class="material-symbols-outlined">login</mat-icon>
         Login
       </a>
+      <a mat-menu-item *ngIf="auth.isLoggedIn$ | async" routerLink="/profile/security">
+        <mat-icon class="material-symbols-outlined">security</mat-icon>
+        <span>Profile &amp; security</span>
+      </a>
       <button mat-menu-item type="button" *ngIf="auth.isLoggedIn$ | async" (click)="logout()">
         <mat-icon class="material-symbols-outlined">logout</mat-icon>
         Logout
@@ -220,6 +224,10 @@
       {{ auth.getFullName() || 'Profile' }}
     </button>
     <mat-menu #profileMenu="matMenu">
+      <a mat-menu-item routerLink="/profile/security">
+        <mat-icon class="material-symbols-outlined">security</mat-icon>
+        <span>Profile &amp; security</span>
+      </a>
       <button mat-menu-item (click)="logout()">
         <mat-icon class="material-symbols-outlined">logout</mat-icon>
         Logout

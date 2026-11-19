@@ -1,5 +1,5 @@
 import { CommonModule } from '@angular/common';
-import { Component, OnInit, signal } from '@angular/core';
+import { Component, OnInit, TemplateRef, signal } from '@angular/core';
 import { MatButtonModule } from '@angular/material/button';
 import { MatDialog, MatDialogModule } from '@angular/material/dialog';
 import { MatIconModule } from '@angular/material/icon';
@@ -32,6 +32,7 @@ export class AdminUsersComponent implements OnInit {
   tenants = signal<AdminTenant[]>([]);
   loading = signal(false);
   displayedColumns = ['name', 'email', 'role', 'tenant', 'activation', 'lastLogin', 'actions'];
+  sendingRecovery = signal(false);
   sendingInvitation = signal<string | null>(null);
   roles: { value: AssignableRole; label: string }[] = [
     { value: 'User', label: 'User' },
@@ -99,6 +100,29 @@ export class AdminUsersComponent implements OnInit {
 
   canManage(user: AdminUser): boolean {
     return user.role !== 'SuperAdmin' && (this.auth.isSuperAdmin() || user.role === 'User');
+  }
+
+  canRecover(user: AdminUser): boolean {
+    return this.auth.isSuperAdmin() && user.role !== 'SuperAdmin' && user.loginMethod === 'password' && !user.pendingActivation;
+  }
+
+  confirmRecovery(user: AdminUser, template: TemplateRef<unknown>): void {
+    if (!this.canRecover(user) || this.sendingRecovery()) return;
+    this.dialog.open(template, { data: user, width: '460px', autoFocus: 'dialog' })
+      .afterClosed().subscribe((confirmed) => {
+        if (!confirmed || this.sendingRecovery()) return;
+        this.sendingRecovery.set(true);
+        this.admin.sendRecoveryLink(user.id).subscribe({
+          next: () => {
+            this.sendingRecovery.set(false);
+            this.snackBar.open('Recovery link sent.', 'Close', { duration: 4500 });
+          },
+          error: (error) => {
+            this.sendingRecovery.set(false);
+            this.snackBar.open(error?.error?.error || 'Recovery link could not be sent.', 'Close', { duration: 5000 });
+          }
+        });
+      });
   }
 
   invitationStatus(user: AdminUser): string {

@@ -5,7 +5,7 @@ function present(row) {
   if (!row) return null;
   return {
     _id: row.id, id: row.id, userId: row.user_id, tenantId: row.tenant_id,
-    clientType: row.client_type, refreshTokenHash: row.refresh_token_hash,
+    clientType: row.client_type, mfaVersion: row.mfa_version, refreshTokenHash: row.refresh_token_hash,
     previousRefreshTokenHash: row.previous_refresh_token_hash,
     previousRefreshTokenGraceUntil: row.previous_refresh_token_grace_until,
     revokedAt: row.revoked_at, expiresAt: row.expires_at,
@@ -21,12 +21,12 @@ async function create(input, client = null) {
     INSERT INTO sessions
       (id,user_id,tenant_id,client_type,refresh_token_hash,previous_refresh_token_hash,
        previous_refresh_token_grace_until,revoked_at,expires_at,absolute_expires_at,
-       last_seen_at,user_agent,ip,created_at,updated_at)
-    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,coalesce($11,now()),$12,$13,now(),now())
+       last_seen_at,user_agent,ip,mfa_version,created_at,updated_at)
+    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,coalesce($11,now()),$12,$13,$14,now(),now())
     RETURNING *`, [sessionId, String(input.userId), input.tenantId ? String(input.tenantId) : null,
     input.clientType || 'web', input.refreshTokenHash, input.previousRefreshTokenHash || null,
     input.previousRefreshTokenGraceUntil || null, input.revokedAt || null, input.expiresAt,
-    input.absoluteExpiresAt || null, input.lastSeenAt || null, input.userAgent || '', input.ip || '']);
+    input.absoluteExpiresAt || null, input.lastSeenAt || null, input.userAgent || '', input.ip || '', input.mfaVersion || null]);
   return present(result.rows[0]);
 }
 
@@ -77,8 +77,8 @@ async function revoke(id, at = new Date()) {
   return present(result.rows[0]);
 }
 
-async function revokeByUser(userId) {
-  await query('UPDATE sessions SET revoked_at=now(),updated_at=now() WHERE user_id=$1 AND revoked_at IS NULL', [userId]);
+async function revokeByUser(userId, client = { query }) {
+  await client.query('UPDATE sessions SET revoked_at=now(),updated_at=now() WHERE user_id=$1 AND revoked_at IS NULL', [userId]);
 }
 
 async function deleteExpired(now = new Date()) {

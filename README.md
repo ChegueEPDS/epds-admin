@@ -42,6 +42,8 @@ The frontend is published on port `4300` and the API on `4301` by default. Mongo
 
 Before starting the stack, create the host storage directory and make it writable by UID/GID `1000`, which is the unprivileged Node user inside the backend container. In Coolify, define the values from `.env.docker.example` as application environment variables and point `FILE_STORAGE_HOST_PATH` at the HDD mount.
 
+A SuperAdmin első beállítását, az éles jelszócserét, a kétlépcsős hitelesítést és az automatikus fióklevelek konfigurálását a [telepítési útmutató](backend/docs/superadmin-setup.md) írja le.
+
 ## Customer service monitoring
 
 Status JSON and PDF endpoints require the normal authenticated session and `domainHealth` feature access. Customer report queries are constrained by tenant ID, including a selected SuperAdmin tenant context. The legacy `/public/domain-status/:owner` URL is retained for compatibility, but is no longer public. Customer payloads omit service URLs, tenant IDs, health policies, raw errors and PageSpeed diagnostic text. Responses are private and must not be cached by shared proxies. Existing anonymous status links now lead to login.
@@ -50,7 +52,7 @@ Availability and response performance are independent: a successful response exc
 
 The monitor still runs every 15 minutes. Confirmation retries occur within a round (1.5-second intervals), not after another 15-minute wait. Distributed per-domain leases prevent competing manual and scheduled checks. Internal snapshots remain available for background processing, but customer responses are scoped and sanitized independently.
 
-PostgreSQL applies the customer-monitoring upgrade automatically during database connection, before tenant normalization, seeding or background jobs. A transaction, advisory lock and persistent migration marker make this safe across API replicas and restarts. The manual `npm run migrate:domain-customers` command uses the same upgrade. For MongoDB, run that command before starting the updated backend to increase raw-check retention to 400 days and reclassify historical `slow_response` failures as warnings. PostgreSQL cleanup likewise retains 400 days. Existing data already expired under the old 30-day retention cannot be restored; monthly PDFs explicitly report missing coverage. Previously stored daily snapshots/PDFs are not served by the customer endpoint.
+PostgreSQL applies the customer-monitoring upgrade automatically during database connection, before tenant normalization or background jobs. A transaction, advisory lock and persistent migration marker make this safe across API replicas and restarts. The manual `npm run migrate:domain-customers` command uses the same upgrade. For MongoDB, run that command before starting the updated backend to increase raw-check retention to 400 days and reclassify historical `slow_response` failures as warnings. PostgreSQL cleanup likewise retains 400 days. Existing data already expired under the old 30-day retention cannot be restored; monthly PDFs explicitly report missing coverage. Previously stored daily snapshots/PDFs are not served by the customer endpoint.
 
 ### Independent measurement locations
 

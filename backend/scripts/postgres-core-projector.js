@@ -135,6 +135,18 @@ async function projectTenantOwners(client, tenantDocs) {
   }
 }
 
+async function projectLocalMfa(client) {
+  const docs = await sourceDocuments(client, await firstExistingCollection(client, ['localmfas']));
+  for (const doc of docs) {
+    const { login: _login, setup: _setup, registration: _registration, ...state } = doc.state || {};
+    await client.query(`
+      INSERT INTO local_mfa (user_id, revision, state)
+      SELECT id, $2, $3::jsonb FROM users WHERE id=$1
+      ON CONFLICT (user_id) DO UPDATE SET revision=EXCLUDED.revision, state=EXCLUDED.state
+    `, [id(doc._id), doc.revision, JSON.stringify(state)]);
+  }
+}
+
 async function projectSessions(client) {
   const docs = await sourceDocuments(client, await firstExistingCollection(client, ['sessions']));
   for (const doc of docs) await upsert(client, 'sessions', {
@@ -301,6 +313,7 @@ async function projectCore(pool) {
     const tenants = await projectTenants(client); counts.tenants = tenants.length;
     counts.users = (await projectUsers(client)).length;
     await projectTenantOwners(client, tenants);
+    await projectLocalMfa(client);
     counts.sessions = (await projectSessions(client)).length;
     counts.clientCompanies = (await projectClients(client)).length;
     counts.workItems = (await projectWorks(client)).length;

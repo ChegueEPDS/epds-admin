@@ -10,6 +10,8 @@ const express = require('express');
 const cors = require('cors');
 const cookieParser = require('cookie-parser');
 const rateLimit = require('express-rate-limit');
+const { validateEncryptionKey } = require('./services/mfaTotp');
+const { configuredContext } = require('./services/mfaPasskeys');
 const { connectDb, checkDbHealth } = require('./db');
 const authRoutes = require('./routes/authRoutes');
 const adminRoutes = require('./routes/adminRoutes');
@@ -30,7 +32,6 @@ const { startDomainDailyReportScheduler } = require('./services/domainDailyRepor
 const { startDomainPageSpeedScheduler } = require('./services/domainPageSpeedSchedulerService');
 const { startDomainStatusReadModel } = require('./services/domainStatusReadModelService');
 const { startDomainStatusPdfMaintenance } = require('./services/domainStatusPdfCacheService');
-const { seedSuperAdmin } = require('./services/userSeedService');
 const { normalizeTenantTypes } = require('./services/tenantMigrationService');
 const { startWebhookWorker } = require('./services/webhookWorkerService');
 const { startLicenseExpiryScheduler } = require('./services/licenseExpiryService');
@@ -46,6 +47,7 @@ function allowedOrigins() {
 
 app.set('trust proxy', 1);
 app.use(logger.requestLogger);
+app.use(require('./services/securityAudit').record);
 
 app.get('/health/live', (req, res) => {
   res.json({
@@ -114,9 +116,16 @@ app.use((err, req, res, next) => {
 
 if (require.main === module) {
   const port = Number(process.env.PORT || 4301);
-  connectDb()
+  Promise.resolve()
+    .then(() => {
+      if (process.env.NODE_ENV !== 'production') return;
+      validateEncryptionKey();
+      if (!configuredContext()) {
+        throw new Error('Configure the public HTTPS origin with MFA_WEBAUTHN_ORIGIN or EPDS_ADMIN_PUBLIC_URL');
+      }
+    })
+    .then(connectDb)
     .then(() => normalizeTenantTypes())
-    .then(() => seedSuperAdmin())
     .then(() => {
       startDomainNotifications();
       startDomainMonthlyReports();

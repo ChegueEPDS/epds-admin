@@ -1,3 +1,4 @@
+const { financialChange } = require('../services/securityAudit');
 const { lockSubWorkRates } = require('../services/workExchangeRates');
 const { calculatedReporting } = require('../services/workPaymentSummary');
 const mongoose = require('mongoose');
@@ -448,6 +449,7 @@ exports.updateWork = (req, res) => withErrors(res, async () => {
     work.customFields = values;
     return work.save();
   }, { ...payload, ...dates });
+  financialChange(req, previous, work);
   await markMongoDashboardDirty(req.scope);
   const subWorks = await SubWorkItem.find({ ...scopeQuery(req.scope), workItemId: work._id, archivedAt: { $exists: false } }).sort({ sequenceNumber: 1 });
   res.json({ work: presentWork(work, subWorks) });
@@ -510,12 +512,14 @@ exports.updateSubWork = (req, res) => withErrors(res, async () => {
   if (!subWork) throw httpError('Sub-work not found', 404);
   const work = await scopedWork(subWork.workItemId, req.scope);
   const subPayload = subWorkPayload(req.body, work, subWork);
-  const exchangeRates = await lockSubWorkRates(subWork.toObject(), subPayload);
+  const previous = subWork.toObject();
+  const exchangeRates = await lockSubWorkRates(previous, subPayload);
   Object.assign(subWork, subPayload, { exchangeRates, updatedBy: req.userId });
   if (Object.prototype.hasOwnProperty.call(req.body || {}, 'responsibleUserId')) {
     applySubWorkResponsible(subWork, await resolveResponsible(req.body.responsibleUserId, req.scope));
   }
   await subWork.save();
+  financialChange(req, previous, subWork);
   await markMongoDashboardDirty(req.scope);
   res.json({ subWork: presentSubWork(subWork, work) });
 });

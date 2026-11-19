@@ -5,8 +5,53 @@
     </mat-card-header>
 
     <mat-card-content>
+      @if (completedEnrollment?.recoveryCodes; as codes) {
+        <app-recovery-codes [codes]="codes" (done)="finishEnrollment()"/>
+      } @else if (verification; as flow) {
+        <h2>{{ flow.setup ? 'Set up two-step verification' : 'Verify it’s you' }}</h2>
+        <p *ngIf="verificationError" role="alert">{{ verificationError }}</p>
+        @if (flow.setup) {
+          <p>Your role requires two-step verification.</p>
+          @if (verificationSetup; as setup) {
+            <app-mfa-setup [setup]="setup"/>
+          } @else if (isLoading()) {
+            <p role="status">Preparing your authenticator setup…</p>
+          } @else {
+            <button mat-button type="button" (click)="startEnrollment()">Try setup again</button>
+          }
+        }
+        @if (flow.setup ? verificationSetup : verificationMethod !== 'passkey') {
+          <form class="login-form" #codeForm="ngForm" (ngSubmit)="verify()">
+            <mat-form-field appearance="outline">
+              <mat-label>{{ verificationMethod === 'recovery' ? 'Recovery code' : 'Six-digit code' }}</mat-label>
+              <input matInput name="verificationCode" autocomplete="one-time-code" required
+                [attr.inputmode]="verificationMethod === 'recovery' ? 'text' : 'numeric'"
+                [attr.maxlength]="verificationMethod === 'recovery' ? 40 : 6" [(ngModel)]="verificationCode">
+            </mat-form-field>
+            <button mat-flat-button type="submit" [disabled]="isLoading() || codeForm.invalid">Verify code</button>
+          </form>
+        }
+        @if (!flow.setup && verificationMethod === 'passkey') {
+          <p>Use your passkey to finish signing in.</p>
+          <button mat-flat-button type="button" [disabled]="isLoading()" (click)="verify()">Continue with passkey</button>
+        }
+        @if (!flow.setup) {
+          <button mat-button type="button" [disabled]="isLoading()" [attr.aria-expanded]="otherMethods"
+            (click)="otherMethods = !otherMethods">Sign in another way</button>
+          @if (otherMethods) {
+            <div>
+              <button mat-button type="button" [disabled]="isLoading()" (click)="chooseMethod('totp')">Authenticator app</button>
+              <button mat-button type="button" [disabled]="isLoading()" (click)="chooseMethod('recovery')">Recovery code</button>
+              @if (canUsePasskey && verificationMethod !== 'passkey') {
+                <button mat-button type="button" [disabled]="isLoading()" (click)="chooseMethod('passkey')">Passkey</button>
+              }
+            </div>
+          }
+        }
+        <button mat-button type="button" [disabled]="isLoading()" (click)="cancelVerification()">Back to sign in</button>
+      } @else {
       <ng-container *ngIf="linkPurpose; else standardLogin">
-        <h2>{{ linkPurpose === 'invite' ? 'Activate your account' : 'Reset your password' }}</h2>
+        <h2>{{ linkPurpose === 'invite' ? 'Activate your account' : linkPurpose === 'recovery' ? 'Recover your account' : 'Reset your password' }}</h2>
         <p *ngIf="linkError" role="alert">{{ linkError }}</p>
         <p *ngIf="!linkMethod && !linkError" role="status">Checking your invitation…</p>
 
@@ -20,7 +65,7 @@
           <mat-form-field appearance="outline">
             <mat-label>New password</mat-label>
             <input matInput type="password" name="newPassword" autocomplete="new-password"
-              [(ngModel)]="newPassword" minlength="8" maxlength="72" required>
+              [(ngModel)]="newPassword" [minlength]="minimumPasswordLength" maxlength="72" required>
           </mat-form-field>
           <mat-form-field appearance="outline">
             <mat-label>Confirm password</mat-label>
@@ -82,6 +127,7 @@
           </form>
         </ng-template>
       </ng-template>
+      }
     </mat-card-content>
   </mat-card>
 </section>

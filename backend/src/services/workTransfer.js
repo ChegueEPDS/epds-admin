@@ -1,3 +1,4 @@
+const { recordImportedFinancialChanges } = require('./securityAudit');
 const { randomUUID } = require('node:crypto');
 const mongoose = require('mongoose');
 const { databaseEngine, query, withTransaction } = require('../postgres');
@@ -181,6 +182,7 @@ async function importWorks({ scope, actorId, excel, archive, job }) {
     await deleteFiles(uploaded);
     return rejected(job, workbook, sheet, conflicts);
   }
+  await recordImportedFinancialChanges(scope, actorId, rows);
   await deleteFiles(rows.flatMap((row) => row.retired));
   if (!isPostgres()) await markMongoDashboardDirty(scope);
   const created = rows.filter((row) => !row.id).length;

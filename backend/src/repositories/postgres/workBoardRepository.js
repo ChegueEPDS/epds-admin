@@ -264,7 +264,7 @@ const SUB_MUTABLE = new Map([
   ['invoiceDate','invoice_date'],['invoicePaymentDeadline','invoice_payment_deadline'],['paidAmount','paid_amount'],['paidAt','paid_at']
 ]);
 
-async function updateSubWork(tenantId, subWorkId, actorId, input) {
+async function updateSubWork(tenantId, subWorkId, actorId, input, onChange) {
   return withTransaction(async (client) => {
     const found = await client.query('SELECT * FROM sub_work_items WHERE id=$1 AND tenant_id=$2 AND archived_at IS NULL FOR UPDATE', [subWorkId, tenantId]);
     const previous = subWork(found.rows[0]);
@@ -282,7 +282,9 @@ async function updateSubWork(tenantId, subWorkId, actorId, input) {
     params.push(JSON.stringify(exchangeRates)); sets.push(`exchange_rates=$${params.length}::jsonb`);
     params.push(actorId); sets.push(`updated_by=$${params.length}`, 'updated_at=now()');
     const result = await client.query(`UPDATE sub_work_items SET ${sets.join(',')} WHERE id=$1 AND tenant_id=$2 AND archived_at IS NULL RETURNING *`, params);
-    return subWork(result.rows[0]);
+    const updated = subWork(result.rows[0]);
+    if (updated) onChange?.(previous, updated);
+    return updated;
   });
 }
 

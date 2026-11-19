@@ -15,11 +15,11 @@ function isBackendUrl(req: HttpRequest<unknown>): boolean {
   }
 }
 
-function isGlobalAdministrationRequest(req: HttpRequest<unknown>): boolean {
+function isGlobalRequest(req: HttpRequest<unknown>): boolean {
   try {
-    return new URL(req.url, window.location.origin).pathname.includes('/api/admin/');
+    return new URL(req.url, window.location.origin).pathname.match(/\/api\/(admin|auth)\//) !== null;
   } catch {
-    return req.url.includes('/api/admin/');
+    return /\/api\/(admin|auth)\//.test(req.url);
   }
 }
 
@@ -39,7 +39,7 @@ export const authInterceptor: HttpInterceptorFn = (req, next) => {
       setHeaders['X-CSRF-Token'] = decodeURIComponent(csrf);
     }
     const tenantContext = injector.get(AuthService).getTenantContextId();
-    if (tenantContext && !isGlobalAdministrationRequest(req)) {
+    if (tenantContext && !isGlobalRequest(req)) {
       setHeaders['X-Tenant-Context'] = tenantContext;
     }
 

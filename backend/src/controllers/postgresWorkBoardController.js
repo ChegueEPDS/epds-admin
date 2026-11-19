@@ -1,3 +1,4 @@
+const { financialChange } = require('../services/securityAudit');
 const { calculatedReporting } = require('../services/workPaymentSummary');
 const crypto = require('crypto');
 const { pipeline } = require('stream/promises');
@@ -72,6 +73,7 @@ exports.updateWork=(req,res)=>run(res,async()=>{const input={...req.body};if(Obj
     if (!result) throw fail('The work changed. Reload and try again.', 409);
     return result;
   });
+  financialChange(req, existing, updated);
   res.json({ work: presentWork({ ...updated, subWorks: existing.subWorks }) });
 });
 exports.downloadCustomField = (req, res) => run(res, async () => {
@@ -82,7 +84,14 @@ exports.downloadCustomField = (req, res) => run(res, async () => {
 exports.archiveWork=(req,res)=>run(res,async()=>{if(!await store.archiveWork(req.scope.tenantId,req.params.id,req.userId))throw fail('Work not found',404);res.status(204).end();});
 exports.restoreWork=(req,res)=>run(res,async()=>{const w=await store.restoreWork(req.scope.tenantId,req.params.id,req.userId);if(!w)throw fail('Work not found',404);res.json({work:presentWork(await store.findWork(req.scope.tenantId,w.id))});});
 exports.createSubWork=(req,res)=>run(res,async()=>{if(!clean(req.body?.name))throw fail('Sub-work name is required');const s=await store.createSubWork(req.scope.tenantId,req.params.id,req.userId,req.body);if(!s)throw fail('Work not found',404);const w=await store.findWork(req.scope.tenantId,req.params.id);res.status(201).json({subWork:presentSub(s,w)});});
-exports.updateSubWork=(req,res)=>run(res,async()=>{const s=await store.updateSubWork(req.scope.tenantId,req.params.subWorkId,req.userId,req.body);if(!s)throw fail('Sub-work not found',404);const w=await store.findWork(req.scope.tenantId,s.workItemId);res.json({subWork:presentSub(s,w)});});
+exports.updateSubWork = (req, res) => run(res, async () => {
+  const tenantId = req.scope.tenantId;
+  const updated = await store.updateSubWork(tenantId, req.params.subWorkId, req.userId, req.body,
+    (before, after) => financialChange(req, before, after, tenantId));
+  if (!updated) throw fail('Sub-work not found', 404);
+  const work = await store.findWork(tenantId, updated.workItemId);
+  res.json({ subWork: presentSub(updated, work) });
+});
 exports.archiveSubWork=(req,res)=>run(res,async()=>{if(!await store.archiveSubWork(req.scope.tenantId,req.params.subWorkId,req.userId))throw fail('Sub-work not found',404);res.status(204).end();});
 exports.listClients=(req,res)=>run(res,async()=>res.json({clients:(await store.listClients(req.scope.tenantId)).map(presentClient)}));
 exports.lookupClientByTaxNumber=(req,res)=>run(res,async()=>{const n=normalizeTaxNumber(req.query.taxNumber);if(!n)throw fail('Tax number is required');const c=await store.findClientByTaxNumber(n);res.json({client:presentClient(c),linked:c?await store.isClientLinked(c.id,req.scope.tenantId):false});});

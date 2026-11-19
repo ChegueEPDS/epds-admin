@@ -5,6 +5,7 @@ import { BehaviorSubject, Observable, of, startWith, switchMap } from 'rxjs';
 import { catchError, distinctUntilChanged, finalize, map, shareReplay, tap } from 'rxjs/operators';
 import { environment } from '../../environments/environment';
 import { MsalService } from '@azure/msal-angular';
+import type { MfaChallenge } from '../security/mfa-api.service';
 import { loginRequest } from './msal.config';
 
 export type TenantFeatureKey = 'mail' | 'domainHealth' | 'licenses' | 'workBoard' | 'effortTracking' | 'webhookTester';
@@ -50,9 +51,11 @@ type SessionMeta = {
   serverNow?: string | null;
 };
 
-type AuthResponse = {
+export type AuthResponse = {
   user: AuthUser | null;
   session?: SessionMeta | null;
+  verification?: MfaChallenge;
+  recoveryCodes?: string[];
 };
 
 const FEATURE_ROUTES: Record<TenantFeatureKey, string> = {
@@ -167,19 +170,18 @@ export class AuthService {
     this.navigatePostLogin();
   }
 
-  loginWithPassword(email: string, password: string): Observable<AuthUser | null> {
+  loginWithPassword(email: string, password: string): Observable<AuthResponse> {
     return this.http.post<AuthResponse>(
       `${this.baseUrl}/login`,
       { email, password },
       { withCredentials: true, headers: { 'X-No-Redirect-On-401': '1' } }
-    ).pipe(
-      tap((res) => this.applyUser(res?.user || null)),
-      map((res) => {
-        if (!res?.user) throw new Error('Login did not return a user');
-        this.navigatePostLogin();
-        return res.user;
-      })
     );
+  }
+
+  completePasswordLogin(response: AuthResponse): void {
+    if (!response.user) return;
+    this.applyUser(response.user);
+    this.navigatePostLogin();
   }
 
   logout(): void {
@@ -215,7 +217,7 @@ export class AuthService {
 
   navigatePostLogin(): void {
     const requestedTarget = this.getRedirectUrl() || '/home';
-    const target = this.isFinanceTenant() || requestedTarget === '/home'
+    const target = (this.isFinanceTenant() && requestedTarget !== '/profile/security') || requestedTarget === '/home'
       ? this.defaultRouteAfterLogin()
       : requestedTarget;
     this.clearRedirectUrl();

@@ -1,7 +1,10 @@
+const { canRecover, completeRecovery } = require('../services/accountRecovery');
 const bcrypt = require('bcryptjs');
 const accounts = require('../services/accountStore');
 const { tokenAccount, sendAccountLink, clearToken, normalizeEmail, validEmail, validPassword } = require('../services/accountInvitations');
-const { SUPERADMIN_EMAIL } = require('../services/userSeedService');
+const { beginLogin } = require('./mfaController');
+const { isLocal } = require('../services/mfaPolicy');
+const { SUPERADMIN_EMAIL } = require('../services/accountRoles');
 const { verifyMicrosoftAccessToken } = require('../services/microsoftTokenVerifier');
 const {
   buildSessionMetadata,
@@ -29,7 +32,8 @@ exports.invitationDetails = async (req, res, next) => {
   try {
     const user = await tokenAccount(req.body?.account, req.body?.token, 'invite');
     if (!user || user.emailVerified || !await hasTenant(user)) return invalidInvitation(res);
-    res.set('Cache-Control', 'no-store').json({ loginMethod: user.loginMethod, email: user.email });
+    res.set('Cache-Control', 'no-store').json({ loginMethod: user.loginMethod, email: user.email,
+      ...(user.role === 'SuperAdmin' ? { minimumPasswordLength: 16 } : {}) });
   } catch (error) { next(error); }
 };
 
@@ -65,7 +69,7 @@ exports.microsoftLogin = async (req, res, next) => {
       if (!user) return invalidInvitation(res);
     } else {
       const linked = await accounts.findMicrosoft(azureId);
-      if (!linked || (linked.microsoftTenantId && linked.microsoftTenantId !== claims.tid)) {
+      if (!linked || linked.loginMethod === 'password' || (linked.microsoftTenantId && linked.microsoftTenantId !== claims.tid)) {
         return res.status(403).json({ error: 'This Microsoft account needs an invitation from your administrator.' });
       }
       if (!await hasTenant(linked)) return res.status(403).json({ error: 'Ask your administrator to assign a tenant.' });
@@ -91,11 +95,15 @@ exports.login = async (req, res, next) => {
     if (!email || typeof password !== 'string' || !password) return denied();
 
     const account = await accounts.findEmail(email);
-    if (!account?.password || (account.loginMethod && !account.emailVerified) || account.loginMethod === 'microsoft' ||
+    if (!account?.password || (account.loginMethod && !account.emailVerified) || !isLocal(account) ||
         !await bcrypt.compare(password, account.password)) return denied();
     if (!await hasTenant(account)) return res.status(403).json({ error: 'Ask your administrator to assign a tenant.' });
+    const verification = await beginLogin(account, req);
+    if (verification?.retry) return res.status(409).json({ error: 'Sign-in changed in another window. Please try again.' });
+    if (verification) return res.set('Cache-Control', 'no-store').json({ verification });
     const user = await accounts.updateAccount({
-      _id: String(account._id), email, password: account.password, tenantId: account.tenantId
+      _id: String(account._id), email, password: account.password, tenantId: account.tenantId,
+      role: account.role, loginMethod: account.loginMethod
     }, { lastLoginAt: new Date() });
     if (!user) return denied();
     return sendAuthResult(req, res, await createSession({ user, req }));
@@ -106,7 +114,8 @@ exports.requestPasswordReset = async (req, res, next) => {
   try {
     const email = normalizeEmail(req.body?.email);
     const user = validEmail(email) && email !== SUPERADMIN_EMAIL ? await accounts.findEmail(email) : null;
-    if (user?.password && user.loginMethod !== 'microsoft' && await hasTenant(user)) {
+    const pendingRecovery = user?.accountTokenPurpose === 'recovery' && new Date(user.accountTokenExpiresAt) > new Date();
+    if (!pendingRecovery && user?.password && user.role !== 'SuperAdmin' && user.loginMethod !== 'microsoft' && await hasTenant(user)) {
       sendAccountLink(user, 'reset').catch(() => {});
     }
     return res.json({ ok: true });
@@ -117,16 +126,33 @@ exports.setPassword = async (req, res, next) => {
   try {
     const { account, token, purpose, password } = req.body || {};
     if (!validPassword(password)) return res.status(400).json({ error: 'Use at least 8 characters and at most 72 UTF-8 bytes.' });
+    if (purpose === 'recovery') {
+      const user = await tokenAccount(account, token, purpose);
+      if (!canRecover(user) || !await hasTenant(user)) return invalidInvitation(res);
+      if (await bcrypt.compare(password, user.password)) {
+        return res.status(400).json({ error: 'Choose a different password from your previous password.' });
+      }
+      if (!await completeRecovery(user, await bcrypt.hash(password, 12))) return invalidInvitation(res);
+      req.userId = String(user._id);
+      req.role = user.role;
+      req.securityAudit = { action: 'account.recovered', tenantId: String(user.tenantId), targetId: String(user._id) };
+      return res.set('Cache-Control', 'no-store').json({ ok: true });
+    }
     if (!['invite', 'reset'].includes(purpose)) return invalidInvitation(res);
     const user = await tokenAccount(account, token, purpose);
     if (!user || !await hasTenant(user) || (purpose === 'invite'
       ? user.loginMethod !== 'password' || user.emailVerified
-      : !user.password || user.loginMethod === 'microsoft' || user.email === SUPERADMIN_EMAIL)) {
+      : !user.password || user.loginMethod === 'microsoft' || user.role === 'SuperAdmin' || user.email === SUPERADMIN_EMAIL)) {
       return invalidInvitation(res);
     }
 
+    if (user.role === 'SuperAdmin' && password.length < 16) {
+      return res.status(400).json({ error: 'Use at least 16 characters and at most 72 UTF-8 bytes.' });
+    }
+
     const saved = await accounts.updateAccount({
-      _id: account, email: user.email, tenantId: user.tenantId, accountTokenHash: user.accountTokenHash,
+      _id: account, email: user.email, role: user.role, loginMethod: user.loginMethod,
+      tenantId: user.tenantId, accountTokenHash: user.accountTokenHash,
       emailVerified: user.emailVerified, password: user.password || null
     }, { ...clearToken, password: await bcrypt.hash(password, 12), emailVerified: true }, { liveToken: true });
     if (!saved) return invalidInvitation(res);

@@ -18,6 +18,7 @@ router.get('/admin/users', userManager, accounts.listUsers);
 router.get('/admin/users/tenant-options', userManager, accounts.tenantOptions);
 router.post('/admin/users', userManager, accounts.createUser);
 router.post('/admin/users/:id/invitation', userManager, accounts.resend);
+router.post('/admin/users/:id/recovery', superAdminOnly, accounts.recoverAccount);
 router.patch('/admin/users/:id', userManager, accounts.updateUser);
 router.patch('/admin/users/:id/role', userManager, accounts.updateUserRole);
 router.get('/admin/tenants', superAdminOnly, controller.listTenants);

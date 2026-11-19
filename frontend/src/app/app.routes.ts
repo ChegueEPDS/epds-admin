@@ -66,6 +66,8 @@ export const routes: Routes = [
       }
     ]
   },
+  { path: 'profile/security', canActivate: [AuthGuard],
+    loadComponent: () => import('./security/security-profile.component').then((m) => m.SecurityProfileComponent) },
   { path: 'settings/work-fields', loadComponent: () => import('./work-board/work-field-settings.component').then((m) => m.WorkFieldSettingsComponent),
     canActivate: [AuthGuard], data: { requiresWorkFieldAdmin: true } },
   { path: 'admin/users', component: AdminUsersComponent, canActivate: [AuthGuard], data: { requiresUserManager: true } },

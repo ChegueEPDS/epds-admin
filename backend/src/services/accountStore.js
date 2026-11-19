@@ -14,9 +14,9 @@ const columns = {
   accountTokenExpiresAt: 'account_token_expires_at', lastLoginAt: 'last_login_at'
 };
 
-async function updateAccount(where, changes, { liveToken = false } = {}) {
+async function updateAccount(where, changes, { liveToken = false, client, session } = {}) {
   const matched = liveToken ? { ...where, accountTokenExpiresAt: { $gt: new Date() } } : where;
-  if (!postgres()) return User.findOneAndUpdate(matched, { $set: changes }, { new: true });
+  if (!postgres()) return User.findOneAndUpdate(matched, { $set: changes }, { new: true, session });
 
   const parameters = [];
   const bind = (value) => {
@@ -28,7 +28,7 @@ async function updateAccount(where, changes, { liveToken = false } = {}) {
     ? `${columns[key]} IS NULL`
     : `${columns[key]}=${bind(value)}`);
   if (liveToken) predicates.push('account_token_expires_at>now()');
-  const result = await query(
+  const result = await (client || { query }).query(
     `UPDATE users SET ${assignments.join(',')},updated_at=now() WHERE ${predicates.join(' AND ')} RETURNING *`,
     parameters
   );

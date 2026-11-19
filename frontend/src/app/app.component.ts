@@ -4,6 +4,9 @@ import { FormsModule } from '@angular/forms';
 import { NavigationEnd, Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
+import { MatDialog, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
+import { MfaApi } from './security/mfa-api.service';
+import { MfaRecommendationComponent } from './security/mfa-recommendation.component';
 import { MatMenuModule } from '@angular/material/menu';
 import { MatToolbarModule } from '@angular/material/toolbar';
 import { MatTooltipModule } from '@angular/material/tooltip';
@@ -24,6 +27,7 @@ import { ThemeService } from './services/theme.service';
     MatButtonModule,
     MatIconModule,
     MatMenuModule,
+    MatDialogModule,
     MatToolbarModule,
     MatTooltipModule
   ],
@@ -36,12 +40,16 @@ export class AppComponent {
   tenants: AdminTenant[] = [];
   tenantContextId = '';
   private tenantListLoaded = false;
+  private recommendationUser?: string;
+  private recommendation?: MatDialogRef<MfaRecommendationComponent, boolean>;
 
   constructor(
     public auth: AuthService,
     public theme: ThemeService,
     private admin: AdminService,
-    private router: Router
+    private router: Router,
+    private mfa: MfaApi,
+    private dialog: MatDialog
   ) {
     this.currentUrl = this.router.url;
     this.isPublicRoute = this.isPublicPath(this.currentUrl);
@@ -52,6 +60,13 @@ export class AppComponent {
         this.isPublicRoute = this.isPublicPath(this.currentUrl);
       });
     this.auth.user$.subscribe((user) => {
+      if (!user) {
+        this.recommendationUser = undefined;
+        this.recommendation?.close();
+      } else if (user.role === 'User') {
+        const id = user.id || user.userId;
+        if (id && this.recommendationUser !== id) void this.recommendMfa(id);
+      }
       if (user?.role === 'SuperAdmin' && !this.tenantListLoaded) this.loadTenantContexts();
       if (user?.role !== 'SuperAdmin') {
         this.tenants = [];
@@ -59,6 +74,22 @@ export class AppComponent {
         this.tenantListLoaded = false;
       }
     });
+  }
+
+  private async recommendMfa(id: string): Promise<void> {
+    this.recommendationUser = id;
+    try {
+      const status = await this.mfa.status();
+      if (this.recommendationUser !== id || !status.available || status.enabled || status.recommendationDismissed ||
+          this.router.url.startsWith('/profile/security')) return;
+      this.recommendation = this.dialog.open(MfaRecommendationComponent, { width: '460px' });
+      this.recommendation.afterClosed().subscribe((openSettings) => {
+        this.recommendation = undefined;
+        if (openSettings) void this.router.navigate(['/profile/security']);
+      });
+    } catch {
+      // A failed recommendation request does not interrupt access to the workspace.
+    }
   }
 
   private loadTenantContexts(): void {

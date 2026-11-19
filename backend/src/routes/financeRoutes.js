@@ -1,3 +1,4 @@
+const { financialChange } = require('../services/securityAudit');
 const express = require('express');
 const mongoose = require('mongoose');
 const Tenant = require('../models/tenant');
@@ -189,6 +190,7 @@ router.patch('/finance/tenants/:tenantId/works/:id', handle(async (req, res) => 
   const tenant = await target(req);
   const tenantId = String(tenant._id);
   const work = await findWork(tenantId, req.params.id);
+  const original = pg() ? work : work.toObject();
   const changes = await billingChanges(req.body, work);
   let updated;
   if (pg()) {
@@ -199,10 +201,7 @@ router.patch('/finance/tenants/:tenantId/works/:id', handle(async (req, res) => 
     updated = await work.save();
     await markMongoDashboardDirty({ tenantId, tenantType: tenant.type });
   }
-  console.info('[finance] updated work', {
-    actorId: req.userId, tenantId, workId: String(work._id),
-    fields: Object.keys(changes).filter((key) => key !== 'reporting')
-  });
+  financialChange(req, original, updated, tenantId);
   const subWorks = await financeSubWorks(tenantId, work);
   res.json({ work: presentWork(updated, subWorks) });
 }));

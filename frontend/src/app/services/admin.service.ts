@@ -133,6 +133,10 @@ export class AdminService {
     ).pipe(map((res) => res.user));
   }
 
+  sendRecoveryLink(userId: string): Observable<{ ok: boolean }> {
+    return this.http.post<{ ok: boolean }>(`${this.baseUrl}/users/${encodeURIComponent(userId)}/recovery`, {});
+  }
+
   updateUserRole(userId: string, role: AssignableRole): Observable<AdminUser> {
     return this.http.patch<{ user: AdminUser }>(
       `${this.baseUrl}/users/${encodeURIComponent(userId)}/role`,

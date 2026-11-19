@@ -16,22 +16,34 @@ function ensureLogDir() {
   }
 }
 
-function normalizeArg(arg) {
+const secretField = /password|secret|token|authorization|cookie|credential|api[_-]?key|private[_-]?key|recovery.?code/i;
+
+function redactText(value) {
+  return value
+    .replace(/(?:https?|postgres(?:ql)?|mongodb(?:\+srv)?):\/\/[^\s"'<>]+/gi, '[redacted URL]')
+    .replace(/\/webhook-test\/inboxes\/[^\s/?#"'<>]+/gi, '/webhook-test/inboxes/[redacted]')
+    .replace(/\bBearer\s+[A-Za-z0-9._~+/=-]+/gi, 'Bearer [redacted]');
+}
+
+function normalizeArg(arg, depth = 0) {
   if (arg instanceof Error) {
     return {
       name: arg.name,
-      message: arg.message,
-      stack: arg.stack,
       code: arg.code,
       statusCode: arg.statusCode
     };
   }
-  return arg;
+  if (typeof arg === 'string') return redactText(arg);
+  if (arg === null || typeof arg !== 'object' || arg instanceof Date) return arg;
+  if (depth >= 5 || Buffer.isBuffer(arg)) return '[redacted]';
+  if (Array.isArray(arg)) return arg.map((item) => normalizeArg(item, depth + 1));
+  return Object.fromEntries(Object.entries(arg).map(([key, value]) =>
+    [key, secretField.test(key) ? '[redacted]' : normalizeArg(value, depth + 1)]));
 }
 
 function formatLine(level, args) {
   const message = args
-    .map((arg) => typeof arg === 'string' ? arg : util.inspect(normalizeArg(arg), { depth: 5, breakLength: 160 }))
+    .map((arg) => typeof arg === 'string' ? redactText(arg) : util.inspect(normalizeArg(arg), { depth: 5, breakLength: 160 }))
     .join(' ');
   return `${new Date().toISOString()} ${level.toUpperCase()} ${message}\n`;
 }
@@ -77,19 +89,19 @@ function patchConsole() {
 
   console.log = (...args) => {
     info(...args);
-    original.log(...args);
+    original.log(...args.map((arg) => normalizeArg(arg)));
   };
   console.info = (...args) => {
     info(...args);
-    original.info(...args);
+    original.info(...args.map((arg) => normalizeArg(arg)));
   };
   console.warn = (...args) => {
     warn(...args);
-    original.warn(...args);
+    original.warn(...args.map((arg) => normalizeArg(arg)));
   };
   console.error = (...args) => {
     error(...args);
-    original.error(...args);
+    original.error(...args.map((arg) => normalizeArg(arg)));
   };
 }
 
@@ -103,7 +115,7 @@ function requestLogger(req, res, next) {
 
     const payload = {
       method: req.method,
-      path: req.originalUrl || req.url,
+      route: typeof req.route?.path === 'string' ? req.route.path : undefined,
       status: res.statusCode,
       durationMs,
       responseBytes: Number(res.getHeader('content-length')) || undefined,

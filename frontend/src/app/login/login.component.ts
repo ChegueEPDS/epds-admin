@@ -10,7 +10,10 @@ import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatIconModule } from '@angular/material/icon';
 import { MatInputModule } from '@angular/material/input';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
-import { AuthService } from '../services/auth.service';
+import { MfaApi, MfaChallenge, MfaSetup, mfaError } from '../security/mfa-api.service';
+import { MfaSetupComponent } from '../security/mfa-setup.component';
+import { RecoveryCodesComponent } from '../security/recovery-codes.component';
+import { AuthResponse, AuthService } from '../services/auth.service';
 
 @Component({
   selector: 'app-login',
@@ -24,7 +27,9 @@ import { AuthService } from '../services/auth.service';
     MatFormFieldModule,
     MatIconModule,
     MatInputModule,
-    MatSnackBarModule
+    MatSnackBarModule,
+    MfaSetupComponent,
+    RecoveryCodesComponent
   ],
   templateUrl: './login.component.html',
   styleUrl: './login.component.scss'
@@ -33,6 +38,13 @@ export class LoginComponent {
   isLoading = signal(false);
   isShaking = signal(false);
   readonly passwordFormOpen = signal(false);
+  verification?: MfaChallenge;
+  verificationSetup?: MfaSetup;
+  verificationMethod: 'passkey' | 'totp' | 'recovery' = 'totp';
+  otherMethods = false;
+  verificationCode = '';
+  verificationError = '';
+  completedEnrollment?: AuthResponse;
   email = '';
   password = '';
   newPassword = '';
@@ -41,14 +53,16 @@ export class LoginComponent {
   notice = '';
   linkError = '';
   linkMethod: 'microsoft' | 'password' | null = null;
-  linkPurpose: 'invite' | 'reset' | null = null;
+  linkPurpose: 'invite' | 'reset' | 'recovery' | null = null;
   private linkToken = '';
   private linkAccount = '';
+  minimumPasswordLength = 8;
   private invitationEmail = '';
   private readonly api = environment.apiBaseUrl;
 
   constructor(
     private auth: AuthService,
+    private mfa: MfaApi,
     private route: ActivatedRoute,
     private snackBar: MatSnackBar,
     private http: HttpClient,
@@ -58,14 +72,15 @@ export class LoginComponent {
       this.notice = '';
       this.linkError = '';
       this.linkMethod = null;
+      this.minimumPasswordLength = 8;
       this.newPassword = '';
       this.confirmPassword = '';
       const link = new URLSearchParams(fragment || '');
-      this.linkPurpose = link.has('invite') ? 'invite' : link.has('reset') ? 'reset' : null;
+      this.linkPurpose = link.has('invite') ? 'invite' : link.has('reset') ? 'reset' : link.has('recovery') ? 'recovery' : null;
       this.linkAccount = link.get('account') || '';
       this.linkToken = this.linkPurpose ? link.get(this.linkPurpose) || '' : '';
       if (this.linkPurpose === 'invite') this.loadInvitation();
-      if (this.linkPurpose === 'reset') this.linkMethod = 'password';
+      if (this.linkPurpose === 'reset' || this.linkPurpose === 'recovery') this.linkMethod = 'password';
       const returnUrl = this.route.snapshot.queryParamMap.get('returnUrl');
       if (!this.linkPurpose && returnUrl) this.auth.setRedirectUrl(returnUrl);
     });
@@ -90,13 +105,14 @@ export class LoginComponent {
 
   private loadInvitation(): void {
     const token = this.linkToken;
-    this.http.post<{ loginMethod: 'microsoft' | 'password'; email: string }>(
+    this.http.post<{ loginMethod: 'microsoft' | 'password'; email: string; minimumPasswordLength?: number }>(
       `${this.api}/auth/invitation`, { account: this.linkAccount, token }
     ).subscribe({
       next: (result) => {
         if (token !== this.linkToken) return;
         this.linkMethod = result.loginMethod;
         this.invitationEmail = result.email;
+        this.minimumPasswordLength = result.minimumPasswordLength ?? 8;
       },
       error: (error) => {
         if (token === this.linkToken) this.linkError = error?.error?.error || 'Unable to open the invitation.';
@@ -148,7 +164,17 @@ export class LoginComponent {
     if (this.isLoading() || !this.passwordFormOpen()) return;
     this.isLoading.set(true);
     this.auth.loginWithPassword(this.email, this.password).subscribe({
-      next: () => this.isLoading.set(false),
+      next: (response) => {
+        this.isLoading.set(false);
+        this.password = '';
+        if (!response.verification) {
+          this.auth.completePasswordLogin(response);
+          return;
+        }
+        this.verification = response.verification;
+        this.verificationMethod = this.canUsePasskey ? 'passkey' : 'totp';
+        if (response.verification.setup) void this.startEnrollment();
+      },
       error: (error) => {
         this.isLoading.set(false);
         this.isShaking.set(true);
@@ -157,4 +183,65 @@ export class LoginComponent {
       }
     });
   }
+
+  get canUsePasskey(): boolean {
+    return Boolean(this.verification?.passkey && window.isSecureContext && window.PublicKeyCredential);
+  }
+
+  private async runVerification(action: () => Promise<void>): Promise<void> {
+    if (this.isLoading()) return;
+    this.isLoading.set(true);
+    this.verificationError = '';
+    try {
+      await action();
+    } catch (error) {
+      this.verificationError = mfaError(error, 'We could not complete verification. Please try again.');
+    } finally {
+      this.isLoading.set(false);
+    }
+  }
+
+  async startEnrollment(): Promise<void> {
+    const flow = this.verification;
+    if (!flow) return;
+    await this.runVerification(async () => {
+      this.verificationSetup = await this.mfa.post<MfaSetup>('login/setup', flow);
+    });
+  }
+
+  async verify(): Promise<void> {
+    const flow = this.verification;
+    if (!flow) return;
+    await this.runVerification(async () => {
+      const method = this.verificationMethod;
+      const response = method === 'passkey' && !flow.setup ? await this.mfa.authenticate(flow) : undefined;
+      const result = await this.mfa.post<AuthResponse>(flow.setup ? 'login/confirm' : 'login/verify',
+        { ...flow, method, response, code: this.verificationCode });
+      this.verificationCode = '';
+      this.verificationSetup = undefined;
+      if (result.recoveryCodes?.length) this.completedEnrollment = result;
+      else this.auth.completePasswordLogin(result);
+    });
+  }
+
+  chooseMethod(method: 'passkey' | 'totp' | 'recovery'): void {
+    this.verificationMethod = method;
+    this.verificationCode = '';
+    this.verificationError = '';
+    this.otherMethods = false;
+  }
+
+  cancelVerification(): void {
+    this.verification = undefined;
+    this.verificationSetup = undefined;
+    this.otherMethods = false;
+    this.verificationCode = '';
+    this.verificationError = '';
+  }
+
+  finishEnrollment(): void {
+    if (this.completedEnrollment) this.auth.completePasswordLogin(this.completedEnrollment);
+    this.completedEnrollment = undefined;
+  }
+
 }

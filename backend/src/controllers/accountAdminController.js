@@ -1,6 +1,8 @@
+const { tagChange } = require('../services/securityAudit');
+const { canRecover, recoveryAvailable } = require('../services/accountRecovery');
 const accounts = require('../services/accountStore');
 const { sendAccountLink, clearToken, normalizeEmail, validEmail } = require('../services/accountInvitations');
-const { ASSIGNABLE_ROLES, SUPERADMIN_EMAIL } = require('../services/userSeedService');
+const { ASSIGNABLE_ROLES, SUPERADMIN_EMAIL } = require('../services/accountRoles');
 
 function present(user, tenant = user.tenantId) {
   return {
@@ -69,7 +71,7 @@ exports.resend = async (req, res, next) => {
   try {
     const user = await accounts.findById(req.params.id);
     if (!user || !canManage(req, user)) return res.status(404).json({ error: 'User not found.' });
-    if (!user.loginMethod || user.emailVerified || !await accounts.findTenant(user.tenantId)) {
+    if (user.role === 'SuperAdmin' || !user.loginMethod || user.emailVerified || !await accounts.findTenant(user.tenantId)) {
       return res.status(409).json({ error: 'This account has no pending invitation.' });
     }
     if (!await sendInvite(user)) return res.status(503).json({ error: 'Invitation could not be sent. Please retry.' });
@@ -105,6 +107,7 @@ async function editUser(req, res, next, onlyRole) {
       _id: req.params.id, tenantId: user.tenantId, role: user.role, email: user.email, azureId: user.azureId || null
     }, changes);
     if (!saved) return res.status(409).json({ error: 'User changed. Reload and try again.' });
+    tagChange(req, 'account.role_or_tenant_changed', user, saved, ['role', 'tenantId'], tenantId);
     return res.json({ user: present(saved, tenant) });
   } catch (error) { return finishError(error, res, next); }
 }
@@ -119,5 +122,25 @@ exports.tenantOptions = async (req, res, next) => {
     return res.json({ tenants: tenant ? [{
       id: String(tenant._id), name: tenant.name, displayName: tenant.displayName, type: tenant.type
     }] : [] });
+  } catch (error) { next(error); }
+};
+
+exports.recoverAccount = async (req, res, next) => {
+  try {
+    const user = await accounts.findById(req.params.id);
+    if (!user) return res.status(404).json({ error: 'User not found.' });
+    if (!canRecover(user) || !await accounts.findTenant(user.tenantId)) {
+      return res.status(409).json({ error: 'Only active local accounts can be recovered here.' });
+    }
+    if (user.accountTokenPurpose === 'recovery' && new Date(user.accountTokenExpiresAt) > new Date(Date.now() + 29 * 60000)) {
+      return res.status(429).json({ error: 'A recovery link was just sent. Wait one minute before sending another.' });
+    }
+    if (!await recoveryAvailable()) {
+      return res.status(503).json({ error: 'Account recovery requires a transaction-capable database.' });
+    }
+    const sent = await sendAccountLink(user, 'recovery').catch(() => false);
+    if (!sent) return res.status(503).json({ error: 'Recovery link could not be sent. Check mail delivery and try again.' });
+    req.securityAudit = { action: 'account.recovery_sent', tenantId: String(user.tenantId) };
+    return res.json({ ok: true });
   } catch (error) { next(error); }
 };

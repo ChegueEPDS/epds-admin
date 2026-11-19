@@ -55,6 +55,10 @@
           [disabled]="!!sendingInvitation()" (click)="resendInvitation(user)">
           <mat-icon class="material-symbols-outlined">send</mat-icon>
         </button>
+        <button *ngIf="canRecover(user)" mat-icon-button type="button" aria-label="Start account recovery"
+          matTooltip="Start account recovery" [disabled]="sendingRecovery()" (click)="confirmRecovery(user, recoveryDialog)">
+          <mat-icon class="material-symbols-outlined">lock_reset</mat-icon>
+        </button>
         <button mat-icon-button type="button" matTooltip="Edit user" (click)="openEditUser(user)" [disabled]="!canManage(user)">
           <mat-icon class="material-symbols-outlined">edit</mat-icon>
         </button>
@@ -67,3 +71,16 @@
 
   <div class="empty-state" *ngIf="!loading() && !users().length">No users.</div>
 </section>
+
+<ng-template #recoveryDialog let-user>
+  <h2 mat-dialog-title>Start account recovery?</h2>
+  <mat-dialog-content>
+    <p>Send a single-use recovery link to <strong>{{ user.email }}</strong>. It expires in 30 minutes.</p>
+    <p>When the user sets a new password, their existing verification methods and sessions will be cleared.</p>
+    <p>Send the link only after verifying the account owner’s identity.</p>
+  </mat-dialog-content>
+  <mat-dialog-actions align="end">
+    <button mat-button [mat-dialog-close]="false">Cancel</button>
+    <button mat-flat-button [mat-dialog-close]="true">Send recovery link</button>
+  </mat-dialog-actions>
+</ng-template>

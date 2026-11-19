@@ -14,6 +14,7 @@ test('Finance access scopes tenants, records and writes to the billing workflow'
   const { query, closePostgres } = require('../src/postgres');
   const { connectDb } = require('../src/db');
   const { createSession } = require('../src/services/authSessionService');
+  const mfaStore = require('../src/services/mfaStore');
   const tenants = require('../src/repositories/postgres/tenantRepository');
   const users = require('../src/repositories/postgres/userRepository');
   const works = require('../src/repositories/postgres/workBoardRepository');
@@ -54,10 +55,16 @@ test('Finance access scopes tenants, records and writes to the billing workflow'
     return saved;
   }
   async function session(tenant, role, label) {
+    const local = label === 'member';
     const user = await users.save({ tenantId: tenant.id, role, email: label + '-' + suffix + '@example.test',
-      firstName: 'QA', lastName: 'User' });
+      firstName: 'QA', lastName: 'User', loginMethod: local ? 'password' : 'microsoft' });
     userIds.push(user.id);
-    return createSession({ user, req: {} });
+    const mfaVersion = local ? randomBytes(16).toString('hex') : null;
+    if (local) {
+      await assert.rejects(createSession({ user, req: {} }), /two-step verification/);
+      await mfaStore.replace(user.id, null, { secret: 'fixture only', version: mfaVersion });
+    }
+    return createSession({ user, req: {}, mfaVersion });
   }
 
   const finance = await tenant('Pénzügy', 'finance', true, true);

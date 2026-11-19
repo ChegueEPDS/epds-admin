@@ -17,25 +17,28 @@ async function sendAccountLink(user, purpose) {
   }
   const token = randomBytes(32).toString('hex');
   const reset = purpose === 'reset';
-  const hours = reset ? 0.5 : 72;
+  const recovery = purpose === 'recovery';
+  const shortLived = reset || recovery || user.role === 'SuperAdmin';
+  const minutes = shortLived ? 30 : 72 * 60;
   const accountTokenHash = digest(token);
   const saved = await updateAccount({
     _id: String(user._id), email: user.email, role: user.role, tenantId: user.tenantId,
     emailVerified: user.emailVerified, azureId: user.azureId || null,
-    accountTokenHash: user.accountTokenHash || null,
+    accountTokenHash: user.accountTokenHash || null, loginMethod: user.loginMethod,
     password: user.password || null
   }, {
     accountTokenHash, accountTokenPurpose: purpose,
-    accountTokenExpiresAt: new Date(Date.now() + hours * 3600000)
+    accountTokenExpiresAt: new Date(Date.now() + minutes * 60000)
   });
   if (!saved) return false;
   url.hash = new URLSearchParams({ [purpose]: token, account: String(user._id) }).toString();
-  const action = reset ? 'Reset password' : user.loginMethod === 'microsoft' ? 'Connect Microsoft account' : 'Set your password';
+  const action = recovery ? 'Recover your account' : reset ? 'Reset password' : user.loginMethod === 'microsoft' ? 'Connect Microsoft account' : 'Set your password';
   try {
     await mail.sendMail({
       to: user.email,
-      subject: reset ? 'EPDS Admin – Password reset' : 'EPDS Admin – Account invitation',
-      html: `<p><a href="${url.href.replaceAll('&', '&amp;')}">${action}</a></p><p>This link can be used once and expires in ${reset ? '30 minutes' : '72 hours'}.</p>`
+      subject: recovery ? 'EPDS Admin – Account recovery' : reset ? 'EPDS Admin – Password reset' :
+        user.role === 'SuperAdmin' ? 'EPDS Admin – SuperAdmin invitation' : 'EPDS Admin – Account invitation',
+      html: `<p><a href="${url.href.replaceAll('&', '&amp;')}">${action}</a></p><p>This link can be used once and expires in ${shortLived ? '30 minutes' : '72 hours'}.</p>`
     });
   } catch {
     // Clear only this attempt. Another request may already have issued a replacement.
