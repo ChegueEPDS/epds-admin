@@ -4,10 +4,16 @@ const accounts = require('../services/accountStore');
 const { sendAccountLink, clearToken, normalizeEmail, validEmail } = require('../services/accountInvitations');
 const { ASSIGNABLE_ROLES, SUPERADMIN_EMAIL } = require('../services/accountRoles');
 
-function present(user, tenant = user.tenantId) {
+function membershipIds(user) {
+  return [user.tenantId?._id || user.tenantId, ...(user.additionalTenantIds || [])].filter(Boolean).map(String);
+}
+
+function present(user, tenant = user.tenantId, scoped = false) {
   return {
     id: String(user._id), email: user.email, firstName: user.firstName, lastName: user.lastName,
-    role: user.role, tenantId: user.tenantId ? String(user.tenantId._id || user.tenantId) : null,
+    role: user.role, tenantId: scoped ? String(tenant._id) : membershipIds(user)[0] || null,
+    tenantIds: scoped ? [String(tenant._id)] : membershipIds(user),
+    canManage: !scoped || (user.role === 'User' && membershipIds(user).length === 1),
     tenantName: tenant?.name, tenantDisplayName: tenant?.displayName || tenant?.name,
     azureId: user.azureId, loginMethod: user.loginMethod || (user.azureId ? 'microsoft' : 'password'),
     pendingActivation: Boolean(user.loginMethod && !user.emailVerified),
@@ -17,13 +23,36 @@ function present(user, tenant = user.tenantId) {
 }
 
 function canManage(req, user) {
-  return req.role === 'SuperAdmin' || (req.user.tenantId && String(user.tenantId) === req.user.tenantId &&
+  return req.role === 'SuperAdmin' || (req.scope.tenantId && membershipIds(user).length === 1 && membershipIds(user)[0] === req.scope.tenantId &&
     user.role === 'User');
 }
 
 function canAssign(req, tenantId, role) {
   return ASSIGNABLE_ROLES.includes(role) && (req.role === 'SuperAdmin' ||
-    (tenantId === req.user.tenantId && role === 'User'));
+    (tenantId === req.scope.tenantId && role === 'User'));
+}
+
+async function resolveAssignment(req, res, tenantId, role, tenantIds) {
+  if (tenantIds !== undefined && (!Array.isArray(tenantIds) ||
+      tenantIds.some((id) => typeof id !== 'string'))) {
+    res.status(400).json({ error: 'Invalid tenant selection.' });
+    return null;
+  }
+  const ids = [...new Set([tenantId, ...(tenantIds || [])])];
+  if (ids.some((id) => !canAssign(req, id, role)) || (ids.length > 1 && req.role !== 'SuperAdmin')) {
+    res.status(403).json({ error: 'Tenant or role is outside your access.' });
+    return null;
+  }
+  const tenants = await Promise.all(ids.map(accounts.findTenant));
+  if (tenants.some((tenant) => !tenant)) {
+    res.status(404).json({ error: 'Tenant not found.' });
+    return null;
+  }
+  if ((ids.length > 1 && role === 'Finance') || tenants.some((tenant) => tenant.type === 'finance' && role !== 'Finance')) {
+    res.status(400).json({ error: 'Finance access requires a single tenant and the Finance role.' });
+    return null;
+  }
+  return { tenant: tenants[0], additionalTenantIds: ids.slice(1) };
 }
 
 function finishError(error, res, next) {
@@ -41,9 +70,11 @@ async function sendInvite(user) {
 
 exports.listUsers = async (req, res, next) => {
   try {
-    const users = await accounts.list(req.role === 'SuperAdmin' ? null : req.user.tenantId);
-    const ownTenant = req.role === 'Admin' ? await accounts.findTenant(req.user.tenantId) : null;
-    res.json({ users: users.map((user) => present(user, ownTenant || user.tenantId)) });
+    if (req.role === 'Admin' && !req.scope.tenantId) return res.sendStatus(403);
+    const users = await accounts.list(req.role === 'SuperAdmin' ? null : req.scope.tenantId);
+    const ownTenant = req.role === 'Admin' ? await accounts.findTenant(req.scope.tenantId) : null;
+    if (req.role === 'Admin' && !ownTenant) return res.sendStatus(403);
+    res.json({ users: users.map((user) => present(user, ownTenant || user.tenantId, Boolean(ownTenant))) });
   } catch (error) { next(error); }
 };
 
@@ -57,11 +88,10 @@ exports.createUser = async (req, res, next) => {
         !['microsoft', 'password'].includes(loginMethod)) {
       return res.status(400).json({ error: 'Valid user data and a sign-in method are required.' });
     }
-    if (!canAssign(req, tenantId, role)) return res.status(403).json({ error: 'Tenant or role is outside your access.' });
-    const tenant = await accounts.findTenant(tenantId);
-    if (!tenant) return res.status(404).json({ error: 'Tenant not found.' });
-    if (tenant.type === 'finance' && role !== 'Finance') return res.status(400).json({ error: 'Select the Finance role for this tenant.' });
-    const user = await accounts.create({ email, firstName, lastName, tenantId, role, loginMethod, emailVerified: false });
+    const assignment = await resolveAssignment(req, res, tenantId, role, req.body?.tenantIds);
+    if (!assignment) return;
+    const { tenant, additionalTenantIds } = assignment;
+    const user = await accounts.create({ email, firstName, lastName, tenantId, additionalTenantIds, role, loginMethod, emailVerified: false });
     const invitationSent = await sendInvite(user);
     return res.status(201).json({ user: { ...present(await accounts.findById(String(user._id)), tenant), invitationSent } });
   } catch (error) { return finishError(error, res, next); }
@@ -88,11 +118,10 @@ async function editUser(req, res, next, onlyRole) {
     }
     const role = req.body?.role;
     const tenantId = onlyRole ? String(user.tenantId || '') : req.body?.tenantId;
-    if (!canAssign(req, tenantId, role)) return res.status(403).json({ error: 'Tenant or role is outside your access.' });
-    const tenant = await accounts.findTenant(tenantId);
-    if (!tenant) return res.status(404).json({ error: 'Tenant not found.' });
-    if (tenant.type === 'finance' && role !== 'Finance') return res.status(400).json({ error: 'Select the Finance role for this tenant.' });
-    const changes = { role, tenantId };
+    const assignment = await resolveAssignment(req, res, tenantId, role, onlyRole ? membershipIds(user) : req.body?.tenantIds ?? (req.role === 'SuperAdmin' ? user.additionalTenantIds : []));
+    if (!assignment) return;
+    const { tenant, additionalTenantIds } = assignment;
+    const changes = { role, tenantId, additionalTenantIds };
     if (!onlyRole && !user.azureId) {
       const email = normalizeEmail(req.body?.email);
       const firstName = String(req.body?.firstName || '').trim();
@@ -104,10 +133,10 @@ async function editUser(req, res, next, onlyRole) {
       if (email !== user.email) Object.assign(changes, clearToken);
     }
     const saved = await accounts.updateAccount({
-      _id: req.params.id, tenantId: user.tenantId, role: user.role, email: user.email, azureId: user.azureId || null
+      _id: req.params.id, tenantId: user.tenantId, additionalTenantIds: user.additionalTenantIds || [], role: user.role, email: user.email, azureId: user.azureId || null
     }, changes);
     if (!saved) return res.status(409).json({ error: 'User changed. Reload and try again.' });
-    tagChange(req, 'account.role_or_tenant_changed', user, saved, ['role', 'tenantId'], tenantId);
+    tagChange(req, 'account.role_or_tenant_changed', user, saved, ['role', 'tenantId', 'additionalTenantIds'], tenantId);
     return res.json({ user: present(saved, tenant) });
   } catch (error) { return finishError(error, res, next); }
 }
@@ -118,7 +147,7 @@ exports.updateUserRole = (req, res, next) => editUser(req, res, next, true);
 exports.tenantOptions = async (req, res, next) => {
   if (req.role === 'SuperAdmin') return require('./adminControllerFacade').listTenants(req, res, next);
   try {
-    const tenant = await accounts.findTenant(req.user.tenantId);
+    const tenant = await accounts.findTenant(req.scope.tenantId);
     return res.json({ tenants: tenant ? [{
       id: String(tenant._id), name: tenant.name, displayName: tenant.displayName, type: tenant.type
     }] : [] });

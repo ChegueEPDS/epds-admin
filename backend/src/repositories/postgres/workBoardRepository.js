@@ -326,7 +326,7 @@ async function saveClient(tenantId, actorId, input) {
 }
 
 async function listUsers(tenantId) {
-  const result = await query('SELECT id,first_name,last_name,email FROM users WHERE tenant_id=$1 ORDER BY last_name,first_name,email LIMIT 500',[tenantId]);
+  const result = await query('SELECT id,first_name,last_name,email FROM users WHERE tenant_id=$1 OR additional_tenant_ids @> ARRAY[$1]::varchar(24)[] ORDER BY last_name,first_name,email LIMIT 500',[tenantId]);
   return result.rows.map((r)=>({id:r.id,_id:r.id,firstName:r.first_name,lastName:r.last_name,email:r.email}));
 }
 

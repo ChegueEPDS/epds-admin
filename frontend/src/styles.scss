@@ -202,8 +202,14 @@ app-work-board .work-table td.numeric small { display: block; margin-top: 4px; c
 app-work-board .work-table .numeric { text-align: right; }
 app-work-board .work-table .work-number-column,
 app-work-board .work-table .work-status-column { width: 1%; white-space: nowrap; overflow-wrap: normal; }
-app-work-board .work-table .work-number-column .expand-trigger { flex: 0 0 24px; }
-app-work-board .work-number-cell { display: flex; align-items: center; gap: 9px; }
+app-work-board .work-number-cell {
+  display: grid;
+  grid-template-columns: 32px max-content;
+  align-items: center;
+  column-gap: 4px;
+}
+app-work-board .work-number-cell .expand-trigger { grid-column: 1; width: 100%; }
+app-work-board .work-number-cell .work-number { grid-column: 2; }
 app-work-board .expand-trigger { display: grid; width: 24px; height: 24px; padding: 0; place-items: center; color: var(--brand-muted); border: 1px solid transparent; border-radius: 6px; background: transparent; cursor: pointer; transition: color .15s ease, border-color .15s ease, background .15s ease; }
 app-work-board .expand-trigger:hover,
 app-work-board .expand-trigger:focus-visible { outline: none; color: #a54f00; border-color: rgba(165, 79, 0, .3); background: rgba(165, 79, 0, .07); }

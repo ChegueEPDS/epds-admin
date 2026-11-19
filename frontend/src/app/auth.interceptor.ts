@@ -15,11 +15,12 @@ function isBackendUrl(req: HttpRequest<unknown>): boolean {
   }
 }
 
-function isGlobalRequest(req: HttpRequest<unknown>): boolean {
+function isGlobalRequest(req: HttpRequest<unknown>, isSuperAdmin: boolean): boolean {
+  const globalPath = isSuperAdmin ? /\/api\/(admin|auth)\// : /\/api\/auth\//;
   try {
-    return new URL(req.url, window.location.origin).pathname.match(/\/api\/(admin|auth)\//) !== null;
+    return new URL(req.url, window.location.origin).pathname.match(globalPath) !== null;
   } catch {
-    return /\/api\/(admin|auth)\//.test(req.url);
+    return globalPath.test(req.url);
   }
 }
 
@@ -38,8 +39,9 @@ export const authInterceptor: HttpInterceptorFn = (req, next) => {
     if (csrf && !['GET', 'HEAD', 'OPTIONS'].includes(req.method.toUpperCase())) {
       setHeaders['X-CSRF-Token'] = decodeURIComponent(csrf);
     }
-    const tenantContext = injector.get(AuthService).getTenantContextId();
-    if (tenantContext && !isGlobalRequest(req)) {
+    const auth = injector.get(AuthService);
+    const tenantContext = auth.getTenantContextId();
+    if (tenantContext && !isGlobalRequest(req, auth.isSuperAdmin())) {
       setHeaders['X-Tenant-Context'] = tenantContext;
     }
 

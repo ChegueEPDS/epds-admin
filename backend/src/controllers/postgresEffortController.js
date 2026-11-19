@@ -58,7 +58,7 @@ async function subReference(client, project, subId) {
 
 const taskFields = (req, client, task) => applyTaskFields(task, req.body || {}, async (id) => {
   const { rows } = await client.query(`SELECT id, first_name AS "firstName", last_name AS "lastName", email
-    FROM users WHERE tenant_id=$1 AND id=$2`, [req.scope.tenantId, id]);
+    FROM users WHERE (tenant_id=$1 OR additional_tenant_ids @> ARRAY[$1]::varchar(24)[]) AND id=$2`, [req.scope.tenantId, id]);
   return rows[0];
 });
 

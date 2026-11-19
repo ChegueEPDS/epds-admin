@@ -6,14 +6,14 @@ const vm = require('node:vm');
 const ts = require('typescript');
 const { defer, of, throwError } = require('rxjs');
 
-function loadAuthService() {
+function loadAuthService(localStorage) {
   const filename = join(__dirname, '../src/app/services/auth.service.ts');
   const compiled = ts.transpileModule(readFileSync(filename, 'utf8'), {
     compilerOptions: { module: ts.ModuleKind.CommonJS, experimentalDecorators: true }
   }).outputText;
   const exports = {};
   vm.runInNewContext(compiled, {
-    exports, queueMicrotask,
+    exports, queueMicrotask, localStorage,
     require(name) {
       if (name === '@angular/core') return { Injectable: () => (target) => target };
       if (name.includes('environment')) return { environment: { apiBaseUrl: '/api' } };
@@ -93,4 +93,29 @@ test('a new Webhook Tester tab restores a regular tenant user without another lo
   assert.equal(webhookTab.isAuthenticated(), true);
   assert.equal(webhookTab.canAccessFeature('webhookTester'), true);
   assert.equal(webhookTab.getCurrentUser().id, user.id);
+});
+
+
+test('multi-tenant sessions restore the selected tenant and fall back when access is removed', async () => {
+  const tenantA = { id: 'tenant-a', name: 'Tenant A', features: {} };
+  const tenantB = { id: 'tenant-b', name: 'Tenant B', features: { workBoard: { enabled: true } } };
+  const storage = new Map();
+  const AuthService = loadAuthService({
+    getItem: (key) => storage.get(key),
+    setItem: (key, value) => storage.set(key, value),
+    removeItem: (key) => storage.delete(key)
+  });
+  let user = { id: 'member', role: 'Admin', tenantId: tenantA.id, tenantOptions: [tenantA, tenantB] };
+  const service = new AuthService({ get: () => of({ user }) }, {}, {});
+  await new Promise(queueMicrotask);
+  assert.equal(service.getTenantContextId(), tenantA.id);
+  service.setTenantContext(tenantB);
+  service.checkSession().subscribe();
+  assert.equal(service.getCurrentUser().tenantId, tenantB.id);
+  assert.equal(service.canAccessFeature('workBoard'), true);
+  user = { ...user, tenantOptions: [] };
+  service.checkSession().subscribe();
+  assert.equal(service.getTenantContextId(), null);
+  assert.equal(service.getCurrentUser().tenantId, tenantA.id);
+  assert.equal(service.canAccessFeature('workBoard'), false);
 });

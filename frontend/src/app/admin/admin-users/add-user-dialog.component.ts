@@ -38,6 +38,7 @@ export class AddUserDialogComponent {
   firstName = '';
   lastName = '';
   tenantId = '';
+  additionalTenantIds: string[] = [];
   role: AssignableRole = 'User';
   roles: { value: AssignableRole; label: string }[] = [
     { value: 'User', label: 'User' },
@@ -59,6 +60,7 @@ export class AddUserDialogComponent {
       this.firstName = user.firstName || '';
       this.lastName = user.lastName || '';
       this.tenantId = user.tenantId || '';
+      this.additionalTenantIds = (user.tenantIds || []).filter((id) => id !== this.tenantId);
       this.role = this.roles.some((item) => item.value === user.role) ? user.role as AssignableRole : 'User';
     }
   }
@@ -71,7 +73,12 @@ export class AddUserDialogComponent {
     return Boolean(this.data.user?.azureId);
   }
 
+  get additionalTenantOptions(): AdminTenant[] {
+    return this.data.tenants.filter((tenant) => tenant.id !== this.tenantId && tenant.type !== 'finance');
+  }
+
   onTenantChange(): void {
+    this.additionalTenantIds = this.additionalTenantIds.filter((id) => id !== this.tenantId);
     if (this.data.tenants.some((tenant) => tenant.id === this.tenantId && tenant.type === 'finance')) {
       this.role = 'Finance';
     }
@@ -98,6 +105,9 @@ export class AddUserDialogComponent {
       firstName: this.firstName,
       lastName: this.lastName,
       tenantId: this.tenantId,
+      ...(this.data.isSuperAdmin ? {
+        tenantIds: this.role === 'Finance' ? [] : this.additionalTenantIds
+      } : {}),
       role: this.role
     };
     const request = this.data.user

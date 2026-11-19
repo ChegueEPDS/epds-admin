@@ -85,12 +85,13 @@ function parseCookies(req) {
   }, {});
 }
 
-async function buildUserContext(user, session = null) {
-  const tenant = user.tenantId
-    ? (usingPostgres()
-      ? await tenantStore().findById(user.tenantId)
-      : await Tenant.findById(user.tenantId).lean().select('name displayName logoDataUrl type features professionRbacEnabled'))
-    : null;
+async function findContextTenant(id) {
+  return usingPostgres()
+    ? tenantStore().findById(id)
+    : Tenant.findById(id).lean().select('name displayName logoDataUrl type features professionRbacEnabled');
+}
+
+function normalizeTenantFeatures(tenant, tenantRestricted = false) {
   const featureAccess = (value) => {
     if (typeof value === 'boolean') return { enabled: value, edit: value, delete: value };
     const enabled = Boolean(value?.enabled);
@@ -100,14 +101,29 @@ async function buildUserContext(user, session = null) {
       delete: enabled && Boolean(value?.delete)
     };
   };
-  const tenantFeatures = {
-    mail: featureAccess(tenant?.features?.mail),
+  return {
+    mail: featureAccess(!tenantRestricted && tenant?.features?.mail),
     domainHealth: featureAccess(tenant?.features?.domainHealth),
     licenses: featureAccess(tenant?.features?.licenses),
     effortTracking: featureAccess(tenant?.features?.effortTracking),
     workBoard: featureAccess(tenant?.features?.workBoard),
-    webhookTester: featureAccess(tenant?.features?.webhookTester)
+    webhookTester: featureAccess(!tenantRestricted && tenant?.features?.webhookTester)
   };
+
+}
+
+async function buildUserContext(user, session = null, includeTenantOptions = true) {
+  const tenant = user.tenantId ? await findContextTenant(user.tenantId) : null;
+  const additionalIds = ['User', 'Admin'].includes(user.role) ? user.additionalTenantIds || [] : [];
+  const tenantFeatures = normalizeTenantFeatures(tenant, additionalIds.length > 0);
+  const tenantOptions = includeTenantOptions && additionalIds.length
+    ? [tenant, ...await Promise.all(additionalIds.map(findContextTenant))].filter(
+      (item) => item && item.type !== 'finance'
+    ).map((item) => ({
+      id: String(item._id), name: item.name, displayName: item.displayName || item.name,
+      type: item.type, logoDataUrl: item.logoDataUrl || null, features: normalizeTenantFeatures(item, true)
+    }))
+    : [];
 
   return {
     id: String(user._id),
@@ -124,6 +140,7 @@ async function buildUserContext(user, session = null) {
     nickname: user.nickname || null,
     azureId: user.azureId || null,
     tenantFeatures,
+    tenantOptions,
     professionRbacEnabled: Boolean(tenant?.professionRbacEnabled),
     permissions: ['*:*'],
     professions: user.professions || [],
@@ -144,7 +161,7 @@ function buildSessionMetadata(session, accessToken = null) {
 }
 
 async function signAccessToken(user, session) {
-  const ctx = await buildUserContext(user, session);
+  const ctx = await buildUserContext(user, session, false);
   const payload = {
     sub: ctx.userId,
     userId: ctx.userId,
@@ -287,7 +304,7 @@ async function rotateRefreshToken({ refreshToken, req }) {
   };
 }
 
-async function authenticateAccessToken(token) {
+async function authenticateAccessToken(token, includeTenantOptions = false) {
   const decoded = jwt.verify(token, mustJwtSecret(), {
     audience: process.env.JWT_AUDIENCE || 'epds-admin-api',
     issuer: process.env.JWT_ISSUER || 'epds-admin-backend'
@@ -310,7 +327,10 @@ async function authenticateAccessToken(token) {
     : await User.findById(session.userId).lean();
   if (!user) throw new Error('Invalid session user');
   await checkSession(user, session);
-  return { decoded, session, user: await buildUserContext(user, session) };
+  const additionalTenantIds = ['User', 'Admin'].includes(user.role)
+    ? (user.additionalTenantIds || []).map(String)
+    : [];
+  return { decoded, session, additionalTenantIds, user: await buildUserContext(user, session, includeTenantOptions) };
 }
 
 function setAuthCookies(res, req, result) {
@@ -366,6 +386,7 @@ async function revokeUserSessions(userId) {
 
 module.exports = {
   authenticateAccessToken,
+  normalizeTenantFeatures,
   buildSessionMetadata,
   clearAuthCookies,
   createSession,

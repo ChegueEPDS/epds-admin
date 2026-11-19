@@ -69,8 +69,8 @@ export class AppComponent {
       }
       if (user?.role === 'SuperAdmin' && !this.tenantListLoaded) this.loadTenantContexts();
       if (user?.role !== 'SuperAdmin') {
-        this.tenants = [];
-        this.tenantContextId = '';
+        this.tenants = user?.tenantOptions || [];
+        this.tenantContextId = this.auth.getTenantContextId() || '';
         this.tenantListLoaded = false;
       }
     });
@@ -122,7 +122,7 @@ export class AppComponent {
     if (this.auth.isFinanceWorkspace()) {
       return financeTenants.find(tenant => tenant.id === this.financeTenantId)?.logoDataUrl || null;
     }
-    if (this.auth.isSuperAdmin() && this.tenantContextId) {
+    if (this.tenantContextId) {
       return this.tenants.find(tenant => tenant.id === this.tenantContextId)?.logoDataUrl || null;
     }
     return this.auth.getCurrentUser()?.tenantLogoDataUrl || null;

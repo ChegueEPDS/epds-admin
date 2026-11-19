@@ -7,7 +7,7 @@ const tenants = require('../repositories/postgres/tenantRepository');
 
 const postgres = () => databaseEngine() === 'postgresql';
 const columns = {
-  _id: 'id', email: 'email', tenantId: 'tenant_id', role: 'role', firstName: 'first_name',
+  _id: 'id', email: 'email', tenantId: 'tenant_id', additionalTenantIds: 'additional_tenant_ids', role: 'role', firstName: 'first_name',
   lastName: 'last_name', loginMethod: 'login_method', emailVerified: 'email_verified',
   azureId: 'azure_id', microsoftTenantId: 'microsoft_tenant_id', password: 'password',
   accountTokenHash: 'account_token_hash', accountTokenPurpose: 'account_token_purpose',
@@ -15,8 +15,14 @@ const columns = {
 };
 
 async function updateAccount(where, changes, { liveToken = false, client, session } = {}) {
-  const matched = liveToken ? { ...where, accountTokenExpiresAt: { $gt: new Date() } } : where;
-  if (!postgres()) return User.findOneAndUpdate(matched, { $set: changes }, { new: true, session });
+  const matched = liveToken ? { ...where, accountTokenExpiresAt: { $gt: new Date() } } : { ...where };
+  if (!postgres()) {
+    if (Array.isArray(matched.additionalTenantIds) && !matched.additionalTenantIds.length) {
+      delete matched.additionalTenantIds;
+      matched.$or = [{ additionalTenantIds: [] }, { additionalTenantIds: { $exists: false } }];
+    }
+    return User.findOneAndUpdate(matched, { $set: changes }, { new: true, session });
+  }
 
   const parameters = [];
   const bind = (value) => {
@@ -45,7 +51,7 @@ const findTenant = (id) => mongoose.isObjectIdOrHexString(id)
   : null;
 const list = (tenantId) => postgres()
   ? (tenantId ? users.listByTenant(tenantId) : users.listAll())
-  : User.find(tenantId ? { tenantId } : {}).populate('tenantId', 'name displayName').sort({ email: 1 });
+  : User.find(tenantId ? { $or: [{ tenantId }, { additionalTenantIds: tenantId }] } : {}).populate('tenantId', 'name displayName').sort({ email: 1 });
 const create = (input) => postgres() ? users.save(input) : User.create(input);
 
 module.exports = { updateAccount, findById, findEmail, findMicrosoft, findTenant, list, create };

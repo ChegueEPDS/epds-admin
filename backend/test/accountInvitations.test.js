@@ -98,9 +98,9 @@ test('Microsoft requires the matching invited identity, consumes the link, and h
 test('tenant admins cannot create users in another tenant or assign privileged roles', async () => {
   const admin = require('../src/controllers/accountAdminController');
   const payload = { email, firstName: 'First', lastName: 'Last', loginMethod: 'microsoft' };
-  for (const selection of [{ tenantId: otherTenantId, role: 'User' }, { tenantId, role: 'Admin' }, { tenantId, role: 'Finance' }]) {
+  for (const selection of [{ tenantId: otherTenantId, role: 'User' }, { tenantId, role: 'Admin' }, { tenantId, role: 'Finance' }, { tenantId, role: 'User', tenantIds: [otherTenantId] }]) {
     const res = response();
-    await admin.createUser({ role: 'Admin', user: { tenantId }, body: { ...payload, ...selection } }, res, next);
+    await admin.createUser({ role: 'Admin', scope: { tenantId }, body: { ...payload, ...selection } }, res, next);
     assert.equal(res.statusCode, 403);
   }
 });

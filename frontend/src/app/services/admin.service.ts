@@ -47,6 +47,8 @@ export type AdminUser = {
   lastName: string;
   role: string;
   tenantId?: string | null;
+  tenantIds?: string[];
+  canManage?: boolean;
   tenantName?: string | null;
   tenantDisplayName?: string | null;
   azureId?: string | null;
@@ -63,6 +65,7 @@ export type CreateAdminUserPayload = {
   firstName: string;
   lastName: string;
   tenantId: string;
+  tenantIds?: string[];
   role: AssignableRole;
 };
 
@@ -71,6 +74,7 @@ export type UpdateAdminUserPayload = {
   firstName: string;
   lastName: string;
   tenantId: string;
+  tenantIds?: string[];
   role: AssignableRole;
 };
 

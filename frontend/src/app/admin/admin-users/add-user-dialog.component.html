@@ -28,10 +28,19 @@
     </mat-form-field>
 
     <mat-form-field appearance="outline">
-      <mat-label>Tenant</mat-label>
+      <mat-label>{{ data.isSuperAdmin ? 'Primary tenant' : 'Tenant' }}</mat-label>
       <mat-select name="tenantId" [(ngModel)]="tenantId" (ngModelChange)="onTenantChange()" required>
         <mat-option *ngFor="let tenant of data.tenants" [value]="tenant.id">
           {{ tenantLabel(tenant) }} ({{ tenant.type }})
+        </mat-option>
+      </mat-select>
+    </mat-form-field>
+
+    <mat-form-field appearance="outline" *ngIf="data.isSuperAdmin && tenantId && role !== 'Finance' && additionalTenantOptions.length">
+      <mat-label>Additional tenants</mat-label>
+      <mat-select name="additionalTenantIds" [(ngModel)]="additionalTenantIds" multiple>
+        <mat-option *ngFor="let tenant of additionalTenantOptions" [value]="tenant.id">
+          {{ tenantLabel(tenant) }}
         </mat-option>
       </mat-select>
     </mat-form-field>

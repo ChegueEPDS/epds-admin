@@ -11,7 +11,7 @@ const router = express.Router();
 const superAdminOnly = [requireAuth, requireSuperAdmin];
 
 function requireUserManager(req, res, next) {
-  if (req.role === 'SuperAdmin' || (req.role === 'Admin' && req.user.tenantId)) return next();
+  if (req.role === 'SuperAdmin' || (req.role === 'Admin' && req.scope.tenantId)) return next();
   return res.status(403).json({ error: 'User management access required.' });
 }
 

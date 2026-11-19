@@ -16,6 +16,7 @@ function licenseScopeQuery(scope) {
 
 function canManageAllLicenses(scope = {}) {
   if (scope.role === 'SuperAdmin') return true;
+  if (scope.tenantRestricted) return false;
   return ['epds', 'developer', 'epds-admin'].includes(String(scope.tenantName || '').trim().toLowerCase());
 }
 

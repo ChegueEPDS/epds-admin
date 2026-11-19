@@ -31,6 +31,7 @@ export type AuthUser = {
   tenantLogoDataUrl?: string | null;
   tenantType?: string | null;
   tenantFeatures?: Partial<TenantFeatures>;
+  tenantOptions?: TenantContext[];
 };
 
 export type FinanceTenant = { id: string; name: string; logoDataUrl?: string | null };
@@ -40,7 +41,8 @@ export type TenantContext = {
   id: string;
   name: string;
   displayName?: string;
-  type?: string;
+  type: 'company' | 'client' | 'finance';
+  logoDataUrl?: string | null;
   features: TenantFeatures;
 };
 
@@ -116,7 +118,17 @@ export class AuthService {
     this.currentUser = user || null;
     const currentUserId = this.currentUser?.id || this.currentUser?.userId || null;
     if (!this.isSuperAdmin() || previousUserId !== currentUserId) {
-      this.tenantContextSubject.next(null);
+      const options = user?.tenantOptions || [];
+      const selected = options.length > 1
+        ? options.find((tenant) => tenant.id === this.readStoredTenantContextId()) || options.find((tenant) => tenant.id === user?.tenantId) || options[0]
+        : null;
+      if (user && selected) {
+        this.currentUser = {
+          ...user, tenantId: selected.id, tenantName: selected.name, tenantDisplayName: selected.displayName,
+          tenantLogoDataUrl: selected.logoDataUrl, tenantType: selected.type, tenantFeatures: selected.features
+        };
+      }
+      this.tenantContextSubject.next(selected);
     }
     this.userSubject.next(this.currentUser);
     this.isLoggedInSubject.next(Boolean(this.currentUser));
@@ -230,7 +242,7 @@ export class AuthService {
   }
 
   getTenantContextId(): string | null {
-    return this.isSuperAdmin() ? this.tenantContextSubject.value?.id || this.readStoredTenantContextId() : null;
+    return this.tenantContextSubject.value?.id || (this.isSuperAdmin() ? this.readStoredTenantContextId() : null);
   }
 
   getTenantContext(): TenantContext | null {
@@ -238,8 +250,8 @@ export class AuthService {
   }
 
   setTenantContext(tenant: TenantContext | null): void {
-    if (!this.isSuperAdmin()) return;
-    this.tenantContextSubject.next(tenant);
+    if (!this.isSuperAdmin() && !this.currentUser?.tenantOptions?.some((option) => option.id === tenant?.id)) return;
+    if (this.isSuperAdmin()) this.tenantContextSubject.next(tenant);
     const userId = this.currentUser?.id || this.currentUser?.userId;
     if (!userId) return;
     try {
@@ -259,7 +271,7 @@ export class AuthService {
 
   private readStoredTenantContextId(): string | null {
     const userId = this.currentUser?.id || this.currentUser?.userId;
-    if (!this.isSuperAdmin() || !userId) return null;
+    if (!userId) return null;
     try { return localStorage.getItem(`${this.tenantContextKeyPrefix}${userId}`); } catch { return null; }
   }
 

@@ -9,7 +9,7 @@ function present(row, includePassword = false) {
     accountTokenHash: row.account_token_hash, accountTokenExpiresAt: row.account_token_expires_at,
     accountTokenPurpose: row.account_token_purpose,
     firstName: row.first_name, lastName: row.last_name, email: row.email,
-    nickname: row.nickname, tenantId: row.tenant_id, role: row.role,
+    nickname: row.nickname, tenantId: row.tenant_id, additionalTenantIds: row.additional_tenant_ids || [], role: row.role,
     professions: row.professions || [], emailVerified: Boolean(row.email_verified),
     lastLoginAt: row.last_login_at, createdAt: row.created_at, updatedAt: row.updated_at
   };
@@ -34,7 +34,7 @@ async function findByAzureId(azureId) {
 
 async function listByTenant(tenantId) {
   const result = await query(
-    'SELECT * FROM users WHERE tenant_id=$1 ORDER BY last_name,first_name,email', [String(tenantId)]
+    'SELECT * FROM users WHERE tenant_id=$1 OR additional_tenant_ids @> ARRAY[$1]::varchar(24)[] ORDER BY last_name,first_name,email', [String(tenantId)]
   );
   return result.rows.map((row) => present(row));
 }
@@ -50,17 +50,17 @@ async function save(input, options = {}) {
   const result = await query(`
     INSERT INTO users
       (id,azure_id,first_name,last_name,email,nickname,tenant_id,role,professions,password,
-       email_verified,last_login_at,created_at,updated_at,login_method)
-    VALUES ($1,$2,$3,$4,lower($5),$6,$7,$8,$9::jsonb,$10,$11,$12,coalesce($13,now()),now(),$14)
+       email_verified,last_login_at,created_at,updated_at,login_method,additional_tenant_ids)
+    VALUES ($1,$2,$3,$4,lower($5),$6,$7,$8,$9::jsonb,$10,$11,$12,coalesce($13,now()),now(),$14,coalesce($15::varchar(24)[],'{}'))
     ON CONFLICT (id) DO UPDATE SET
       azure_id=EXCLUDED.azure_id,first_name=EXCLUDED.first_name,last_name=EXCLUDED.last_name,
       email=EXCLUDED.email,nickname=EXCLUDED.nickname,tenant_id=EXCLUDED.tenant_id,role=EXCLUDED.role,
-      professions=EXCLUDED.professions,password=coalesce(EXCLUDED.password,users.password),email_verified=EXCLUDED.email_verified,
+      additional_tenant_ids=coalesce($15,users.additional_tenant_ids),professions=EXCLUDED.professions,password=coalesce(EXCLUDED.password,users.password),email_verified=EXCLUDED.email_verified,
       last_login_at=EXCLUDED.last_login_at,updated_at=now()
     RETURNING *`, [userId, input.azureId || null, input.firstName, input.lastName, input.email,
     input.nickname || null, input.tenantId || null, input.role || 'User', JSON.stringify(input.professions || []),
     input.password === undefined ? null : input.password, input.emailVerified !== false,
-    input.lastLoginAt || null, input.createdAt || null, input.loginMethod || null]);
+    input.lastLoginAt || null, input.createdAt || null, input.loginMethod || null, input.additionalTenantIds ?? null]);
   return present(result.rows[0], options.includePassword);
 }
 

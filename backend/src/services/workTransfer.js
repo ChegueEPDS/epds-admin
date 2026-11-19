@@ -27,8 +27,9 @@ async function contextFor(tenantId) {
     : ClientCompany.find({ tenantIds: tenantId }).select('name').sort({ name: 1, _id: 1 }).lean();
   const users = isPostgres()
     ? query(`SELECT id, first_name AS "firstName", last_name AS "lastName", email FROM users
-      WHERE tenant_id=$1 ORDER BY last_name, first_name, id`, [tenantId]).then((result) => result.rows)
-    : User.find({ tenantId }).select('firstName lastName email').sort({ lastName: 1, firstName: 1, _id: 1 }).lean();
+      WHERE tenant_id=$1 OR additional_tenant_ids @> ARRAY[$1]::varchar(24)[]
+      ORDER BY last_name, first_name, id`, [tenantId]).then((result) => result.rows)
+    : User.find({ $or: [{ tenantId }, { additionalTenantIds: tenantId }] }).select('firstName lastName email').sort({ lastName: 1, firstName: 1, _id: 1 }).lean();
   const [config, currency, clientList, userList] = await Promise.all([settings(tenantId), getDefaultCurrency(tenantId), clients, users]);
   return { tenantId, config, currency, clients: clientList, users: userList };
 }

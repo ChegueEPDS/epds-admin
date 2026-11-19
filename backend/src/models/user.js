@@ -12,6 +12,7 @@ const UserSchema = new mongoose.Schema(
     lastName: { type: String, required: true },
     email: { type: String, required: true, unique: true, lowercase: true },
     nickname: { type: String },
+    additionalTenantIds: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Tenant' }],
     tenantId: { type: mongoose.Schema.Types.ObjectId, ref: 'Tenant', index: true },
     role: { type: String, enum: ['User', 'Admin', 'Finance', 'SuperAdmin'], default: 'User', required: true },
     professions: [{ type: String }],

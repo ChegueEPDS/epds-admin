@@ -51,8 +51,8 @@ async function workReporting(req, previous, sizeEnabled, tenantHasUser) {
       if (typeof value !== 'string' || !/^[0-9a-f]{24}$/.test(value)) throw fail('Select a backup from this tenant.');
       const tenantId = req.scope.tenantId;
       const exists = tenantHasUser ? tenantHasUser(value) : databaseEngine() === 'postgresql'
-        ? (await query('SELECT 1 FROM users WHERE id=$1 AND tenant_id=$2', [value, tenantId])).rowCount
-        : await User.exists({ _id: value, tenantId });
+        ? (await query('SELECT 1 FROM users WHERE id=$1 AND (tenant_id=$2 OR additional_tenant_ids @> ARRAY[$2]::varchar(24)[])', [value, tenantId])).rowCount
+        : await User.exists({ _id: value, $or: [{ tenantId }, { additionalTenantIds: tenantId }] });
       if (!exists) throw fail('Select a backup from this tenant.');
     }
     if (key === 'nextAction' && (typeof value !== 'string' || !value.trim() || value.trim().length > 500)) throw fail('Invalid next action.');

@@ -282,7 +282,8 @@ async function resolveClient(clientId, scope) {
 async function resolveResponsible(userId, scope) {
   if (!userId) return null;
   if (!mongoose.isValidObjectId(userId)) throw httpError('Responsible user not found', 404);
-  const user = await User.findOne({ _id: userId, tenantId: scope?.tenantId || null });
+  const tenantId = scope?.tenantId || null;
+  const user = await User.findOne({ _id: userId, $or: [{ tenantId }, { additionalTenantIds: tenantId }] });
   if (!user) throw httpError('Responsible user is not a member of this tenant', 404);
   return user;
 }
@@ -573,7 +574,8 @@ exports.createOrLinkClient = (req, res) => withErrors(res, async () => {
 });
 
 exports.listTenantUsers = (req, res) => withErrors(res, async () => {
-  const users = await User.find({ tenantId: req.scope?.tenantId || null }).sort({ lastName: 1, firstName: 1, email: 1 }).limit(500);
+  const tenantId = req.scope.tenantId;
+  const users = await User.find({ $or: [{ tenantId }, { additionalTenantIds: tenantId }] }).sort({ lastName: 1, firstName: 1, email: 1 }).limit(500);
   res.json({ users: users.map(presentUser) });
 });
 

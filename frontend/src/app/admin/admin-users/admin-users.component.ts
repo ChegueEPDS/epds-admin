@@ -99,7 +99,7 @@ export class AdminUsersComponent implements OnInit {
   }
 
   canManage(user: AdminUser): boolean {
-    return user.role !== 'SuperAdmin' && (this.auth.isSuperAdmin() || user.role === 'User');
+    return user.role !== 'SuperAdmin' && (this.auth.isSuperAdmin() || (user.role === 'User' && user.canManage !== false));
   }
 
   canRecover(user: AdminUser): boolean {
@@ -145,6 +145,14 @@ export class AdminUsersComponent implements OnInit {
         this.snackBar.open(error?.error?.error || 'Invitation could not be sent.', 'Close', { duration: 4500 });
       }
     });
+  }
+
+  tenantLabels(user: AdminUser): string {
+    const ids = user.tenantIds || [];
+    return ids.map((id) => {
+      const tenant = this.tenants().find((item) => item.id === id);
+      return tenant?.displayName || tenant?.name || id;
+    }).join(', ') || user.tenantDisplayName || user.tenantName || '-';
   }
 
   roleLabel(role: string): string {

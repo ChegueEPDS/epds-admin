@@ -1,5 +1,6 @@
 const {
   authenticateAccessToken,
+  normalizeTenantFeatures,
   getAccessTokenFromRequest,
   validateCsrf
 } = require('../services/authSessionService');
@@ -15,7 +16,8 @@ function authenticate(req, res, next, allowFinance = false) {
       if (!token) return res.status(401).json({ error: 'No token provided' });
       if (!validateCsrf(req, source)) return res.status(403).json({ error: 'Invalid CSRF token' });
 
-      const { decoded, session, user } = await authenticateAccessToken(token);
+      const includeTenantOptions = ['/auth/me', '/auth/session'].includes(req.route?.path);
+      const { decoded, session, user, additionalTenantIds = [] } = await authenticateAccessToken(token, includeTenantOptions);
       if (user.tenantType === 'finance' && !allowFinance) {
         return res.status(403).json({ error: 'This endpoint is unavailable to Finance tenants' });
       }
@@ -32,16 +34,18 @@ function authenticate(req, res, next, allowFinance = false) {
         tenantName: user.tenantName,
         tenantType: user.tenantType,
         tenantFeatures: user.tenantFeatures || {},
+        tenantRestricted: additionalTenantIds.length > 0,
         sessionId: String(session._id)
       };
 
       const requestedTenantId = String(req.headers?.['x-tenant-context'] || '').trim();
       if (requestedTenantId) {
-        if (user.role !== 'SuperAdmin') {
-          return res.status(403).json({ error: 'Only SuperAdmin can select another tenant context' });
-        }
-        if (!mongoose.Types.ObjectId.isValid(requestedTenantId)) {
+        if (!mongoose.isObjectIdOrHexString(requestedTenantId)) {
           return res.status(400).json({ error: 'Invalid tenant context' });
+        }
+        if (user.role !== 'SuperAdmin' &&
+            requestedTenantId !== user.tenantId && !additionalTenantIds.includes(requestedTenantId)) {
+          return res.status(403).json({ error: 'Tenant is outside your access' });
         }
         const selectedTenant = databaseEngine() === 'postgresql'
           ? await tenantRepository.findById(requestedTenantId)
@@ -49,10 +53,16 @@ function authenticate(req, res, next, allowFinance = false) {
         if (!selectedTenant) {
           return res.status(404).json({ error: 'Selected tenant not found' });
         }
+        if (user.role !== 'SuperAdmin' && selectedTenant.type === 'finance' &&
+            (requestedTenantId !== user.tenantId || !allowFinance)) {
+          return res.status(403).json({ error: 'Finance tenant context is unavailable' });
+        }
         req.scope.tenantId = String(selectedTenant._id);
-        req.scope.tenantName = selectedTenant.displayName || selectedTenant.name;
+        req.scope.tenantName = user.role === 'SuperAdmin'
+          ? selectedTenant.displayName || selectedTenant.name
+          : selectedTenant.name;
         req.scope.tenantType = selectedTenant.type;
-        req.scope.tenantFeatures = selectedTenant.features || {};
+        req.scope.tenantFeatures = normalizeTenantFeatures(selectedTenant, req.scope.tenantRestricted);
         req.tenantContext = selectedTenant;
       }
       return next();
@@ -85,7 +95,7 @@ function requireTenantFeature(featureKey, permission = 'enabled') {
     if (!req.scope?.tenantId) {
       return res.status(403).json({ error: 'Tenant feature access required' });
     }
-    const feature = req.scope?.tenantFeatures?.[featureKey] || req.user?.tenantFeatures?.[featureKey];
+    const feature = req.scope?.tenantFeatures?.[featureKey];
     if (!feature?.enabled) {
       return res.status(403).json({ error: 'Tenant feature is disabled' });
     }

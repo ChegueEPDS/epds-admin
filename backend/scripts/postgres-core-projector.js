@@ -119,6 +119,7 @@ async function projectUsers(client) {
     id: id(doc._id), azure_id: doc.azureId || null, first_name: doc.firstName,
     last_name: doc.lastName, email: String(doc.email || '').toLowerCase(),
     nickname: doc.nickname || null, tenant_id: id(doc.tenantId), role: doc.role || 'User',
+    additional_tenant_ids: (doc.additionalTenantIds || []).map(id).filter(Boolean),
     professions: json(doc.professions, []), password: doc.password || null,
     login_method: doc.loginMethod || null, microsoft_tenant_id: doc.microsoftTenantId || null,
     account_token_hash: doc.accountTokenHash || null, account_token_purpose: doc.accountTokenPurpose || null,
