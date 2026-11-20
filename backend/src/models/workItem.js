@@ -96,7 +96,7 @@ WorkItemSchema.pre('save', async function () {
     if (this.responsibleUserId || this.contributors?.length) {
       const users = await User.find({ $or: [{ tenantId: this.tenantId }, { additionalTenantIds: this.tenantId }] })
         .select('email firstName lastName').session(this.$session()).lean();
-      jobs.push(...statusJobs(change, this, tenant.displayName || tenant.name, users));
+      jobs.push(...statusJobs(change, this, tenant, users));
     }
     this.statusHistory.push({ changedAt: change.changedAt, payload: change });
   }

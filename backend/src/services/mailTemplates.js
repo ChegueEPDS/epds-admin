@@ -133,6 +133,13 @@ function forwardedMail(comment, originalHtml) {
   };
 }
 
+function workDetailsTable(fields) {
+  const rows = fields.map(([label, value]) =>
+    `<tr><th scope="row" align="left" style="padding:8px 16px 8px 0;color:#575048">${escapeHtml(label)}</th><td style="padding:8px 0">${escapeHtml(value)}</td></tr>`
+  ).join('');
+  return `<table cellpadding="0" cellspacing="0" width="100%">${rows}</table>`;
+}
+
 function accountingMail(details, url) {
   const { language, tenantName, workNumber, name, customer, entity, completionDate, totalAmount, currency } = details;
   const hu = language === 'hu';
@@ -152,13 +159,10 @@ function accountingMail(details, url) {
     }).format(new Date(completionDate))],
     [hu ? 'Munka teljes értéke' : 'Total work value', new Intl.NumberFormat(locale, { style: 'currency', currency }).format(totalAmount)]
   ];
-  const rows = fields.filter(([, value]) => value).map(([label, value]) =>
-    `<tr><th scope="row" align="left" style="padding:8px 16px 8px 0;color:#575048">${escapeHtml(label)}</th><td style="padding:8px 0">${escapeHtml(value)}</td></tr>`
-  ).join('');
   return {
     subject: ['[PandA]', hu ? 'Számlázható munka' : title, tenantName, workNumber, name]
       .join(' · ').replace(/[\r\n]+/g, ' '),
-    html: paragraph(intro) + `<table cellpadding="0" cellspacing="0" width="100%">${rows}</table>`,
+    html: paragraph(intro) + workDetailsTable(fields.filter(([, value]) => value)),
     branding: {
       title, category: hu ? 'Pénzügy' : 'Accounting', preheader: intro, lang: language,
       action: { label: hu ? 'Munka megnyitása a PandA-ban' : 'Open work in PandA', url }
@@ -183,9 +187,16 @@ function workStatusMail(change, url) {
   const hu = lang === 'hu';
   const title = hu ? 'Megváltozott a munka státusza' : 'Work status changed';
   const work = `${change.workNumber} · ${change.name}`;
+  const fields = [
+    ['Tenant', change.tenantName],
+    [hu ? 'Munkaszám' : 'Work number', change.workNumber],
+    [hu ? 'Munka' : 'Work', change.name],
+    [hu ? 'Ügyfél' : 'Client', change.customer || '—'],
+    [hu ? 'Szervezeti egység' : 'Organizational unit', change.entity || '—']
+  ];
   return {
     subject: `[PandA] ${title} · ${work}`.replace(/[\r\n]+/g, ' '),
-    html: paragraph(change.tenantName) + paragraph(work) + paragraph(workStatusTransition(change, hu)),
+    html: workDetailsTable(fields) + `<p style="margin:20px 0"><strong>${hu ? 'Státuszváltozás' : 'Status change'}:</strong> ${escapeHtml(workStatusTransition(change, hu))}</p>`,
     branding: { title, lang, action: { url, label: hu ? 'Munka megnyitása' : 'Open work' } }
   };
 }

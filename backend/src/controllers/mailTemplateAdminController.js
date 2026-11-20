@@ -30,6 +30,7 @@ const { weeklyPeriod } = require('../services/workStatusNotifications');
 const sampleWorkUrl = 'https://example.com/project-tracker';
 const sampleWorkChange = {
   tenantName: 'EPDS', workNumber: '2026-0042', name: 'ATEX inspection',
+  customer: 'Example Industrial Ltd.', entity: 'EPDS Hungary',
   previousStatus: 'in_progress', status: 'completed_billable'
 };
 

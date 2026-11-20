@@ -1,7 +1,7 @@
 const assert = require('node:assert/strict');
 const { test } = require('node:test');
-const { statusRecipients, weeklyPeriod, weeklyJob } = require('../src/services/workStatusNotifications');
-const { weeklyWorkMail } = require('../src/services/mailTemplates');
+const { statusRecipients, statusJobs, weeklyPeriod, weeklyJob } = require('../src/services/workStatusNotifications');
+const { weeklyWorkMail, workStatusMail } = require('../src/services/mailTemplates');
 
 test('work status recipients are deduplicated and legacy names must resolve unambiguously', () => {
   const users = [
@@ -33,4 +33,13 @@ test('weekly jobs have stable delivery IDs and the summary shows the recorded tr
   assert.equal(job.id, weeklyJob(tenant, { email: 'ADMIN@example.com' }, period, []).id);
   assert.notEqual(job.id, weeklyJob({ ...tenant, id: 'tenant-2' }, admin, period, []).id);
   assert.match(weeklyWorkMail(job.payload, () => 'https://example.com/work').html, /Folyamatban → Teljesítve, számlázható/);
+});
+
+test('status email shows the saved work details before the status transition', () => {
+  const work = { entityId: 'engineering', customer: 'Client & Co.', responsibleUserId: '1' };
+  const tenant = { displayName: 'EPDS', workFieldSettings: { entities: [{ id: 'engineering', label: 'Engineering' }] } };
+  const change = { workNumber: '2026-0042', name: 'Inspection', previousStatus: 'offer', status: 'in_progress' };
+  const [{ payload }] = statusJobs(change, work, tenant, [{ id: '1', email: 'lead@example.com' }]);
+  const { html } = workStatusMail({ ...payload, language: 'en' }, 'https://example.com/work');
+  assert.match(html, /Tenant.*EPDS.*Work number.*2026-0042.*Work.*Inspection.*Client.*Client &amp; Co\..*Organizational unit.*Engineering.*<\/table>.*Status change:<\/strong> Offer → In progress/s);
 });

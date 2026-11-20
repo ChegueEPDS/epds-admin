@@ -28,9 +28,11 @@ function statusRecipients(users, work) {
   return [...recipients];
 }
 
-function statusJobs(change, work, tenantName, users) {
+function statusJobs(change, work, tenant, users) {
+  const tenantName = tenant.displayName || tenant.name;
+  const entity = tenant.workFieldSettings?.entities?.find(({ id }) => id === work.entityId)?.label;
   return statusRecipients(users, work).map((to) => ({
-    id: randomUUID(), payload: { ...change, type: 'work-status', tenantName, to }
+    id: randomUUID(), payload: { ...change, type: 'work-status', tenantName, customer: work.customer, entity, to }
   }));
 }
 
@@ -39,10 +41,10 @@ async function recordPostgresStatus(client, work, previousStatus) {
   await client.query('INSERT INTO work_status_changes(tenant_id,work_id,changed_at,payload) VALUES($1,$2,$3,$4)',
     [change.tenantId, change.workId, change.changedAt, change]);
   if (!work.responsibleUserId && !work.contributors?.length) return;
-  const { rows: [tenant] } = await client.query('SELECT name,display_name FROM tenants WHERE id=$1', [work.tenantId]);
+  const { rows: [tenant] } = await client.query('SELECT name,display_name AS "displayName",work_field_settings AS "workFieldSettings" FROM tenants WHERE id=$1', [work.tenantId]);
   const { rows: users } = await client.query(`SELECT id,email,first_name,last_name FROM users
     WHERE tenant_id=$1 OR $1=ANY(additional_tenant_ids)`, [work.tenantId]);
-  for (const { id, payload } of statusJobs(change, work, tenant.display_name || tenant.name, users)) {
+  for (const { id, payload } of statusJobs(change, work, tenant, users)) {
     await client.query('INSERT INTO accounting_notification_outbox(id,payload) VALUES($1,$2)', [id, payload]);
   }
 }
