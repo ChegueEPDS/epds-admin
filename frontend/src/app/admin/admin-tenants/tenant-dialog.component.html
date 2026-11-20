@@ -63,10 +63,50 @@
         <ng-template #noPermissionControls><span class="permission-na">-</span></ng-template>
         <ng-template #noDeleteControl><span class="permission-na">-</span></ng-template>
       </div>
+      <mat-checkbox name="weeklyWorkSummary" [(ngModel)]="weeklyWorkSummary">
+        {{ 'Weekly summary' | uiText }}
+      </mat-checkbox>
       <mat-checkbox name="financeAccess" [(ngModel)]="financeAccess" [disabled]="!features.workBoard.enabled">
         {{ 'Pénzügyi hozzáférés a Project Trackerhez' | uiText }}
       </mat-checkbox>
     </section>
+    @if (type === 'company') {
+      <section class="feature-list">
+        <h3>{{ 'Accounting' | uiText }}</h3>
+        <mat-form-field appearance="outline">
+          <mat-label>{{ 'Accounting notification routing' | uiText }}</mat-label>
+          <mat-select name="accountingMode" [(ngModel)]="accountingMode">
+            <mat-option value="off">{{ 'Disabled' | uiText }}</mat-option>
+            <mat-option value="single">{{ 'Single address for all work' | uiText }}</mat-option>
+            <mat-option value="entity" [disabled]="!accountingEntities.length">{{ 'By organizational unit' | uiText }}</mat-option>
+          </mat-select>
+        </mat-form-field>
+        @if (accountingMode === 'single') {
+          <mat-form-field appearance="outline">
+            <mat-label>{{ 'Accounting email' | uiText }}</mat-label>
+            <input matInput type="email" name="accountingEmail" [(ngModel)]="accountingEmail" required email>
+          </mat-form-field>
+        }
+        @if (accountingMode === 'entity') {
+          @for (entity of accountingEntities; track entity.id) {
+            <mat-form-field appearance="outline">
+              <mat-label>{{ 'Accounting email' | uiText }} · {{ entity.label }}</mat-label>
+              <input matInput type="email" [name]="'accountingEmail-' + entity.id"
+                [(ngModel)]="accountingEntityEmails[entity.id]" required email>
+            </mat-form-field>
+          }
+        }
+        @if (accountingMode !== 'off') {
+          <mat-form-field appearance="outline">
+            <mat-label>{{ 'Email language' | uiText }}</mat-label>
+            <mat-select name="accountingLanguage" [(ngModel)]="accountingLanguage">
+              <mat-option value="hu">Magyar</mat-option>
+              <mat-option value="en">English</mat-option>
+            </mat-select>
+          </mat-form-field>
+        }
+      </section>
+    }
     <p *ngIf="type === 'finance'">{{ 'A Pénzügy szerepkörű tagok az engedélyezett tenantok munkatábláit érik el.' | uiText }}</p>
   </mat-dialog-content>
 

@@ -22,6 +22,8 @@ const TenantSchema = new mongoose.Schema(
       used: { type: Number, default: 0, min: 0 }
     },
     seatsManaged: { type: String, enum: ['stripe', 'manual'], default: 'stripe' },
+    weeklyWorkSummarySince: Date,
+    accountingNotifications: { type: mongoose.Schema.Types.Mixed },
     workFieldSettings: { type: mongoose.Schema.Types.Mixed },
     defaultCurrency: { type: String, default: 'HUF', match: /^[A-Z]{3}$/ },
     workTurnoverDay: { type: String, default: DEFAULT_WORK_TURNOVER_DAY, required: true, validate: isWorkTurnoverDay },

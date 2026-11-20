@@ -5,6 +5,13 @@ import { Observable, map } from 'rxjs';
 import { environment } from '../../environments/environment';
 import type { TenantFeatures } from './auth.service';
 
+export type AccountingNotifications = {
+  mode: 'off' | 'single' | 'entity';
+  language: UiLanguage;
+  email?: string;
+  entityEmails?: Record<string, string>;
+};
+
 export type AdminTenant = {
   id: string;
   name: string;
@@ -15,7 +22,10 @@ export type AdminTenant = {
   workTurnoverDay?: string;
   alignWorkSequence?: boolean;
   financeAccess?: boolean;
+  weeklyWorkSummary?: boolean;
+  accountingNotifications?: AccountingNotifications | null;
   features: TenantFeatures;
+  accountingEntities?: { id: string; label: string }[];
   ownerUserId?: string | null;
   createdAt?: string;
   updatedAt?: string;
@@ -33,6 +43,8 @@ export type TenantPayload = {
   alignWorkSequence?: boolean;
   features: TenantFeatures;
   financeAccess?: boolean;
+  weeklyWorkSummary?: boolean;
+  accountingNotifications?: AccountingNotifications | null;
 };
 
 export type LoginMethod = 'microsoft' | 'password';

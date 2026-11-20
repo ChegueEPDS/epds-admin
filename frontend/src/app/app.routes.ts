@@ -47,6 +47,12 @@ export const routes: Routes = [
       inject(Router).createUrlTree(['/project-tracker'], { queryParams, fragment: fragment ?? undefined })
   },
   {
+    path: 'project-tracker/open/:tenantId',
+    component: WorkBoardPageComponent,
+    canActivate: [AuthGuard],
+    data: { openWorkLink: true }
+  },
+  {
     path: 'project-tracker/finance/:tenantId',
     loadComponent: () => import('./work-board/finance-work-board-page.component').then((m) => m.FinanceWorkBoardPageComponent),
     canActivate: [AuthGuard],

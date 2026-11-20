@@ -33,6 +33,7 @@ const { startDomainPageSpeedScheduler } = require('./services/domainPageSpeedSch
 const { startDomainStatusReadModel } = require('./services/domainStatusReadModelService');
 const { startDomainStatusPdfMaintenance } = require('./services/domainStatusPdfCacheService');
 const { normalizeTenantTypes } = require('./services/tenantMigrationService');
+const { startAccountingNotifications } = require('./services/accountingNotificationWorker');
 const { startWebhookWorker } = require('./services/webhookWorkerService');
 const { startLicenseExpiryScheduler } = require('./services/licenseExpiryService');
 
@@ -144,6 +145,7 @@ if (require.main === module) {
       startDomainStatusReadModel();
       startDomainStatusPdfMaintenance();
       startWebhookWorker();
+      startAccountingNotifications();
       startLicenseExpiryScheduler();
       startMnbExchangeRates();
       startWorkDashboardSnapshots();

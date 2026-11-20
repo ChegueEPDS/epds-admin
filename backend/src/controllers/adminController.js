@@ -1,3 +1,4 @@
+const { activeEntities, accountingSettings } = require('../services/accountingNotifications');
 const { tenantLogoError } = require('../services/tenantLogo');
 const Tenant = require('../models/tenant');
 const DomainMonitor = require('../models/domainMonitor');
@@ -125,6 +126,9 @@ function presentTenant(tenant) {
     displayName: tenant.displayName || tenant.name,
     type: tenant.type,
     logoDataUrl: tenant.logoDataUrl ?? null,
+    weeklyWorkSummary: Boolean(tenant.weeklyWorkSummarySince),
+    accountingNotifications: tenant.accountingNotifications ?? null,
+    accountingEntities: activeEntities(tenant.workFieldSettings),
     defaultCurrency: tenant.defaultCurrency || DEFAULT_CURRENCY,
     workTurnoverDay: tenant.workTurnoverDay ?? DEFAULT_WORK_TURNOVER_DAY,
     alignWorkSequence: tenant.alignWorkSequence === true,
@@ -171,6 +175,8 @@ exports.createTenant = async (req, res) => {
       displayName,
       type,
       logoDataUrl,
+      weeklyWorkSummarySince: req.body?.weeklyWorkSummary === true ? new Date() : null,
+      accountingNotifications: accountingSettings(req.body?.accountingNotifications),
       defaultCurrency: currency,
       workTurnoverDay,
       alignWorkSequence,
@@ -181,6 +187,7 @@ exports.createTenant = async (req, res) => {
     return res.status(201).json({ tenant: presentTenant(tenant) });
   } catch (error) {
     if (error?.code === 11000) return res.status(409).json({ error: 'Tenant already exists' });
+    if (error.statusCode === 400) return res.status(400).json({ error: error.message });
     console.error('[admin] create tenant failed:', error);
     return res.status(500).json({ error: 'Tenant creation failed' });
   }
@@ -212,6 +219,11 @@ exports.updateTenant = async (req, res) => {
     const existing = await Tenant.findOne({ name, _id: { $ne: tenant._id } });
     if (existing) return res.status(409).json({ error: 'Tenant already exists' });
 
+    const accountingNotifications = accountingSettings(req.body?.accountingNotifications, tenant.workFieldSettings);
+    if (typeof req.body?.weeklyWorkSummary === 'boolean') {
+      tenant.weeklyWorkSummarySince = req.body.weeklyWorkSummary ? tenant.weeklyWorkSummarySince || new Date() : null;
+    }
+    if (accountingNotifications !== undefined) tenant.accountingNotifications = accountingNotifications;
     tenant.name = name;
     tenant.displayName = displayName;
     tenant.type = type;
@@ -230,6 +242,7 @@ exports.updateTenant = async (req, res) => {
     return res.json({ tenant: presentTenant(tenant) });
   } catch (error) {
     if (error?.code === 11000) return res.status(409).json({ error: 'Tenant already exists' });
+    if (error.statusCode === 400) return res.status(400).json({ error: error.message });
     console.error('[admin] update tenant failed:', error);
     return res.status(500).json({ error: 'Tenant update failed' });
   }

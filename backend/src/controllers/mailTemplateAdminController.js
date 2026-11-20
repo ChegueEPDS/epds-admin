@@ -1,7 +1,7 @@
 const { requestLanguage } = require('../services/uiLanguage');
 const mail = require('../services/mailService');
 const { normalizeEmail, validEmail } = require('../services/accountInvitations');
-const { accountMail, transitionMail, monthlyReportMail, forwardedMail, paragraph } = require('../services/mailTemplates');
+const { accountMail, transitionMail, monthlyReportMail, forwardedMail, paragraph, accountingMail, workStatusMail, weeklyWorkMail } = require('../services/mailTemplates');
 const { dailyReportMail } = require('../services/domainDailyReportService');
 const { generateMonthlyPdf } = require('../services/domainMonthlyPdfService');
 const { calculateMonthlyMetrics, monthPeriod, previousMonth } = require('../services/domainMonthlyMetrics');
@@ -25,6 +25,14 @@ async function sampleMonthlyReport(language) {
   };
 }
 
+const { weeklyPeriod } = require('../services/workStatusNotifications');
+
+const sampleWorkUrl = 'https://example.com/project-tracker';
+const sampleWorkChange = {
+  tenantName: 'EPDS', workNumber: '2026-0042', name: 'ATEX inspection',
+  previousStatus: 'in_progress', status: 'completed_billable'
+};
+
 const templates = new Map(Object.entries({
   'invite-password': ['Account invitation · Password', sampleAccount('invite-password', '72 hours')],
   'invite-microsoft': ['Account invitation · Microsoft', sampleAccount('invite-microsoft', '72 hours')],
@@ -39,6 +47,18 @@ const templates = new Map(Object.entries({
     performance: { status: 'ok' }, availability: { uptimePercent: 100 }
   }], language)],
   'domain-monthly': ['Domain Health · Monthly PDF report', sampleMonthlyReport],
+  'work-billable': ['Accounting · Work ready for invoicing', (language) => accountingMail({
+    language, tenantName: 'EPDS', workNumber: '2026-0042', name: 'ATEX inspection',
+    customer: 'Example Industrial Ltd.', entity: 'EPDS Hungary', completionDate: '2026-11-20',
+    totalAmount: 1250000, currency: 'HUF'
+  }, 'https://example.com/project-tracker')],
+  'work-status': ['Project Tracker · Work status changed', (language) =>
+    workStatusMail({ ...sampleWorkChange, language }, sampleWorkUrl)],
+  'work-weekly': ['Project Tracker · Weekly summary', (language) => {
+    const period = weeklyPeriod();
+    return weeklyWorkMail({ ...period, language, tenantName: sampleWorkChange.tenantName,
+      changes: [{ ...sampleWorkChange, changedAt: new Date(+period.to - 60_000) }] }, () => sampleWorkUrl);
+  }],
   'manual-message': ['Mailbox · New message', () => ({
     subject: 'Sample message', html: paragraph('This is a sample message sent from PandA.')
   })],

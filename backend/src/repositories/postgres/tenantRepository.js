@@ -11,6 +11,9 @@ function present(row) {
     defaultCurrency: row.default_currency || 'HUF',
     workTurnoverDay: row.work_turnover_day ?? DEFAULT_WORK_TURNOVER_DAY,
     alignWorkSequence: row.align_work_sequence === true,
+    weeklyWorkSummarySince: row.weekly_work_summary_since,
+    accountingNotifications: row.accounting_notifications ?? null,
+    workFieldSettings: row.work_field_settings,
     seats: { max: Number(row.seats_max), used: Number(row.seats_used) },
     seatsManaged: row.seats_managed, features: row.features || {},
     professionRbacEnabled: Boolean(row.profession_rbac_enabled),
@@ -37,13 +40,16 @@ async function save(input) {
   const result = await query(`
     INSERT INTO tenants
       (id,name,display_name,type,owner_user_id,seats_max,seats_used,seats_managed,features,
-       profession_rbac_enabled,created_at,updated_at,default_currency,work_turnover_day,align_work_sequence,logo_data_url)
-    VALUES ($1,lower($2),$3,$4,$5,$6,$7,$8,$9::jsonb,$10,coalesce($11,now()),now(),coalesce($12,'HUF'),coalesce($13,'01-01'),coalesce($14,false),$15)
+       profession_rbac_enabled,created_at,updated_at,default_currency,work_turnover_day,align_work_sequence,logo_data_url,accounting_notifications,weekly_work_summary_since)
+    VALUES ($1,lower($2),$3,$4,$5,$6,$7,$8,$9::jsonb,$10,coalesce($11,now()),now(),coalesce($12,'HUF'),coalesce($13,'01-01'),coalesce($14,false),$15,$17::jsonb,CASE WHEN $19::boolean THEN now() END)
     ON CONFLICT (id) DO UPDATE SET
       name=EXCLUDED.name, display_name=EXCLUDED.display_name, type=EXCLUDED.type,
       owner_user_id=EXCLUDED.owner_user_id, seats_max=EXCLUDED.seats_max,
       seats_used=EXCLUDED.seats_used, seats_managed=EXCLUDED.seats_managed,
       features=EXCLUDED.features, profession_rbac_enabled=EXCLUDED.profession_rbac_enabled,
+      weekly_work_summary_since=CASE WHEN $19::boolean IS NULL THEN tenants.weekly_work_summary_since
+        WHEN $19 THEN coalesce(tenants.weekly_work_summary_since, now()) ELSE NULL END,
+      accounting_notifications=CASE WHEN $18 THEN EXCLUDED.accounting_notifications ELSE tenants.accounting_notifications END,
       logo_data_url=CASE WHEN $16 THEN EXCLUDED.logo_data_url ELSE tenants.logo_data_url END,
       updated_at=now(), default_currency=coalesce($12,tenants.default_currency),
       work_turnover_day=coalesce($13,tenants.work_turnover_day), align_work_sequence=coalesce($14,tenants.align_work_sequence)
@@ -52,7 +58,9 @@ async function save(input) {
     input.ownerUserId || null, Number(input.seats?.max || 0), Number(input.seats?.used || 0),
     input.seatsManaged || 'stripe', JSON.stringify(input.features || {}),
     Boolean(input.professionRbacEnabled), input.createdAt || null, input.defaultCurrency || null,
-    input.workTurnoverDay ?? null, input.alignWorkSequence ?? null, input.logoDataUrl ?? null, input.logoDataUrl !== undefined
+    input.workTurnoverDay ?? null, input.alignWorkSequence ?? null, input.logoDataUrl ?? null, input.logoDataUrl !== undefined,
+    input.accountingNotifications == null ? null : JSON.stringify(input.accountingNotifications), input.accountingNotifications !== undefined,
+    typeof input.weeklyWorkSummary === 'boolean' ? input.weeklyWorkSummary : null
   ]);
   return present(result.rows[0]);
 }

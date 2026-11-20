@@ -140,6 +140,19 @@
             }
             @case ('responsible') {
               <mat-form-field appearance="outline"><mat-label>{{ 'Responsible' | uiText }}</mat-label><mat-select name="workResponsible" [(ngModel)]="workForm.responsibleUserId"><mat-option value="">{{ 'No responsible' | uiText }}</mat-option><mat-option *ngFor="let user of tenantUsers" [value]="user.id">{{ user.fullName }}</mat-option></mat-select></mat-form-field>
+              <mat-form-field appearance="outline">
+                <mat-label>{{ 'Contributors' | uiText }}</mat-label>
+                <mat-select name="workContributors" [(ngModel)]="workForm.contributors" multiple>
+                  @for (user of tenantUsers; track user.id) {
+                    <mat-option [value]="user.id">{{ user.fullName }}</mat-option>
+                  }
+                  @for (contributor of workForm.contributors; track contributor) {
+                    @if (!isTenantUser(contributor)) {
+                      <mat-option [value]="contributor">{{ contributor }}</mat-option>
+                    }
+                  }
+                </mat-select>
+              </mat-form-field>
             }
             @case ('status') {
               <mat-form-field appearance="outline"><mat-label>{{ 'Status' | uiText }}</mat-label><mat-select name="workStatus" [ngModel]="workForm.status" (ngModelChange)="changeWorkStatus($event)"><mat-option *ngFor="let status of statuses" [value]="status.value">{{ status.label | uiText }}</mat-option></mat-select></mat-form-field>
@@ -414,7 +427,7 @@
             <div class="table-column-groups">
               <section aria-labelledby="visible-columns-heading">
                 <h3 id="visible-columns-heading">{{ financeTenantId ? ('Megjelenített oszlopok' | uiText) : ('Displayed columns' | uiText) }}</h3>
-                <app-work-layout-list [items]="visibleColumns" (itemsChange)="changeColumns($event)"/>
+                <app-work-layout-list [items]="visibleColumns" [horizontal]="true" (itemsChange)="changeColumns($event)"/>
               </section>
               <section aria-labelledby="available-columns-heading">
                 <h3 id="available-columns-heading">{{ financeTenantId ? ('Elérhető oszlopok' | uiText) : ('Available columns' | uiText) }}</h3>
@@ -439,7 +452,7 @@
           <thead matSort matSortDisableClear [matSortActive]="sort.active" [matSortDirection]="sort.direction" (matSortChange)="sortChanged($event)">
             <tr>
               @for (column of columns; track column.id) {
-                @if (column.id === 'invoiceNumber' || column.id === 'paymentDeadline') {
+                @if (!isSortableColumn(column.id)) {
                   <th scope="col">{{ column.id.startsWith('field:') ? column.label : (column.label | uiText) }}</th>
                 } @else {
                   <th scope="col" [mat-sort-header]="column.id" [sortActionDescription]="'Sort by ' + column.label"
@@ -484,19 +497,35 @@
                       <td [class.overdue]="isOverdue(operational?.deadline ?? null)">{{ (operational?.deadline | date:'yyyy.MM.dd') || '—' }}</td>
                     }
                     @case ('totalAmount') {
-                      <td class="numeric">{{ showFrom('offer', work.status) ? formatMoney(work.totalAmount, work.currency) : '—' }}</td>
+                      <td class="numeric">
+                        @if (showFrom('offer', work.status)) {
+                          {{ formatMoney(work.totalAmount, work.currency) }}
+                          @let paidAmount = operational?.paidAmount ?? work.reporting?.paidAmount ?? 0;
+                          @if (paidAmount > 0) {
+                            <small>{{ 'Paid' | uiText }} · {{ formatMoney(paidAmount, work.currency) }}</small>
+                          }
+                        } @else {
+                          —
+                        }
+                      </td>
                     }
                     @case ('subWorkCount') {
                       <td class="numeric"><strong>{{ operational?.subWorkCount }}</strong><small *ngIf="isFieldVisible('totalAmount') && work.totalAmount">{{ operational?.allocatedPercentage | number:'1.0-1' }}%</small></td>
                     }
-                    @case ('invoiceNumber') { <td>{{ work.invoiceNumber || '—' }}</td> }
+                    @case ('invoiceNumber') { <td>{{ operational ? additionalColumnValue(operational, column.id) : (work.invoiceNumber || '—') }}</td> }
                     @case ('paymentDeadline') {
-                      <td [class.overdue]="work.status !== 'paid' && isBillingOverdue(work.invoicePaymentDeadline)">{{ (billingDay(work.invoicePaymentDeadline) | date:'yyyy.MM.dd') || '—' }}</td>
+                      <td [class.overdue]="work.status !== 'paid' && isBillingOverdue(work.invoicePaymentDeadline)">{{ operational ? additionalColumnValue(operational, column.id) : ((billingDay(work.invoicePaymentDeadline) | date:'yyyy.MM.dd') || '—') }}</td>
                     }
                     @default {
-                      @if (operational && customField(column.id.slice(6)); as field) {
-                        <td class="custom-field-cell">{{ listField(operational, field) }}</td>
-                      }
+                      <td class="custom-field-cell">
+                        @if (operational) {
+                          @if (column.id.startsWith('field:') && customField(column.id.slice(6)); as field) {
+                            {{ listField(operational, field) }}
+                          } @else {
+                            {{ additionalColumnValue(operational, column.id) }}
+                          }
+                        }
+                      </td>
                     }
                   }
                 }
@@ -678,10 +707,10 @@
           <section class="form-group" *ngIf="showFrom('offer', subWorkForm.status)">
             <div class="group-heading"><span>02</span><div><h3>{{ 'Schedule and value' | uiText }}</h3></div></div>
             <div class="form-grid">
-              <mat-form-field appearance="outline"><mat-label>{{ 'Deadline' | uiText }}</mat-label><input matInput name="subDeadline" [(ngModel)]="subWorkForm.deadline" [matDatepicker]="subDeadlinePicker"><mat-datepicker-toggle matIconSuffix [for]="subDeadlinePicker"></mat-datepicker-toggle><mat-datepicker #subDeadlinePicker></mat-datepicker></mat-form-field>
-              <mat-form-field appearance="outline"><mat-label>{{ 'Planned hours' | uiText }}</mat-label><input matInput type="number" min="0" name="subHours" [(ngModel)]="subWorkForm.plannedHours"></mat-form-field>
               <mat-form-field appearance="outline"><mat-label>{{ 'Amount' | uiText }}</mat-label><input matInput type="number" min="0" name="subAmount" [(ngModel)]="subWorkForm.amount" (ngModelChange)="amountChanged()"><span matTextSuffix>{{ work.currency }}</span></mat-form-field>
               <mat-form-field appearance="outline"><mat-label>{{ 'Of total' | uiText }}</mat-label><input matInput type="number" min="0" name="subPercentage" [(ngModel)]="subWorkForm.percentage" (ngModelChange)="percentageChanged()"><span matTextSuffix>%</span></mat-form-field>
+              <mat-form-field appearance="outline"><mat-label>{{ 'Deadline' | uiText }}</mat-label><input matInput name="subDeadline" [(ngModel)]="subWorkForm.deadline" [matDatepicker]="subDeadlinePicker"><mat-datepicker-toggle matIconSuffix [for]="subDeadlinePicker"></mat-datepicker-toggle><mat-datepicker #subDeadlinePicker></mat-datepicker></mat-form-field>
+              <mat-form-field appearance="outline"><mat-label>{{ 'Planned hours' | uiText }}</mat-label><input matInput type="number" min="0" name="subHours" [(ngModel)]="subWorkForm.plannedHours"></mat-form-field>
             </div>
           </section>
           <section class="form-group" *ngIf="showFrom('completion', subWorkForm.status)">

@@ -1,4 +1,18 @@
 export const HU_UI_TEXTS: Readonly<Record<string, string>> = {
+  "Disabled": "Kikapcsolva",
+  "Weekly summary": "Heti összefoglaló",
+  "Contributors": "Közreműködők",
+  "Accounting": "Pénzügy",
+  "Accounting notification routing": "Pénzügyi értesítések címzése",
+  "Single address for all work": "Egy cím minden munkához",
+  "By organizational unit": "Szervezetenként",
+  "Accounting email": "Pénzügyi e-mail-cím",
+  "Email language": "Levél nyelve",
+  "Invalid accounting notification settings.": "Érvénytelen pénzügyi értesítési beállítások.",
+  "Enter a valid accounting email for each selected recipient.": "Adj meg érvényes pénzügyi e-mail-címet minden kiválasztott címzetthez.",
+  "Set the accounting email for this work’s organizational unit before marking it billable.": "A számlázható státuszhoz válassz a munkához olyan szervezetet, amelyhez meg van adva pénzügyi e-mail-cím.",
+  "Accounting · Work ready for invoicing": "Pénzügy · Számlázható munka",
+
   " (archived)": " (archivált)",
   " · Baseline": " · Kiinduló árfolyam",
   " · Latest available": " · Legutóbbi elérhető árfolyam",

@@ -133,4 +133,79 @@ function forwardedMail(comment, originalHtml) {
   };
 }
 
-module.exports = { brandMail, escapeHtml, paragraph, accountMail, transitionMail, monthlyReportMail, forwardedMail };
+function accountingMail(details, url) {
+  const { language, tenantName, workNumber, name, customer, entity, completionDate, totalAmount, currency } = details;
+  const hu = language === 'hu';
+  const locale = hu ? 'hu-HU' : 'en-GB';
+  const title = hu ? 'A munka számlázható' : 'Work ready for invoicing';
+  const intro = hu
+    ? 'Az alábbi munka teljesítve van és számlázható. A számlázáshoz szükséges részleteket a munka adatlapján találod.'
+    : 'The work below is complete and ready for invoicing. Open the work record for billing details.';
+  const fields = [
+    ['Tenant', tenantName],
+    [hu ? 'Munkaszám' : 'Work number', workNumber],
+    [hu ? 'Munka' : 'Work', name],
+    [hu ? 'Ügyfél' : 'Client', customer],
+    [hu ? 'Szervezet' : 'Organizational unit', entity],
+    [hu ? 'Teljesítés dátuma' : 'Completion date', completionDate && new Intl.DateTimeFormat(locale, {
+      dateStyle: 'long', timeZone: 'UTC'
+    }).format(new Date(completionDate))],
+    [hu ? 'Munka teljes értéke' : 'Total work value', new Intl.NumberFormat(locale, { style: 'currency', currency }).format(totalAmount)]
+  ];
+  const rows = fields.filter(([, value]) => value).map(([label, value]) =>
+    `<tr><th scope="row" align="left" style="padding:8px 16px 8px 0;color:#575048">${escapeHtml(label)}</th><td style="padding:8px 0">${escapeHtml(value)}</td></tr>`
+  ).join('');
+  return {
+    subject: ['[PandA]', hu ? 'Számlázható munka' : title, tenantName, workNumber, name]
+      .join(' · ').replace(/[\r\n]+/g, ' '),
+    html: paragraph(intro) + `<table cellpadding="0" cellspacing="0" width="100%">${rows}</table>`,
+    branding: {
+      title, category: hu ? 'Pénzügy' : 'Accounting', preheader: intro, lang: language,
+      action: { label: hu ? 'Munka megnyitása a PandA-ban' : 'Open work in PandA', url }
+    }
+  };
+}
+
+const workStatusLabels = {
+  inquiry: ['Inquiry', 'Megkeresés'], offer: ['Offer', 'Ajánlat'], to_start: ['To start', 'Indításra vár'],
+  in_progress: ['In progress', 'Folyamatban'], on_hold: ['On hold', 'Felfüggesztve'],
+  completed_billable: ['Completed, billable', 'Teljesítve, számlázható'], invoiced: ['Invoiced', 'Számlázva'],
+  paid: ['Paid', 'Fizetve'], closed: ['Closed', 'Lezárt'], cancelled: ['Cancelled', 'Lemondva'], lost: ['Lost', 'Elvesztett']
+};
+
+function workStatusTransition(change, hu) {
+  const label = (status) => workStatusLabels[status]?.[hu ? 1 : 0] ?? status;
+  return [label(change.previousStatus), label(change.status)].join(' → ');
+}
+
+function workStatusMail(change, url) {
+  const lang = change.language || 'hu';
+  const hu = lang === 'hu';
+  const title = hu ? 'Megváltozott a munka státusza' : 'Work status changed';
+  const work = `${change.workNumber} · ${change.name}`;
+  return {
+    subject: `[PandA] ${title} · ${work}`.replace(/[\r\n]+/g, ' '),
+    html: paragraph(change.tenantName) + paragraph(work) + paragraph(workStatusTransition(change, hu)),
+    branding: { title, lang, action: { url, label: hu ? 'Munka megnyitása' : 'Open work' } }
+  };
+}
+
+function weeklyWorkMail(summary, workUrl) {
+  const lang = summary.language || 'hu';
+  const hu = lang === 'hu';
+  const title = hu ? 'Heti összefoglaló' : 'Weekly summary';
+  const format = new Intl.DateTimeFormat(hu ? 'hu-HU' : 'en-GB', {
+    timeZone: 'Europe/Budapest', dateStyle: 'medium', timeStyle: 'short'
+  });
+  const rows = summary.changes.map((change) => `<li style="margin-bottom:14px"><a href="${escapeHtml(workUrl(change))}"
+      style="color:#8a4608">${escapeHtml(change.workNumber)} · ${escapeHtml(change.name)}</a><br>
+      ${escapeHtml(workStatusTransition(change, hu))} · ${escapeHtml(format.format(new Date(change.changedAt)))}</li>`);
+  return {
+    subject: `[PandA] ${title} · ${summary.tenantName}`.replace(/[\r\n]+/g, ' '),
+    html: paragraph(`${format.format(new Date(summary.from))} – ${format.format(new Date(summary.to))}`) +
+      `<ul style="padding-left:22px">${rows.join('')}</ul>`,
+    branding: { title, lang }
+  };
+}
+
+module.exports = { brandMail, escapeHtml, paragraph, accountMail, transitionMail, monthlyReportMail, forwardedMail, accountingMail, workStatusMail, weeklyWorkMail };

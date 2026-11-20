@@ -10,7 +10,7 @@ import { LayoutItem } from './work-fields';
   selector: 'app-work-layout-list',
   imports: [UiTextPipe, CdkDrag, CdkDragHandle, CdkDropList, MatButtonModule, MatCheckboxModule, MatIconModule],
   template: `
-    <ol cdkDropList [cdkDropListDisabled]="disabled()" (cdkDropListDropped)="drop($event)">
+    <ol cdkDropList [class.horizontal]="horizontal()" [cdkDropListOrientation]="horizontal() ? 'mixed' : 'vertical'" [cdkDropListDisabled]="disabled()" (cdkDropListDropped)="drop($event)">
       @for (item of items(); track item.id; let i = $index) {
         <li cdkDrag>
           <span class="handle" cdkDragHandle aria-hidden="true"><mat-icon class="material-symbols-outlined">drag_indicator</mat-icon></span>
@@ -40,20 +40,21 @@ import { LayoutItem } from './work-fields';
             }
           } @else if (item.visible !== undefined) {
             <mat-checkbox [checked]="item.visible" [disabled]="disabled() || (item.visible && visibleCount === 1)"
-              (change)="toggle(i, $event.checked)">{{ item.label }}</mat-checkbox>
+              (change)="toggle(i, $event.checked)">{{ horizontal() && !item.id.startsWith('field:') ? (item.label | uiText) : item.label }}</mat-checkbox>
           } @else {
             <span>{{ item.label }}</span>
           }
           <button mat-icon-button type="button" [disabled]="disabled() || i === 0"
-            [attr.aria-label]="'Move ' + item.label + ' up'" (click)="move(i, i - 1)"><mat-icon class="material-symbols-outlined">keyboard_arrow_up</mat-icon></button>
+            [attr.aria-label]="'Move ' + item.label + (horizontal() ? ' earlier' : ' up')" (click)="move(i, i - 1)"><mat-icon class="material-symbols-outlined">{{ horizontal() ? 'keyboard_arrow_left' : 'keyboard_arrow_up' }}</mat-icon></button>
           <button mat-icon-button type="button" [disabled]="disabled() || i === items().length - 1"
-            [attr.aria-label]="'Move ' + item.label + ' down'" (click)="move(i, i + 1)"><mat-icon class="material-symbols-outlined">keyboard_arrow_down</mat-icon></button>
+            [attr.aria-label]="'Move ' + item.label + (horizontal() ? ' later' : ' down')" (click)="move(i, i + 1)"><mat-icon class="material-symbols-outlined">{{ horizontal() ? 'keyboard_arrow_right' : 'keyboard_arrow_down' }}</mat-icon></button>
         </li>
       }
     </ol>
   `,
   styles: [`
     ol { display: grid; gap: 4px; list-style: none; margin: 0; padding: 0; }
+    ol.horizontal { display: flex; flex-wrap: wrap; }
     li { display: flex; gap: 4px; align-items: center;
       background: var(--brand-panel); color: var(--brand-ink); border: 1px solid var(--brand-border); border-radius: 8px; padding-inline: 8px; }
     li > :nth-child(2) { flex: 1; min-width: 0; overflow-wrap: anywhere; }
@@ -69,6 +70,7 @@ import { LayoutItem } from './work-fields';
 })
 export class WorkLayoutListComponent {
   readonly items = input.required<LayoutItem[]>();
+  readonly horizontal = input(false);
   readonly disabled = input(false);
   readonly fieldVisibility = input(false);
   readonly itemsChange = output<LayoutItem[]>();

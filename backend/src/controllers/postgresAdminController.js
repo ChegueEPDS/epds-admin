@@ -1,3 +1,4 @@
+const { activeEntities, accountingSettings } = require('../services/accountingNotifications');
 const { tenantLogoError } = require('../services/tenantLogo');
 const {query}=require('../postgres');
 const tenantRepository=require('../repositories/postgres/tenantRepository');
@@ -6,6 +7,8 @@ const { workTurnoverError } = require('../services/workTurnover');
 function tenantView(t) {
   return { id: String(t._id), name: t.name, displayName: t.displayName || t.name, type: t.type,
     logoDataUrl: t.logoDataUrl ?? null,
+    weeklyWorkSummary: Boolean(t.weeklyWorkSummarySince),
+    accountingNotifications: t.accountingNotifications, accountingEntities: activeEntities(t.workFieldSettings),
     defaultCurrency: t.defaultCurrency, workTurnoverDay: t.workTurnoverDay, alignWorkSequence: t.alignWorkSequence,
     features: t.features || {}, financeAccess: t.features?.financeAccess?.enabled === true,
     ownerUserId: t.ownerUserId || null, createdAt: t.createdAt, updatedAt: t.updatedAt };
@@ -36,11 +39,16 @@ async function saveTenant(req, res, next, existing = null) {
     if (duplicate && duplicate._id !== existing?._id) return res.status(409).json({ error: 'Tenant already exists' });
     const financeAccess = req.body?.financeAccess ?? existing?.features?.financeAccess?.enabled;
     const features = type === 'finance' ? {} : { ...req.body?.features, financeAccess: { enabled: financeAccess === true } };
-    const saved = await tenantRepository.save({ ...existing, name, displayName, type, defaultCurrency, workTurnoverDay, alignWorkSequence, logoDataUrl,
+    const accountingNotifications = accountingSettings(req.body?.accountingNotifications, existing?.workFieldSettings);
+    const saved = await tenantRepository.save({ ...existing, name, displayName, type, defaultCurrency, workTurnoverDay, alignWorkSequence, logoDataUrl, accountingNotifications,
+      weeklyWorkSummary: req.body?.weeklyWorkSummary,
       features, seats: existing?.seats || { max: 0, used: 0 }, seatsManaged: existing?.seatsManaged || 'manual' });
     await query('UPDATE license_customers SET customer_name=$2,normalized_customer_name=lower($2),updated_at=now() WHERE tenant_id=$1', [saved._id, displayName]);
     await query(`UPDATE domain_monitors SET owner=$2,updated_at=now() WHERE tenant_id=$1 AND $3<>'exnb-exva'`, [saved._id, displayName, name]);
     return res.status(existing ? 200 : 201).json({ tenant: tenantView(saved) });
-  } catch (error) { next(error); }
+  } catch (error) {
+    if (error.statusCode === 400) return res.status(400).json({ error: error.message });
+    next(error);
+  }
 }
 exports.createTenant=(req,res,next)=>saveTenant(req,res,next);exports.updateTenant=async(req,res,next)=>{const t=await tenantRepository.findById(req.params.id);if(!t)return res.status(404).json({error:'Tenant not found'});return saveTenant(req,res,next,t);};

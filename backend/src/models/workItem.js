@@ -1,3 +1,7 @@
+const { statusChange, statusJobs } = require('../services/workStatusNotifications');
+const User = require('./user');
+const { BILLABLE, billableNotification } = require('../services/accountingNotifications');
+const Tenant = require('./tenant');
 const mongoose = require('mongoose');
 
 const WORK_STATUSES = [
@@ -47,6 +51,18 @@ const WorkItemSchema = new mongoose.Schema(
     contractSigned: { type: Boolean, default: false },
     performanceCertificate: { type: Boolean, default: false },
     archivedAt: { type: Date },
+    statusHistory: [{
+      _id: false,
+      changedAt: Date,
+      payload: mongoose.Schema.Types.Mixed
+    }],
+    accountingOutbox: [{
+      _id: false,
+      id: String,
+      payload: mongoose.Schema.Types.Mixed,
+      nextAttemptAt: Date,
+      attempts: Number
+    }],
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     updatedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' }
   },
@@ -56,6 +72,40 @@ const WorkItemSchema = new mongoose.Schema(
 WorkItemSchema.index({ tenantId: 1, year: 1, sequenceNumber: 1 }, { unique: true });
 WorkItemSchema.index({ tenantId: 1, status: 1, deadline: 1 });
 WorkItemSchema.index({ tenantId: 1, archivedAt: 1, status: 1, deadline: 1, updatedAt: -1 });
+
+WorkItemSchema.index({ 'accountingOutbox.nextAttemptAt': 1 }, { sparse: true });
+
+WorkItemSchema.index({ tenantId: 1, 'statusHistory.changedAt': 1 });
+
+WorkItemSchema.pre('save', async function () {
+  if ((!this.isNew && !this.isModified('status')) || this.$locals.notificationStatus === this.status) return;
+  const previous = this.isNew ? null : await this.constructor.findById(this._id)
+    .select('status').session(this.$session()).lean();
+  if (previous?.status === this.status) return;
+  const tenant = await Tenant.findById(this.tenantId)
+    .select('name displayName accountingNotifications workFieldSettings').session(this.$session()).lean();
+  if (!tenant) return;
+
+  const jobs = [];
+  if (this.status === BILLABLE) {
+    const event = billableNotification(tenant, this);
+    if (event) jobs.push(event);
+  }
+  if (previous) {
+    const change = statusChange(this, previous.status);
+    if (this.responsibleUserId || this.contributors?.length) {
+      const users = await User.find({ $or: [{ tenantId: this.tenantId }, { additionalTenantIds: this.tenantId }] })
+        .select('email firstName lastName').session(this.$session()).lean();
+      jobs.push(...statusJobs(change, this, tenant.displayName || tenant.name, users));
+    }
+    this.statusHistory.push({ changedAt: change.changedAt, payload: change });
+  }
+  this.accountingOutbox.push(...jobs.map((job) => ({ ...job, nextAttemptAt: new Date(), attempts: 0 })));
+  this.$locals.notificationStatus = this.status;
+});
+WorkItemSchema.post('save', function () {
+  delete this.$locals.notificationStatus;
+});
 
 module.exports = {
   WorkItem: mongoose.models.WorkItem || mongoose.model('WorkItem', WorkItemSchema),

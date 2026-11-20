@@ -1,3 +1,5 @@
+const { recordPostgresStatus } = require('../../services/workStatusNotifications');
+const { BILLABLE, enqueuePostgres } = require('../../services/accountingNotifications');
 const { lockSubWorkRates } = require('../../services/workExchangeRates');
 const mongoose = require('mongoose');
 const { query, withTransaction } = require('../../postgres');
@@ -168,7 +170,9 @@ async function insertWork(client, tenantId, actorId, input) {
     input.invoiceDate || null, input.invoicePaymentDeadline || null, input.invoiceNumber || '',
     Boolean(input.contractSigned), Boolean(input.performanceCertificate), actorId, JSON.stringify(input.customFields || {}),
     input.entityId || null, input.serviceTypeId || null, JSON.stringify(input.reporting || {}), input.paidAt || null]);
-  return work(result.rows[0]);
+  const saved = work(result.rows[0]);
+  if (saved.status === BILLABLE) await enqueuePostgres(client, saved);
+  return saved;
 }
 
 const WORK_MUTABLE = new Map([
@@ -207,9 +211,20 @@ async function updateWork(tenantId, workId, actorId, input, expectedRevision, tr
     params.push(expectedRevision);
     revision = ` AND field_revision=$${params.length}`;
   }
-  const execute = transaction ? transaction.query.bind(transaction) : query;
-  const result = await execute(`UPDATE work_items SET ${sets.join(',')} WHERE id=$1 AND tenant_id=$2 AND archived_at IS NULL${revision} RETURNING *`, params);
-  return work(result.rows[0]);
+  const update = async (client) => {
+    const previous = input.status !== undefined
+      ? (await client.query('SELECT status FROM work_items WHERE id=$1 AND tenant_id=$2 FOR UPDATE', [workId, tenantId])).rows[0]
+      : null;
+    const result = await client.query(`UPDATE work_items SET ${sets.join(',')} WHERE id=$1 AND tenant_id=$2 AND archived_at IS NULL${revision} RETURNING *`, params);
+    const saved = work(result.rows[0]);
+    if (saved && previous && previous.status !== saved.status) {
+      if (saved.status === BILLABLE) await enqueuePostgres(client, saved);
+      await recordPostgresStatus(client, saved, previous.status);
+    }
+    return saved;
+  };
+  if (transaction) return update(transaction);
+  return input.status !== undefined ? withTransaction(update) : update({ query });
 }
 
 async function archiveWork(tenantId, workId, actorId) {

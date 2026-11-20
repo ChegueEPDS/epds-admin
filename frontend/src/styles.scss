@@ -190,7 +190,7 @@ app-work-board .table-view-settings { margin-bottom: 8px; border: 1px solid var(
 app-work-board .table-view-settings summary { cursor: pointer; padding: 10px 12px; font-size: .85rem; font-weight: 700; }
 app-work-board .table-view-content { display: grid; gap: 12px; padding: 0 12px 12px; }
 app-work-board .table-view-actions { display: flex; flex-wrap: wrap; gap: 8px; }
-app-work-board .table-column-groups { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 20rem), 1fr)); gap: 16px; }
+app-work-board .table-column-groups { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; }
 app-work-board .table-column-groups > section { min-width: 0; }
 app-work-board .table-column-groups h3 { margin: 0 0 8px; font-size: .9rem; }
 app-work-board .available-columns { display: flex; flex-wrap: wrap; gap: 6px; }

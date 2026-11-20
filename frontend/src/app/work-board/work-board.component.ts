@@ -6,7 +6,7 @@ import { Component, DestroyRef, Input, OnDestroy, OnInit, inject } from '@angula
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
-import { firstValueFrom } from 'rxjs';
+import { distinctUntilChanged, firstValueFrom, map } from 'rxjs';
 import { MatButtonModule } from '@angular/material/button';
 import { MatCheckboxModule } from '@angular/material/checkbox';
 import { MatDatepickerModule } from '@angular/material/datepicker';
@@ -26,14 +26,14 @@ import { WorkLayoutListComponent } from './work-layout-list.component';
 import { WorkTransferDialogComponent } from './work-transfer-dialog.component';
 import { WorkMoneyComponent, WorkRateSnapshot } from './work-money.component';
 import { WorkRateInfoComponent } from './work-rate-info.component';
-import { cardLayout, orderLayout, LayoutItem, WorkFieldOrder, displayWorkField, isWorkFieldFile, PROJECT_SIZES, REPORT_PAYMENT_STATUSES, WORK_CATALOGS, WorkCatalog, WorkCatalogEntry, WorkField, WorkFieldAmount, WorkFieldCard, WorkFieldFiles, WorkFieldValues, WorkReporting, workCatalogLabel } from './work-fields';
+import { cardLayout, orderLayout, LayoutItem, WorkFieldOrder, displayWorkField, isWorkFieldFile, PROJECT_SIZES, REPORT_PAYMENT_STATUSES, WORK_CARD_FIELDS, WORK_FIELD_CARDS, WORK_TABLE_COLUMNS, WORK_CATALOGS, WorkCatalog, WorkCatalogEntry, WorkField, WorkFieldAmount, WorkFieldCard, WorkFieldFiles, WorkFieldValues, WorkReporting, workCatalogLabel } from './work-fields';
 
 const billingCalendar = new Intl.DateTimeFormat('sv-SE', { timeZone: 'Europe/Budapest' });
 const billingDateFields = ['completionDate', 'invoiceDate', 'invoicePaymentDeadline', 'paidAt'] as const;
 
 type WorkForm = {
   name: string; clientId: string; responsibleUserId: string; status: WorkStatus; deadline: Date | null; description: string;
-  entityId: string; serviceTypeId: string;
+  entityId: string; serviceTypeId: string; contributors: string[];
   currency: string; totalAmount: number; costAmount: number; subcontractor: string; paymentDeadlineDays: number;
   offerDate: Date | null; completionDate: Date | null; invoiceDate: Date | null; invoicePaymentDeadline: Date | null; invoiceNumber: string;
   contractSigned: boolean; performanceCertificate: boolean; paidAt: Date | null;
@@ -177,10 +177,9 @@ export class WorkBoardComponent implements OnInit, OnDestroy {
       if (Array.isArray(saved?.order) && saved.order.every((id: unknown) => typeof id === 'string') &&
           saved.visibility && typeof saved.visibility === 'object') this.columnPreferences = saved;
     } catch { /* The table still works without browser storage. */ }
-    const id = this.route.snapshot.queryParamMap.get('work');
     if (this.financeTenantId) {
       this.statusFilter = 'all';
-      void this.loadFinance(this.financeTenantId, id);
+      this.watchWorkLink(this.loadFinance(this.financeTenantId));
       return;
     }
     this.board.exchangeRates().pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
@@ -200,15 +199,32 @@ export class WorkBoardComponent implements OnInit, OnDestroy {
     });
     if (this.showClients) {
       this.loading = false;
-      return;
     }
-    void this.load().then(async () => {
-      if (!id || this.showClients || this.showWorkForm || this.detailView) return;
-      try {
-        const work = this.works.find((item) => item.id === id) || await firstValueFrom(this.board.getWork(id));
-        if (!this.showClients && !this.showWorkForm && !this.detailView) this.selectWork(work);
-      } catch (error) { this.error(error, 'The work could not be opened.'); }
+    this.watchWorkLink(this.showClients ? Promise.resolve() : this.load());
+  }
+
+  private watchWorkLink(initialLoad: Promise<void>): void {
+    this.route.queryParamMap.pipe(
+      map((params) => params.get('work')),
+      distinctUntilChanged(),
+      takeUntilDestroyed(this.destroyRef)
+    ).subscribe((id) => {
+      if (id) void this.openLinkedWork(id, initialLoad);
     });
+  }
+
+  private async openLinkedWork(id: string, initialLoad: Promise<void>): Promise<void> {
+    const isCurrent = () => !this.destroyed && !this.showClients && this.route.snapshot.queryParamMap.get('work') === id;
+    await initialLoad;
+    if (!isCurrent()) return;
+    try {
+      const work = await firstValueFrom<WorkItem | FinanceWork>(this.financeTenantId
+        ? this.board.getFinanceWork(this.financeTenantId, id)
+        : this.board.getWork(id));
+      if (isCurrent()) this.selectWork(work);
+    } catch (error) {
+      if (isCurrent()) this.error(error, 'The work could not be opened.');
+    }
   }
 
   ngOnDestroy(): void {
@@ -221,6 +237,8 @@ export class WorkBoardComponent implements OnInit, OnDestroy {
     return this.financeTenantId ? this.financeWorks : this.works;
   }
 
+  isTenantUser(id: string): boolean { return this.tenantUsers.some((user) => user.id === id); }
+
   operationalWork(work: WorkItem | FinanceWork): WorkItem | null {
     return 'subWorks' in work ? work : null;
   }
@@ -230,7 +248,7 @@ export class WorkBoardComponent implements OnInit, OnDestroy {
     return index < 0 ? [] : this.financeStatuses.slice(index, index + 2);
   }
 
-  private async loadFinance(tenantId: string, workId?: string | null): Promise<void> {
+  private async loadFinance(tenantId: string): Promise<void> {
     const requestId = ++this.loadRequestId;
     this.loading = true;
     this.financeError = '';
@@ -248,7 +266,7 @@ export class WorkBoardComponent implements OnInit, OnDestroy {
       this.referencesLoaded = true;
       if (this.page > this.totalPages) {
         this.page = this.totalPages;
-        await this.loadFinance(tenantId, workId);
+        await this.loadFinance(tenantId);
         return;
       }
     } catch (error: any) {
@@ -258,14 +276,6 @@ export class WorkBoardComponent implements OnInit, OnDestroy {
       return;
     } finally {
       if (requestId === this.loadRequestId) this.loading = false;
-    }
-    if (workId) {
-      try {
-        const work = this.financeWorks.find(({ id }) => id === workId) || await firstValueFrom(this.board.getFinanceWork(tenantId, workId));
-        if (requestId === this.loadRequestId && !this.detailView) this.selectWork(work);
-      } catch (error) {
-        if (requestId === this.loadRequestId) this.error(error, 'A munka megnyitása sikertelen.');
-      }
     }
   }
 
@@ -434,7 +444,7 @@ export class WorkBoardComponent implements OnInit, OnDestroy {
     if (!this.selectedWork) return;
     const w = this.selectedWork;
     this.workForm = {
-      name: w.name, clientId: w.clientId || '', responsibleUserId: w.responsibleUserId || '', status: w.status, deadline: this.dateValue(w.deadline), description: w.description,
+      contributors: [...w.contributors], name: w.name, clientId: w.clientId || '', responsibleUserId: w.responsibleUserId || '', status: w.status, deadline: this.dateValue(w.deadline), description: w.description,
       entityId: w.entityId || '', serviceTypeId: w.serviceTypeId || '',
       currency: w.currency, totalAmount: w.totalAmount, costAmount: w.costAmount, subcontractor: w.subcontractor,
       paymentDeadlineDays: w.paymentDeadlineDays, offerDate: this.dateValue(w.offerDate), completionDate: this.billingFormDate(w.completionDate),
@@ -752,6 +762,33 @@ export class WorkBoardComponent implements OnInit, OnDestroy {
       default: return null;
     }
   }
+  private readonly additionalColumns = new Map(
+    WORK_FIELD_CARDS.flatMap(({ id: card }) => Object.entries(WORK_CARD_FIELDS[card])
+      .filter(([id]) => !WORK_TABLE_COLUMNS.has(id))
+      .map(([id, label]) => [id, { id, label, card }] as const))
+  );
+
+  additionalColumnValue(work: WorkItem, id: string): string {
+    const column = this.additionalColumns.get(id);
+    if (!column) return '—';
+    const card = id === 'paymentDeadline' && !this.showFrom('invoice', work.status) ? 'completion' : column.card;
+    if (card !== 'basic' && card !== 'reporting' && card !== 'documents' && !this.showFrom(card, work.status)) return '—';
+
+    const value = this.detailFieldValue(card, id, work) ?? '—';
+    switch (id) {
+      case 'contract':
+      case 'certificate':
+      case 'paymentStatus':
+      case 'projectSize': return this.ui.text(value);
+      case 'paymentDays': return work.paymentDeadlineDays ? work.paymentDeadlineDays + ' ' + this.ui.text('days') : '—';
+      default: return value;
+    }
+  }
+
+  isSortableColumn(id: string): boolean {
+    return WORK_TABLE_COLUMNS.has(id) || id.startsWith('field:');
+  }
+
   get defaultColumns(): LayoutItem[] {
     const columns = [
       { id: 'workNumber', label: this.financeTenantId ? 'Munkaszám' : 'Work no.' },
@@ -766,7 +803,10 @@ export class WorkBoardComponent implements OnInit, OnDestroy {
         : [{ id: 'subWorkCount', label: 'Sub-works' }]
     ].filter(({ id }) => this.isFieldVisible(id))
       .map((column) => ({ ...column, visible: this.tenantColumnVisibility[column.id] ?? true }));
-    return [...columns, ...this.customFields.filter(({ id }) => this.isFieldVisible(id))
+    const additional = this.financeTenantId ? [] : [...this.additionalColumns.values()]
+      .filter(({ id }) => this.isFieldVisible(id) && (id !== 'projectSize' || this.projectSizeGrouping))
+      .map(({ id, label }) => ({ id, label, visible: false }));
+    return [...columns, ...additional, ...this.customFields.filter(({ id }) => this.isFieldVisible(id))
       .map((field) => ({ id: 'field:' + field.id, label: field.label, visible: this.tenantColumnVisibility[field.id] ?? field.showInList }))];
   }
   get columnOptions(): LayoutItem[] {
@@ -860,7 +900,7 @@ export class WorkBoardComponent implements OnInit, OnDestroy {
   private dateValue(value: string | null): Date | null { return value ? new Date(value) : null; }
   private notice(message: string): void { this.snackBar.open(this.ui.text(message), this.ui.text('OK'), { duration: 3000 }); }
   private error(error: any, fallback: string): void { this.snackBar.open(this.ui.text(error?.error?.error || fallback), this.ui.text('OK'), { duration: 4500 }); }
-  private emptyWorkForm(): WorkForm { return { name: '', clientId: '', entityId: '', serviceTypeId: '', responsibleUserId: '', status: 'inquiry', deadline: null, description: '', currency: this.defaultCurrency, totalAmount: 0, costAmount: 0, subcontractor: '', paymentDeadlineDays: 30, offerDate: null, completionDate: null, invoiceDate: null, invoicePaymentDeadline: null, invoiceNumber: '', contractSigned: false, performanceCertificate: false, paidAt: null }; }
+  private emptyWorkForm(): WorkForm { return { name: '', contributors: [], clientId: '', entityId: '', serviceTypeId: '', responsibleUserId: '', status: 'inquiry', deadline: null, description: '', currency: this.defaultCurrency, totalAmount: 0, costAmount: 0, subcontractor: '', paymentDeadlineDays: 30, offerDate: null, completionDate: null, invoiceDate: null, invoicePaymentDeadline: null, invoiceNumber: '', contractSigned: false, performanceCertificate: false, paidAt: null }; }
   private emptySubWorkForm(): SubWorkForm { return { name: '', responsibleUserId: '', status: 'inquiry', deadline: null, description: '', plannedHours: 0, amount: 0, percentage: 0, performanceCertificateRequired: false, performanceCertificateSigned: false, invoiceNumber: '', invoiceDate: null, invoicePaymentDeadline: null, paidAmount: 0, paidAt: null }; }
   private emptyClientForm(): ClientPayload { return { taxNumber: '', name: '', country: 'HU', postalCode: '', city: '', address: '', email: '', phone: '' }; }
 }

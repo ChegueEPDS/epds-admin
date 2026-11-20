@@ -11,7 +11,7 @@ import { MatCheckboxModule } from '@angular/material/checkbox';
 import { MatSelectModule } from '@angular/material/select';
 import { MatSlideToggleModule } from '@angular/material/slide-toggle';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
-import { AdminService, AdminTenant, TenantType } from '../../services/admin.service';
+import { AccountingNotifications, AdminService, AdminTenant, TenantType } from '../../services/admin.service';
 import { TenantFeatureKey, TenantFeatures } from '../../services/auth.service';
 
 type TenantDialogData = {
@@ -54,6 +54,14 @@ export class TenantDialogComponent {
   }
   name = '';
   financeAccess = false;
+  weeklyWorkSummary = false;
+  accountingMode: AccountingNotifications['mode'] = 'off';
+  accountingLanguage: AccountingNotifications['language'] = 'hu';
+  accountingEmail = '';
+  accountingEntityEmails: Record<string, string> = {};
+  get accountingEntities(): { id: string; label: string }[] {
+    return this.data.tenant?.accountingEntities ?? [];
+  }
   displayName = '';
   type: TenantType = 'company';
   types: { value: TenantType; label: string }[] = [
@@ -89,6 +97,14 @@ export class TenantDialogComponent {
       this.displayName = data.tenant.displayName || data.tenant.name || '';
       this.type = data.tenant.type || 'company';
       this.financeAccess = data.tenant.financeAccess === true;
+      this.weeklyWorkSummary = data.tenant.weeklyWorkSummary === true;
+      const accounting = data.tenant.accountingNotifications;
+      if (accounting) {
+        this.accountingMode = accounting.mode;
+        this.accountingLanguage = accounting.language;
+        this.accountingEmail = accounting.email ?? '';
+        this.accountingEntityEmails = { ...accounting.entityEmails };
+      }
       this.types = this.types.filter(({ value }) => (value === 'finance') === (this.type === 'finance'));
       for (const { key } of this.featureOptions) {
         this.features[key] = { ...this.features[key], ...data.tenant.features?.[key] };
@@ -176,6 +192,11 @@ export class TenantDialogComponent {
     this.applyFeaturePolicy();
     const payload = { name: this.name, displayName: this.displayName, type: this.type, features: this.features,
       logoDataUrl: this.logoChange,
+      weeklyWorkSummary: this.type === 'finance' ? undefined : this.weeklyWorkSummary,
+      accountingNotifications: this.type === 'company' ? {
+        mode: this.accountingMode, language: this.accountingLanguage,
+        email: this.accountingEmail, entityEmails: this.accountingEntityEmails
+      } : undefined,
       financeAccess: this.type !== 'finance' && this.features.workBoard.enabled && this.financeAccess };
     const request = this.data.tenant
       ? this.admin.updateTenant(this.data.tenant.id, payload)
