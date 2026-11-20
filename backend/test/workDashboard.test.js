@@ -117,3 +117,13 @@ test('a linked Effort Tracker task satisfies the next action check and uses its 
   assert.equal(result.checks.find(({ label }) => label === 'No next action').count, 0);
   assert.equal(result.checks.find(({ label }) => label === 'Action overdue').count, 1);
 });
+
+test('dashboard backup checks use contributors and ignore legacy backup assignments', () => {
+  const rows = [
+    { ...work, id: 'with-contributors', status: 'in_progress', contributors: ['first', 'second'] },
+    { ...work, id: 'legacy-only', status: 'in_progress', contributors: [], reporting: { backupId: 'legacy' } }
+  ];
+  const missingBackupCount = (row) => buildDashboard([row], config, 'HUF', fx, '2026-11-09')
+    .checks.find(({ label }) => label === 'No backup').count;
+  assert.deepEqual(rows.map(missingBackupCount), [0, 1]);
+});

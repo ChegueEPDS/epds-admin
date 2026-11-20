@@ -240,10 +240,7 @@
         @for (item of orderedFields('reporting'); track item.id) {
           @switch (item.id) {
             @case ('backup') {
-              <mat-form-field appearance="outline"><mat-label>{{ 'Backup' | uiText }}</mat-label><mat-select name="backupId" [(ngModel)]="reportForm.backupId">
-              <mat-option value="">{{ 'Unassigned' | uiText }}</mat-option>
-              @for (user of tenantUsers; track user.id) { <mat-option [value]="user.id">{{ user.fullName }}</mat-option> }
-              </mat-select></mat-form-field>
+              <mat-form-field appearance="outline"><mat-label>{{ 'Backup' | uiText }}</mat-label><input matInput [value]="backupLabel(workForm.contributors)" readonly></mat-form-field>
             }
             @case ('nextAction') {}
             @case ('actionDue') {}

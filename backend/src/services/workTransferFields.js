@@ -41,6 +41,11 @@ function optionLookup(items, label) {
 function columnsFor({ config, clients, users, currency }) {
   const nameOf = (user) => [user.firstName, user.lastName].filter(Boolean).join(' ') || user.email;
   const userOptions = optionLookup(users, nameOf);
+  const backupNames = new Map();
+  for (const user of users) {
+    backupNames.set(asId(user.id ?? user._id), nameOf(user));
+    if (user.email) backupNames.set(user.email.toLowerCase(), nameOf(user));
+  }
   const currencies = [...new Set([...currencyOptions(), currency])];
   const catalog = (entries) => optionLookup(entries, ({ label, code }) => code ? code + ' -- ' + label : label);
   const fields = [
@@ -56,7 +61,7 @@ function columnsFor({ config, clients, users, currency }) {
     ['invoicePaymentDeadline', 'Invoice payment deadline', 'date'], ['paidAt', 'Paid at', 'date'],
     ['invoiceNumber', 'Invoice number', 'text'], ['contractSigned', 'Contract signed', 'boolean'],
     ['performanceCertificate', 'Performance certificate', 'boolean'],
-    ['reporting.backupId', 'Backup', 'reference', userOptions], ['reporting.nextAction', 'Next action', 'text'],
+    ['reporting.backup', 'Backup', 'text', backupNames], ['reporting.nextAction', 'Next action', 'text'],
     ['reporting.actionDue', 'Action due', 'date'], ['reporting.contractDate', 'Order acceptance date', 'date']
   ];
   if (config.projectSizeGrouping) fields.push(['reporting.projectSize', 'Project size', 'choice', ['Small', 'Medium', 'Large']]);
@@ -82,6 +87,10 @@ function formatWork(work, columns, config) {
     const [group, fieldId, part] = col.key.split('.');
     const field = group === 'custom' ? config.fields.find(({ id }) => id === fieldId) : undefined;
     if (field && !relevant(field, work.status)) continue;
+    if (col.key === 'reporting.backup') {
+      result[col.key] = (work.contributors || []).map((value) => col.options.get(value.toLowerCase()) || value).join(', ');
+      continue;
+    }
     let value = field ? work.customFields?.[fieldId] : group === 'reporting' ? work.reporting?.[fieldId] : work[col.key];
     if (field?.type === 'amount') value = value?.[part || 'amount'];
     if (value == null || value === '') continue;
@@ -240,14 +249,14 @@ async function prepareRows({ sheet, columns, context, works, files, progress }) 
       } else if (!isBlank(valueAt('revision'))) issue('id', 'Keep the exported ID for an existing work. For new works, use an empty template row.');
 
       for (const [key, col] of keys) {
-        if (key === 'id' || key === 'revision' || key.startsWith('custom.')) continue;
+        if (key === 'id' || key === 'revision' || key === 'reporting.backup' || key.startsWith('custom.')) continue;
         const isReporting = key.startsWith('reporting.');
         const property = isReporting ? key.split('.')[1] : key;
         try {
           const value = parseCell(col, valueAt(key), isReporting ? reporting[property] : previous?.[key]);
           if (isReporting) {
             const req = { scope: { tenantId, tenantType: 'company' }, body: { reporting: { [property]: value ?? null } } };
-            const result = await workReporting(req, reporting, config.projectSizeGrouping, (id) => byUser.has(id));
+            const result = await workReporting(req, reporting, config.projectSizeGrouping);
             if (Object.hasOwn(result, property)) reporting[property] = result[property]; else delete reporting[property];
           } else changes[key] = value ?? (key === 'currency' ? currency : optionalDefaults[key] ?? null);
         } catch (error) { issue(key, error.message); }

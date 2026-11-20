@@ -504,7 +504,6 @@ export class WorkBoardComponent implements OnInit, OnDestroy {
       const ids = new Set(active.map((field) => field.id));
       const files = Object.fromEntries(Object.entries(this.fieldFiles).filter(([id]) => ids.has(id)));
       const reporting: WorkReporting = {
-        backupId: this.reportForm.backupId,
         contractDate: this.reportForm.contractDate,
         ...(this.projectSizeGrouping ? { projectSize: this.reportForm.projectSize } : {})
       };
@@ -686,7 +685,12 @@ export class WorkBoardComponent implements OnInit, OnDestroy {
     finally { this.saving = false; }
   }
   statusLabel(status: WorkStatus): string { return (this.financeTenantId ? this.financeStatuses : this.statuses).find((item) => item.value === status)?.label || status; }
-  backupLabel(id?: string): string { return this.tenantUsers.find((user) => user.id === id)?.fullName || '—'; }
+  backupLabel(contributors: readonly string[]): string {
+    return contributors.map((contributor) =>
+      this.tenantUsers.find((user) => user.id === contributor || user.email.toLowerCase() === contributor.toLowerCase())?.fullName
+      || contributor
+    ).join(', ') || '—';
+  }
   reportPaymentLabel(status?: string): string { return this.reportPaymentStatuses.find((item) => item.id === status)?.label || '—'; }
   get editorValues(): WorkFieldValues { return (this.editingWork && this.selectedWork?.customFields) || {}; }
   get visibleCatalogs() { return this.catalogDefinitions.filter((catalog) => this.hasCatalogOptions(catalog.key)); }
@@ -753,7 +757,7 @@ export class WorkBoardComponent implements OnInit, OnDestroy {
       case 'invoiceNumber': return work.invoiceNumber || null;
       case 'invoiceDate': return date(work.invoiceDate, true);
       case 'paidAt': return date(work.paidAt, true);
-      case 'backup': return this.backupLabel(report?.backupId);
+      case 'backup': return this.backupLabel(work.contributors);
       case 'nextAction': return report?.nextAction || '—';
       case 'actionDue': return report?.actionDue || '—';
       case 'paymentStatus': return this.reportPaymentLabel(report?.paymentStatus);

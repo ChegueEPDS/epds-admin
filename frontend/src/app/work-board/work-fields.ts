@@ -92,7 +92,7 @@ export type WorkExchangeRate = {
 export type WorkFinancialEntry = { id: string; date: string; amount: number; reference: string; rate?: WorkExchangeRate };
 export type WorkReporting = {
   projectSize?: typeof PROJECT_SIZES[number] | '';
-  backupId?: string; nextAction?: string; actionDue?: string;
+  nextAction?: string; actionDue?: string;
   invoicedAmount?: number | null; paidAmount?: number | null;
   paymentStatus?: typeof REPORT_PAYMENT_STATUSES[number]['id'] | '';
   contractDate?: string | null;

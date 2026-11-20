@@ -1,7 +1,6 @@
 const mongoose = require('mongoose');
 const Decimal = require('decimal.js').clone({ precision: 40 });
 const { databaseEngine, query } = require('../postgres');
-const User = require('../models/user');
 const { WorkItem } = require('../models/workItem');
 const SubWorkItem = require('../models/subWorkItem');
 const EffortProject = require('../models/effortProject');
@@ -35,26 +34,18 @@ const day = (value) => !value ? null : isoDay.test(value) ? value : workCalendar
 const dayNumber = (value) => Date.parse(value) / 86400000;
 const fail = (message) => Object.assign(new Error(message), { statusCode: 400 });
 
-async function workReporting(req, previous, sizeEnabled, tenantHasUser) {
+async function workReporting(req, previous, sizeEnabled) {
   const input = req.body?.reporting;
   if (input === undefined) return previous;
   if (req.scope.tenantType === 'client' || !input || typeof input !== 'object' || Array.isArray(input)) {
     throw fail('Invalid work reporting fields.');
   }
   const result = { ...previous };
-  for (const key of ['backupId', 'nextAction', 'actionDue', 'projectSize']) {
+  for (const key of ['nextAction', 'actionDue', 'projectSize']) {
     if (!Object.hasOwn(input, key)) continue;
     const value = input[key];
     if (key === 'projectSize' && !sizeEnabled) throw fail('Project size grouping is disabled.');
     if (value === null || value === '') { delete result[key]; continue; }
-    if (key === 'backupId' && value !== previous.backupId) {
-      if (typeof value !== 'string' || !/^[0-9a-f]{24}$/.test(value)) throw fail('Select a backup from this tenant.');
-      const tenantId = req.scope.tenantId;
-      const exists = tenantHasUser ? tenantHasUser(value) : databaseEngine() === 'postgresql'
-        ? (await query('SELECT 1 FROM users WHERE id=$1 AND (tenant_id=$2 OR additional_tenant_ids @> ARRAY[$2]::varchar(24)[])', [value, tenantId])).rowCount
-        : await User.exists({ _id: value, $or: [{ tenantId }, { additionalTenantIds: tenantId }] });
-      if (!exists) throw fail('Select a backup from this tenant.');
-    }
     if (key === 'nextAction' && (typeof value !== 'string' || !value.trim() || value.trim().length > 500)) throw fail('Invalid next action.');
     if (key === 'actionDue' && (typeof value !== 'string' || !isoDay.test(value) ||
         !Number.isFinite(Date.parse(value)) || new Date(value).toISOString().slice(0, 10) !== value)) throw fail('Invalid action deadline.');
@@ -71,7 +62,7 @@ async function reportWorks(tenantId) {
   let actions;
   if (databaseEngine() === 'postgresql') {
     const [workResult, subResult, actionResult] = await Promise.all([
-      query(`SELECT w.id,w.work_number AS "workNumber",w.name,w.status,w.customer,w.responsible,w.currency,w.deadline,w.reporting,
+      query(`SELECT w.id,w.work_number AS "workNumber",w.name,w.status,w.customer,w.responsible,w.contributors,w.currency,w.deadline,w.reporting,
         w.responsible_user_id AS "ownerId",w.entity_id AS "entityId",w.service_type_id AS "serviceTypeId",
         w.total_amount AS "totalAmount",w.created_at AS "createdAt",w.updated_at AS "updatedAt",
         w.invoice_payment_deadline AS "paymentDue"
@@ -90,7 +81,7 @@ async function reportWorks(tenantId) {
   } else {
     const scope = { tenantId: new mongoose.Types.ObjectId(tenantId), archivedAt: { $exists: false } };
     [works, subWorks, actions] = await Promise.all([
-      WorkItem.find(scope).select('workNumber name status customer responsible responsibleUserId entityId serviceTypeId currency deadline totalAmount reporting createdAt updatedAt invoicePaymentDeadline').sort('_id').lean(),
+      WorkItem.find(scope).select('workNumber name status customer responsible responsibleUserId contributors entityId serviceTypeId currency deadline totalAmount reporting createdAt updatedAt invoicePaymentDeadline').sort('_id').lean(),
       SubWorkItem.find(scope).select('workItemId status amount paidAmount paidAt invoiceNumber invoiceDate exchangeRates').lean(),
       EffortProject.aggregate([
         { $match: { tenantId: scope.tenantId, shared: true, status: 'open', workItemId: { $type: 'objectId' } } },
@@ -147,7 +138,7 @@ function prepareWork(work, asOf, today, config, snapshot) {
     : daysLeft < 0 ? 'Overdue' : daysLeft <= 14 ? 'Due in 14 days' : 'On track';
   const stale = (active || lead) && (!work.updatedAt || today - dayNumber(day(work.updatedAt)) > 14);
   const checks = [
-    [!work.ownerId && !work.responsible, 'No owner'], [active && !reporting.backupId, 'No backup'],
+    [!work.ownerId && !work.responsible, 'No owner'], [active && !work.contributors?.length, 'No backup'],
     [stage === 'Unknown', 'No status'], [!work.customer, 'No client'], [!work.serviceTypeId, 'No service type'],
     [active && contract.isZero(), 'No amount'], [!contract.isZero() && currency === '?', 'No currency'],
     [!payment && ((completed && !contract.isZero()) || (active && invoiced?.gt(0))), 'Payment status missing'],

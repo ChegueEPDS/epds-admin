@@ -152,3 +152,14 @@ test('background imports reject the whole batch on a save-time conflict and enfo
   assert.equal(insert.mock.calls[0].arguments[3].workNumber, 'INSP26-0007');
   assert.deepEqual(counters, [[tenantId, 'work:2026', 7]]);
 });
+
+test('Backup is exported from contributors and changes to its cell are ignored on import', async () => {
+  const work = { ...existing, contributors: ['First', 'Second'], reporting: { backupId: oldId } };
+  const { sheet } = await open([work]);
+  const backupColumn = columns.findIndex(({ label }) => label === 'Backup') + 1;
+  assert.equal(sheet.getCell(2, backupColumn).value, 'First, Second');
+  sheet.getCell(2, backupColumn).value = 'Different person';
+  const result = await validate(sheet, [work]);
+  assert.deepEqual(result.issues, []);
+  assert.equal(result.rows[0].modified, false);
+});
