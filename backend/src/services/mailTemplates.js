@@ -153,7 +153,7 @@ function accountingMail(details, url) {
     [hu ? 'Munkaszám' : 'Work number', workNumber],
     [hu ? 'Munka' : 'Work', name],
     [hu ? 'Ügyfél' : 'Client', customer],
-    [hu ? 'Szervezet' : 'Organizational unit', entity],
+    [hu ? 'Szervezet' : 'Organizational unit', entity?.trim()],
     [hu ? 'Teljesítés dátuma' : 'Completion date', completionDate && new Intl.DateTimeFormat(locale, {
       dateStyle: 'long', timeZone: 'UTC'
     }).format(new Date(completionDate))],
@@ -187,12 +187,13 @@ function workStatusMail(change, url) {
   const hu = lang === 'hu';
   const title = hu ? 'Megváltozott a munka státusza' : 'Work status changed';
   const work = `${change.workNumber} · ${change.name}`;
+  const entity = change.entity?.trim();
   const fields = [
     ['Tenant', change.tenantName],
     [hu ? 'Munkaszám' : 'Work number', change.workNumber],
     [hu ? 'Munka' : 'Work', change.name],
     [hu ? 'Ügyfél' : 'Client', change.customer || '—'],
-    [hu ? 'Szervezeti egység' : 'Organizational unit', change.entity || '—']
+    ...(entity ? [[hu ? 'Szervezeti egység' : 'Organizational unit', entity]] : [])
   ];
   return {
     subject: `[PandA] ${title} · ${work}`.replace(/[\r\n]+/g, ' '),
