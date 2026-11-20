@@ -333,13 +333,14 @@ async function authenticateAccessToken(token, includeTenantOptions = false) {
   return { decoded, session, additionalTenantIds, user: await buildUserContext(user, session, includeTenantOptions) };
 }
 
-function setAuthCookies(res, req, result) {
+function setAuthCookies(res, req, result, { preserveCsrf = false } = {}) {
   const refreshMs = Math.max(0, new Date(result.session.expiresAt).getTime() - Date.now());
   const accessMs = parseDurationMs(accessTtl(), 15 * 60000);
   res.cookie(ACCESS_COOKIE, result.accessToken, cookieOptions(req, accessMs, true));
   if (result.refreshToken) {
     res.cookie(REFRESH_COOKIE, result.refreshToken, cookieOptions(req, refreshMs, true));
-    res.cookie(CSRF_COOKIE, randomToken(24), cookieOptions(req, refreshMs, false));
+    const csrfToken = preserveCsrf ? parseCookies(req)[CSRF_COOKIE] : null;
+    res.cookie(CSRF_COOKIE, csrfToken || randomToken(24), cookieOptions(req, refreshMs, false));
   }
 }
 

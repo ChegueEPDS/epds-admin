@@ -18,8 +18,8 @@ const {
   setAuthCookies
 } = require('../services/authSessionService');
 
-function sendAuthResult(req, res, result) {
-  setAuthCookies(res, req, result);
+function sendAuthResult(req, res, result, cookieOptions) {
+  setAuthCookies(res, req, result, cookieOptions);
   return res.status(200).json({ user: result.user, session: result.sessionMeta });
 }
 
@@ -171,7 +171,7 @@ exports.renewToken = async (req, res) => {
     const refreshToken = getRefreshTokenFromRequest(req);
     if (!refreshToken) return res.status(401).json({ error: 'No refresh token provided' });
     const result = await rotateRefreshToken({ refreshToken, req });
-    return sendAuthResult(req, res, result);
+    return sendAuthResult(req, res, result, { preserveCsrf: true });
   } catch (error) {
     clearAuthCookies(res, req);
     return res.status(401).json({ error: 'Invalid or expired refresh token' });

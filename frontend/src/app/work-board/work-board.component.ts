@@ -243,6 +243,11 @@ export class WorkBoardComponent implements OnInit, OnDestroy {
     return 'subWorks' in work ? work : null;
   }
 
+  paidPercentage(work: WorkItem | FinanceWork): number {
+    const paid = work.reporting?.paidAmount ?? 0;
+    return work.totalAmount > 0 && paid > 0 ? paid / work.totalAmount * 100 : 0;
+  }
+
   get financeStatusOptions() {
     const index = this.financeStatuses.findIndex(({ value }) => value === this.financeWork?.status);
     return index < 0 ? [] : this.financeStatuses.slice(index, index + 2);
@@ -798,17 +803,24 @@ export class WorkBoardComponent implements OnInit, OnDestroy {
       { id: 'workNumber', label: this.financeTenantId ? 'Munkaszám' : 'Work no.' },
       { id: 'name', label: this.financeTenantId ? 'Ügyfél / munka' : this.isFieldVisible('client') ? 'Client / work' : 'Work' },
       ...this.visibleCatalogs.map(({ reference, label }) => ({ id: reference, label })),
-      ...this.financeTenantId ? [] : [{ id: 'responsible', label: 'Responsible' }],
+      ...this.financeTenantId ? [] : [
+        { id: 'responsible', label: 'Responsible' },
+        { id: 'backup', label: WORK_CARD_FIELDS.reporting.backup }
+      ],
       { id: 'status', label: this.financeTenantId ? 'Státusz' : 'Status' },
       ...this.financeTenantId ? [] : [{ id: 'deadline', label: 'Deadline' }],
       { id: 'totalAmount', label: this.financeTenantId ? 'Szerződéses összeg' : 'Value' },
       ...this.financeTenantId
         ? [{ id: 'invoiceNumber', label: 'Számlaszám' }, { id: 'paymentDeadline', label: 'Fizetési határidő' }]
-        : [{ id: 'subWorkCount', label: 'Sub-works' }]
+        : [
+          { id: 'paid', label: WORK_CARD_FIELDS.reporting.paid },
+          { id: 'subWorkCount', label: 'Sub-works' }
+        ]
     ].filter(({ id }) => this.isFieldVisible(id))
       .map((column) => ({ ...column, visible: this.tenantColumnVisibility[column.id] ?? true }));
     const additional = this.financeTenantId ? [] : [...this.additionalColumns.values()]
-      .filter(({ id }) => this.isFieldVisible(id) && (id !== 'projectSize' || this.projectSizeGrouping))
+      .filter(({ id }) => this.isFieldVisible(id) && !columns.some((column) => column.id === id)
+        && (id !== 'projectSize' || this.projectSizeGrouping))
       .map(({ id, label }) => ({ id, label, visible: false }));
     return [...columns, ...additional, ...this.customFields.filter(({ id }) => this.isFieldVisible(id))
       .map((field) => ({ id: 'field:' + field.id, label: field.label, visible: this.tenantColumnVisibility[field.id] ?? field.showInList }))];

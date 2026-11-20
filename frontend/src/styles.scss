@@ -200,6 +200,22 @@ app-work-board .compact-data-grid .record-full-width { grid-column: 1 / -1; }
 app-work-board .work-table td strong + small,
 app-work-board .work-table td.numeric small { display: block; margin-top: 4px; color: var(--brand-muted); }
 app-work-board .work-table .numeric { text-align: right; }
+app-work-board .work-value-progress {
+  display: block;
+  width: 76px;
+  max-width: 100%;
+  height: 5px;
+  margin: 5px 0 0 auto;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--brand-border);
+}
+app-work-board .work-value-progress > span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #0f766e, #22c55e);
+}
 app-work-board .work-table .work-number-column,
 app-work-board .work-table .work-status-column { width: 1%; white-space: nowrap; overflow-wrap: normal; }
 app-work-board .work-number-cell {

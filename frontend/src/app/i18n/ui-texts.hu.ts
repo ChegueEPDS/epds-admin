@@ -1068,6 +1068,7 @@ export const HU_UI_TEXTS: Readonly<Record<string, string>> = {
   "Stored securely": "Biztonságosan elmentve",
   "Strikethrough": "Áthúzott",
   "Sub-work": "Almunka",
+  "Paid: {0} ({1}%)": "Fizetve: {0} ({1}%)",
   "Sub-work allocation": "Almunkák értékének megoszlása",
   "Sub-work could not be archived.": "Az almunka archiválása sikertelen.",
   "Sub-work could not be saved.": "Az almunka mentése sikertelen.",

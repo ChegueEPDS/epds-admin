@@ -497,9 +497,14 @@
                       <td class="numeric">
                         @if (showFrom('offer', work.status)) {
                           {{ formatMoney(work.totalAmount, work.currency) }}
-                          @let paidAmount = operational?.paidAmount ?? work.reporting?.paidAmount ?? 0;
-                          @if (paidAmount > 0) {
-                            <small>{{ 'Paid' | uiText }} · {{ formatMoney(paidAmount, work.currency) }}</small>
+                          @let percentage = paidPercentage(work);
+                          @if (percentage > 0) {
+                            @let label = 'Paid: {0} ({1}%)' | uiText: (formatMoney(work.reporting?.paidAmount ?? 0, work.currency)) : (percentage | number:'1.0-2');
+                            @let barPercentage = percentage > 100 ? 100 : percentage;
+                            <span class="work-value-progress" role="progressbar" [attr.aria-label]="'Paid amount' | uiText"
+                              [attr.aria-valuenow]="barPercentage" [attr.aria-valuetext]="label" [attr.title]="label">
+                              <span [style.width.%]="barPercentage"></span>
+                            </span>
                           }
                         } @else {
                           —

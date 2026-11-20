@@ -25,28 +25,32 @@ function isGlobalRequest(req: HttpRequest<unknown>, isSuperAdmin: boolean): bool
   }
 }
 
+function withCsrfToken(req: HttpRequest<unknown>): HttpRequest<unknown> {
+  if (['GET', 'HEAD', 'OPTIONS'].includes(req.method.toUpperCase())) return req;
+  const csrf = document.cookie
+    .split(';')
+    .map((value) => value.trim())
+    .find((value) => value.startsWith('csrf_token='))
+    ?.slice('csrf_token='.length);
+  const headers = csrf
+    ? req.headers.set('X-CSRF-Token', decodeURIComponent(csrf))
+    : req.headers.delete('X-CSRF-Token');
+  return req.clone({ headers });
+}
+
 export const authInterceptor: HttpInterceptorFn = (req, next) => {
   const router = inject(Router);
   const injector = inject(Injector);
-
-  if (isBackendUrl(req)) {
-    const csrf = document.cookie
-      .split(';')
-      .map((value) => value.trim())
-      .find((value) => value.startsWith('csrf_token='))
-      ?.slice('csrf_token='.length);
-
+  const backendRequest = isBackendUrl(req);
+  if (backendRequest) {
     const setHeaders: Record<string, string> = { 'Accept-Language': injector.get(UiLanguageService).language() };
-    if (csrf && !['GET', 'HEAD', 'OPTIONS'].includes(req.method.toUpperCase())) {
-      setHeaders['X-CSRF-Token'] = decodeURIComponent(csrf);
-    }
     const auth = injector.get(AuthService);
     const tenantContext = auth.getTenantContextId();
     if (tenantContext && !isGlobalRequest(req, auth.isSuperAdmin())) {
       setHeaders['X-Tenant-Context'] = tenantContext;
     }
 
-    req = req.clone({ setHeaders, withCredentials: true });
+    req = withCsrfToken(req.clone({ setHeaders, withCredentials: true }));
   }
 
   return next(req).pipe(
@@ -58,7 +62,7 @@ export const authInterceptor: HttpInterceptorFn = (req, next) => {
       const auth = injector.get(AuthService);
       return auth.refreshSession().pipe(
         switchMap((ok) => {
-          if (ok) return next(req);
+          if (ok) return next(backendRequest ? withCsrfToken(req) : req);
           router.navigate(['/login']);
           return throwError(() => error);
         })
